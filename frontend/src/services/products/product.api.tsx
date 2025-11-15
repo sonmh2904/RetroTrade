@@ -290,3 +290,64 @@ export const createRating = async (formData: FormData) => {
     throw error;
   }
 };
+
+export interface OwnerRating {
+  _id: string;
+  rating: number;
+  comment?: string;
+  images?: string[];
+  createdAt?: string;
+  renterId?: Record<string, any>;
+  itemId?: Record<string, any>;
+  Item?: Record<string, any>;
+}
+
+export interface OwnerRatingsResult {
+  success: boolean;
+  message?: string;
+  ratings: OwnerRating[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export const getRatingsByOwner = async (
+  ownerId: string,
+  params?: { page?: number; limit?: number }
+): Promise<OwnerRatingsResult> => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/rating/owner/${ownerId}${qs ? `?${qs}` : ""}`
+    );
+
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+
+    const data = await res.json();
+    const payload = data?.data || {};
+
+    return {
+      success: data?.success ?? true,
+      message: data?.message,
+      ratings: Array.isArray(payload.ratings) ? payload.ratings : [],
+      total: Number(payload.total) || 0,
+      page: Number(payload.page) || params?.page || 1,
+      limit: Number(payload.limit) || params?.limit || 20,
+    };
+  } catch (error: any) {
+    console.error("Error fetching owner ratings:", error);
+    return {
+      success: false,
+      message: error?.message || "Không thể tải đánh giá",
+      ratings: [],
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+    };
+  }
+};
