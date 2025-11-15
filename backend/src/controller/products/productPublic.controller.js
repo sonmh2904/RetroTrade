@@ -10,6 +10,7 @@ const ItemConditions = require("../../models/Product/ItemConditions.model");
 const PriceUnits = require("../../models/Product/PriceUnits.model");
 const User = require("../../models/User.model");
 const Tags = require("../../models/Tag.model");
+const Rating = require("../../models/Order/Rating.model");
 
 
 const viewThrottle = new Map();
@@ -1107,15 +1108,166 @@ const getComparableProducts = async (req, res) => {
 };
 
 
-module.exports = { 
-  listAllItems, 
-  getProductByProductId, 
-  searchProduct, 
-  viewFeatureProduct, 
-  listSearchTags, 
-  getProductsByOwnerIdWithHighViewCount, 
-  getPublicStoreByUserGuid, 
+// Get all ratings for products owned by a specific owner
+const getRatingByOwnerId = async (req, res) => {
+  let success = false;
+  try {
+    const { ownerId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+
+    // Validate ownerId
+    if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ownerId không hợp lệ"
+      });
+    }
+
+    const parsedPage = Math.max(parseInt(page) || 1, 1);
+    const parsedLimit = Math.max(Math.min(parseInt(limit) || 20, 100), 1);
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    // Get all items owned by the owner
+    const ownerItems = await Item.find({ 
+      OwnerId: new mongoose.Types.ObjectId(ownerId),
+      IsDeleted: false 
+    }).select('_id Title').lean();
+
+    if (!ownerItems || ownerItems.length === 0) {
+      success = true;
+      return res.status(200).json({
+        success: true,
+        message: "Chủ sở hữu này không có sản phẩm nào",
+        data: {
+          ratings: [],
+          total: 0,
+          page: parsedPage,
+          limit: parsedLimit
+        }
+      });
+    }
+
+    const itemIds = ownerItems.map(item => item._id);
+
+    // Get ratings for all items owned by the owner
+    const [total, ratings] = await Promise.all([
+      Rating.countDocuments({
+        itemId: { $in: itemIds },
+        isDeleted: false
+      }),
+      Rating.find({
+        itemId: { $in: itemIds },
+        isDeleted: false
+      })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parsedLimit)
+        .populate('renterId', 'fullName displayName avatarUrl FullName DisplayName AvatarUrl')
+        .populate('itemId', 'Title')
+        .lean()
+    ]);
+
+    if (!ratings || ratings.length === 0) {
+      success = true;
+      return res.status(200).json({
+        success: true,
+        message: "Không có đánh giá nào cho sản phẩm của chủ sở hữu này",
+        data: {
+          ratings: [],
+          total: 0,
+          page: parsedPage,
+          limit: parsedLimit
+        }
+      });
+    }
+
+    // Get item details for all rated items
+    const ratedItemIds = [...new Set(ratings.map(rating => rating.itemId._id))];
+    const itemsWithDetails = await Item.find({
+      _id: { $in: ratedItemIds },
+      IsDeleted: false
+    })
+      .populate('CategoryId', 'Name')
+      .select('Title CategoryId BasePrice Currency Images')
+      .lean();
+
+    // Get item images
+    const itemImages = await ItemImages.find({
+      ItemId: { $in: ratedItemIds },
+      IsDeleted: false
+    })
+      .sort({ Ordinal: 1 })
+      .lean();
+
+    // Create maps for efficient lookup
+    const itemMap = {};
+    itemsWithDetails.forEach(item => {
+      itemMap[item._id.toString()] = item;
+    });
+
+    const imagesMap = {};
+    itemImages.forEach(img => {
+      const key = img.ItemId.toString();
+      if (!imagesMap[key]) {
+        imagesMap[key] = [];
+      }
+      imagesMap[key].push(img);
+    });
+
+    // Format ratings with full details
+    const ratingsWithDetails = ratings.map(rating => {
+      const item = itemMap[rating.itemId._id.toString()];
+      return {
+        ...rating,
+        Item: {
+          ...item,
+          Images: imagesMap[rating.itemId._id.toString()] || []
+        }
+      };
+    });
+
+    success = true;
+    return res.status(200).json({
+      success: true,
+      message: "Lấy danh sách đánh giá theo chủ sở hữu thành công",
+      data: {
+        ratings: ratingsWithDetails,
+        total,
+        page: parsedPage,
+        limit: parsedLimit
+      }
+    });
+
+  } catch (error) {
+    console.error("Lỗi khi lấy đánh giá theo chủ sở hữu:", error);
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Lỗi server khi lấy đánh giá theo chủ sở hữu"
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Trả về rỗng",
+      data: {
+        ratings: [],
+        total: 0
+      }
+    });
+  }
+};
+
+
+module.exports = {
+  listAllItems,
+  getProductByProductId,
+  searchProduct,
+  viewFeatureProduct,
+  listSearchTags,
+  getProductsByOwnerIdWithHighViewCount,
+  getPublicStoreByUserGuid,
   getProductsByCategoryId,
   getHighlightedProducts,
-  getComparableProducts
+  getComparableProducts,
+  getRatingByOwnerId
 };

@@ -883,7 +883,7 @@ export default function ProductPage() {
                   className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm"
                   disabled={!isAuthenticated}
                 >
-                  <Star className="w-4 h-4 text-yellow-300" />
+                  <Bookmark className="w-4 h-4 text-yellow-300" />
                   <span>Danh sách yêu thích</span>
                 </button>
                 {search && (

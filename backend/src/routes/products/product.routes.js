@@ -28,7 +28,8 @@ const {
   getPublicStoreByUserGuid,
   getProductsByCategoryId,
   getHighlightedProducts,
-  getComparableProducts
+  getComparableProducts,
+  getRatingByOwnerId
 } = require("../../controller/products/productPublic.controller");
 
 const {
@@ -71,6 +72,7 @@ router.put("/rating/:id",authenticateToken, ratingController.updateRating);
 router.delete("/rating/:id",authenticateToken, ratingController.deleteRating);
 router.get("/rating/item/:itemId", ratingController.getRatingsByItem);
 router.get("/rating/item/:itemId/stats", ratingController.getRatingStats);
+router.get("/rating/owner/:ownerId", getRatingByOwnerId);
 //owner
 router.get("/user", authenticateToken, getUserProducts);
 router.get("/user/addresses",authenticateToken, getUserAddresses);

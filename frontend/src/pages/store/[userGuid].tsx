@@ -6,8 +6,11 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import type { RootState } from "@/store/redux_store";
-import { MapPin, Star, Bookmark, ShieldCheck, Truck, BadgeCheck, Clock3, ChevronLeft, ChevronRight, Loader2, Eye, ChevronDown, MessageCircle } from "lucide-react";
+import { MapPin, Star, Bookmark, ShieldCheck, Truck, BadgeCheck, Clock3, ChevronLeft, ChevronRight, Loader2, Eye, ChevronDown, MessageCircle, Zap } from "lucide-react";
 import { getFavorites, getPublicStoreByUserGuid } from "@/services/products/product.api";
+import OwnerRatingsSection from "@/components/owner/OwnerRatingsSection";
+import type { OwnerRatingStats } from "@/components/owner/OwnerRatingsSection";
+import AddToCartButton from "@/components/ui/common/AddToCartButton";
 import { toast } from "sonner";
 
 interface Product {
@@ -75,6 +78,7 @@ export default function OwnerStorePage() {
   const [isLoadMoreMode, setIsLoadMoreMode] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [favoriteLoading, setFavoriteLoading] = useState<Set<string>>(new Set());
+  const [ownerRatingStats, setOwnerRatingStats] = useState<OwnerRatingStats | null>(null);
   const isAuthenticated = useAppSelector((state: RootState) => !!state.auth.accessToken);
   const accessToken = useAppSelector((state: RootState) => state.auth.accessToken);
   const dispatch = useAppDispatch();
@@ -86,7 +90,8 @@ export default function OwnerStorePage() {
     return Array.from(new Set(displayItems.map((it) => it.Category?.name).filter(Boolean)));
   }, [isLoadMoreMode, products, items]);
 
-  const displayItems = useMemo(() => isLoadMoreMode ? products : items, [isLoadMoreMode, products, items]);
+  const displayItems = useMemo(() => (isLoadMoreMode ? products : items), [isLoadMoreMode, products, items]);
+  const ownerInfo = useMemo(() => owner, [owner]);
 
   // Update URL with current query params (only for pagination mode)
   const updateUrl = useCallback((page: number) => {
@@ -107,11 +112,12 @@ export default function OwnerStorePage() {
     );
   }, [router, isLoadMoreMode]);
 
-  // Read page from URL on initial load (only for pagination mode)
+  // Read page from URL and trigger data fetch (only for pagination mode)
   useEffect(() => {
     if (router.isReady && !isLoadMoreMode) {
       const page = parseInt(router.query.page as string) || 1;
       setCurrentPage(page);
+      fetchStoreData(page);
     }
   }, [router.isReady, router.query.page, isLoadMoreMode]);
 
@@ -251,7 +257,7 @@ export default function OwnerStorePage() {
     }
   }, [favorites, favoriteLoading, isAuthenticated, router, isLoadMoreMode]);
 
-  const fetchStoreData = useCallback(async (page?: number) => {
+  async function fetchStoreData(page?: number) {
     if (!userGuid) {
       setError("Không có userGuid");
       setLoading(false);
@@ -259,17 +265,6 @@ export default function OwnerStorePage() {
     }
     
     const fetchPage = page || currentPage;
-    // Update URL with current page (only pagination mode)
-    if (!isLoadMoreMode && fetchPage > 1) {
-      updateUrl(fetchPage);
-    } else if (!isLoadMoreMode) {
-      const { page: _, ...query } = router.query;
-      router.replace(
-        { pathname: router.pathname, query },
-        undefined,
-        { shallow: true }
-      );
-    }
 
     try {
       setLoading(true);
@@ -282,13 +277,8 @@ export default function OwnerStorePage() {
       // Determine mode based on total (only on initial load)
       if (fetchPage === 1) {
         setTotal(fetchedTotal);
-        if (fetchedTotal <= 16) {
-          setIsLoadMoreMode(true);
-          setProducts(fetchedItems);
-        } else {
-          setIsLoadMoreMode(false);
-          setItems(fetchedItems);
-        }
+        setIsLoadMoreMode(false);
+        setItems(fetchedItems);
       } else if (!isLoadMoreMode) {
         // For pagination mode, update items
         setItems(fetchedItems);
@@ -300,7 +290,7 @@ export default function OwnerStorePage() {
     } finally {
       setLoading(false);
     }
-  }, [userGuid, currentPage, updateUrl, router, isLoadMoreMode]);
+  }
 
   // Load more handler for load more mode
   const handleLoadMore = useCallback(async () => {
@@ -327,15 +317,9 @@ export default function OwnerStorePage() {
     setCurrentPage(newPage);
     fetchStoreData(newPage);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [isLoadMoreMode, totalPages, fetchStoreData]);
+  }, [isLoadMoreMode, totalPages]);
 
-  // Initial load
-  useEffect(() => {
-    if (!router.isReady) return;
-    fetchStoreData(1);
-  }, [fetchStoreData, router.isReady]);
-
-  const ownerInfo = useMemo(() => owner, [owner]);
+  // Initial load is now handled by the URL-based effect above
 
   if (loading) {
     return (
@@ -400,7 +384,9 @@ export default function OwnerStorePage() {
               <div className="flex items-center gap-4 mb-4 text-sm text-gray-600 flex-wrap">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                  <span className="font-semibold text-gray-900">{ownerInfo.reputationScore?.toFixed(1) ?? 5.0}</span>
+                  <span className="font-semibold text-gray-900">
+                    {ownerRatingStats?.average?.toFixed(1) ?? ownerInfo.reputationScore?.toFixed(1) ?? "5.0"}
+                  </span>
                 </div>
                 <div className="hidden md:block w-px h-4 bg-gray-300" />
                 <div className="flex items-center gap-1">
@@ -439,8 +425,8 @@ export default function OwnerStorePage() {
                   }</div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-100">
-                  <div className="text-gray-600 text-sm">Đánh giá</div>
-                  <div className="text-2xl font-bold text-gray-900">{ownerInfo.reputationScore?.toFixed(1) ?? 5.0}</div>
+                  <div className="text-gray-600 text-sm">Lượt đánh giá</div>
+                  <div className="text-2xl font-bold text-gray-900">{ownerRatingStats?.total ?? 0}</div>
                 </div>
               </div>
             </div>
@@ -589,6 +575,34 @@ export default function OwnerStorePage() {
                           </span> sản phẩm
                         </div>
                       </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div
+                          className="h-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <AddToCartButton
+                            itemId={it._id}
+                            availableQuantity={availableQuantity}
+                            size="sm"
+                            variant="outline"
+                            showText
+                            className="w-full h-full justify-center py-2 text-[11px] sm:text-xs whitespace-nowrap"
+                          />
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(href);
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm"
+                        >
+                          <Zap size={16} />
+                          Xem chi tiết
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -626,17 +640,7 @@ export default function OwnerStorePage() {
                 Trang {currentPage} / {totalPages} ({total} sản phẩm)
               </div>
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  onClick={() => handlePageChange(1)}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-2 rounded-lg border ${
-                    currentPage === 1 
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                  } transition`}
-                >
-                  Đầu tiên
-                </button>
+                
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
@@ -688,160 +692,19 @@ export default function OwnerStorePage() {
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => handlePageChange(totalPages)}
-                  disabled={currentPage === totalPages}
-                  className={`px-3 py-2 rounded-lg border ${
-                    currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                  } transition`}
-                >
-                  Cuối cùng
-                </button>
+                
               </div>
             </div>
           )}
         </div>
 
         {/* Customer Reviews Section */}
-        <div className="bg-white rounded-3xl p-6 shadow-lg mb-8 mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Đánh giá và phản hồi từ khách hàng</h2>
-          
-          {/* Overall Rating */}
-          <div className="flex items-center justify-between mb-8 p-6 bg-gray-50 rounded-xl">
-            <div className="text-center">
-              <div className="text-5xl font-bold text-gray-900 mb-1">{ownerInfo.reputationScore?.toFixed(1) ?? 5.0}</div>
-              <div className="flex justify-center mb-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star key={star} className="w-6 h-6 text-yellow-500 fill-yellow-500" />
-                ))}
-              </div>
-              <p className="text-gray-600 text-sm">Dựa trên 24 đánh giá</p>
-            </div>
-            
-            <div className="w-px h-20 bg-gray-200 mx-8"></div>
-            
-            <div className="flex-1">
-              {[5, 4, 3, 2, 1].map((rating) => (
-                <div key={rating} className="flex items-center mb-2">
-                  <span className="w-8 text-sm text-gray-600">{rating} sao</span>
-                  <div className="w-48 h-2 bg-gray-200 rounded-full mx-2 overflow-hidden">
-                    <div 
-                      className="h-full bg-yellow-500" 
-                      style={{ width: `${(rating === 5 ? 80 : rating === 4 ? 15 : rating === 3 ? 3 : rating === 2 ? 1 : 1) * 10}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-sm text-gray-500 w-8 text-right">
-                    {rating === 5 ? 80 : rating === 4 ? 15 : rating === 3 ? 3 : rating === 2 ? 1 : 1}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Review List */}
-          <div className="space-y-6">
-            {/* Review Item 1 */}
-            <div className="border-b border-gray-200 pb-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg mr-3">
-                    KH
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Khách hàng 1</h4>
-                    <div className="flex items-center">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                      ))}
-                      <span className="ml-2 text-sm text-gray-500">1 tuần trước</span>
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm text-gray-500">#ĐH123456</span>
-              </div>
-              <p className="text-gray-700 mb-3">Sản phẩm rất tốt, đóng gói cẩn thận, giao hàng nhanh. Sẽ ủng hộ shop dài dài.</p>
-              <div className="flex space-x-2">
-                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden">
-                  <img 
-                    src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&q=80&auto=format&fit=crop" 
-                    alt="Review" 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Review Item 2 */}
-            <div className="border-b border-gray-200 pb-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg mr-3">
-                    NT
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Nguyễn Trang</h4>
-                    <div className="flex items-center">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                      ))}
-                      <span className="ml-2 text-sm text-gray-500">2 tuần trước</span>
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm text-gray-500">#ĐH123455</span>
-              </div>
-              <p className="text-gray-700 mb-3">Hàng đẹp, đúng như mô tả. Shop tư vấn nhiệt tình, giao hàng đúng hẹn. Cảm ơn shop!</p>
-            </div>
-
-            {/* Review Item 3 */}
-            <div className="pb-2">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg mr-3">
-                    TL
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Trần Long</h4>
-                    <div className="flex items-center">
-                      {[1, 2, 3, 4].map((star) => (
-                        <Star key={star} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                      ))}
-                      <Star className="w-4 h-4 text-gray-300" />
-                      <span className="ml-2 text-sm text-gray-500">3 tuần trước</span>
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm text-gray-500">#ĐH123454</span>
-              </div>
-              <p className="text-gray-700 mb-3">Sản phẩm tốt nhưng giao hàng hơi chậm. Đóng gói cẩn thận, nhân viên giao hàng thân thiện.</p>
-              <div className="flex space-x-2">
-                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden">
-                  <img 
-                    src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&q=80&auto=format&fit=crop" 
-                    alt="Review" 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden">
-                  <img 
-                    src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&q=80&auto=format&fit=crop" 
-                    alt="Review" 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Load More Button */}
-          <div className="mt-8 text-center">
-            <button className="px-6 py-2 border border-gray-300 rounded-full text-gray-700 hover:bg-gray-50 transition-colors">
-              Xem thêm đánh giá
-            </button>
-          </div>
-        </div>
+        {ownerInfo?._id && (
+          <OwnerRatingsSection 
+            ownerId={ownerInfo._id} 
+            onStatsUpdate={setOwnerRatingStats}
+          />
+        )}
       </div>
     </div>
   );

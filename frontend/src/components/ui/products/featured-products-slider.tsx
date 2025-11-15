@@ -12,6 +12,7 @@ import {
   ChevronRight,
   RefreshCw,
   Sparkles,
+  Bookmark,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getHighlightedProducts } from "@/services/products/product.api";
@@ -26,6 +27,7 @@ interface Product {
   depositAmount: number;
   viewCount?: number;
   rentCount?: number;
+  favoriteCount?: number;
   city?: string;
   district?: string;
   priceUnit?: { UnitName: string };
@@ -81,7 +83,28 @@ export default function FeaturedProductsSlider({
         if (!thumb.startsWith("http") && !thumb.startsWith("/")) thumb = `/${thumb}`;
         if (thumb.startsWith("/") && !thumb.startsWith("http"))
           thumb = `${process.env.NEXT_PUBLIC_API_URL || ""}${thumb.replace(/^\/+/, "/")}`;
-        const unit = p.priceUnit?.[0] ?? p.priceUnit ?? p.PriceUnit ?? { UnitName: "ngày" };
+        // Map numeric PriceUnitId (1=giờ,2=ngày,3=tuần,4=tháng) like products page
+        const getUnitName = (priceUnitId: number) => {
+          switch (priceUnitId) {
+            case 1: return "giờ";
+            case 2: return "ngày";
+            case 3: return "tuần";
+            case 4: return "tháng";
+            default: return "ngày";
+          }
+        };
+
+        const rawUnit = Array.isArray(p.priceUnit)
+          ? p.priceUnit[0]
+          : p.priceUnit || p.PriceUnit;
+
+        const unitName = typeof p.PriceUnitId === "number"
+          ? getUnitName(p.PriceUnitId)
+          : (rawUnit && typeof rawUnit === "object" && "UnitName" in rawUnit
+              ? (rawUnit as any).UnitName
+              : "ngày");
+
+        const unit = { UnitName: unitName };
         return {
           _id: p._id ?? "",
           title: p.Title ?? "No title",
@@ -92,6 +115,7 @@ export default function FeaturedProductsSlider({
           depositAmount: p.DepositAmount ?? 0,
           viewCount: p.ViewCount ?? 0,
           rentCount: p.RentCount ?? 0,
+          favoriteCount: p.FavoriteCount ?? 0,
           city: p.City ?? "",
           district: p.District ?? "",
           priceUnit: unit,
@@ -269,6 +293,10 @@ export default function FeaturedProductsSlider({
                     <div className="flex items-center gap-1">
                       <Package className="w-4 h-4" />
                       {mainProduct.rentCount ?? 0} thuê
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Bookmark className="w-4 h-4" />
+                      {mainProduct.favoriteCount ?? 0} yêu thích
                     </div>
                   </div>
 
