@@ -576,9 +576,10 @@ export default function WalletPage() {
               setSuccessMessage("Thêm tài khoản ngân hàng thành công!");
               setTimeout(() => setSuccessMessage(null), 3500);
             } catch (error) {
-              setSuccessMessage(null);
-              setWithdrawError("Thêm tài khoản thất bại!");
-              setTimeout(() => setWithdrawError(null), 3500);
+              // setSuccessMessage(null);
+              // setWithdrawError("Thêm tài khoản thất bại!");
+              // setTimeout(() => setWithdrawError(null), 3500);
+              throw error;
             }
           }}
         />
