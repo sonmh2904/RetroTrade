@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/redux_store';
@@ -6,13 +6,6 @@ import { getUserProfile, changePassword, verifyPassword } from '@/services/auth/
 import { validatePassword } from '@/lib/validation-password';
 import { toast } from 'sonner';
 import type { UserProfile, ProfileApiResponse } from '@iService';
-
-
-// import { AccountStatusCard } from '@/components/ui/auth/account-status-card';
-// import { WalletCard } from '@/components/ui/wallet-card';
-// import { StatisticsCard } from '@/components/ui/auth/profile/statistics-card';
-// import { DetailedInfoCard, DetailedInfoCardHandle } from '@/components/ui/auth/profile/detailed-info-card';
-// import { QuickActionsCard } from '@/components/ui/auth/profile/quick-actions-card';
 import { ProfileSidebar } from '@/components/ui/auth/profile/profile-sidebar';
 import { ProfileHeader as UserProfileHeader } from '@/components/ui/auth/profile/user-profile';
 import { ChangePasswordModal } from '@/components/ui/auth/profile/change-password-modal';
@@ -98,24 +91,13 @@ export default function ProfilePage() {
     }
   }, [accessToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // const detailRef = React.useRef<DetailedInfoCardHandle | null>(null);
-
-  const handleEditClick = () => { };
-
-  // Change password modal is opened via sidebar selection
-
-  const handleAvatarEditClick = () => {
+  const handleAvatarEditClick = useCallback(() => {
     setShowAvatarModal(true);
-  };
+  }, []);
 
-  const handleAvatarUpdated = (newAvatarUrl: string) => {
-    if (userProfile) {
-      setUserProfile({
-        ...userProfile,
-        avatarUrl: newAvatarUrl
-      });
-    }
-  };
+  const handleAvatarUpdated = useCallback((newAvatarUrl: string) => {
+    setUserProfile(prev => prev ? { ...prev, avatarUrl: newAvatarUrl } : null);
+  }, []);
 
   // Owner request (inline)
   const [showOwnerForm, setShowOwnerForm] = useState(true);
@@ -123,14 +105,17 @@ export default function ProfilePage() {
   const [ownerInfo, setOwnerInfo] = useState('');
   const [ownerSubmitting, setOwnerSubmitting] = useState(false);
 
-  const submitOwnerRequest = async () => {
+  const submitOwnerRequest = useCallback(async () => {
     if (!ownerReason.trim()) {
       toast.error('Vui lòng nhập lý do');
       return;
     }
     setOwnerSubmitting(true);
     try {
-      await ownerRequestApi.createOwnerRequest({ reason: ownerReason.trim(), additionalInfo: ownerInfo.trim() || undefined });
+      await ownerRequestApi.createOwnerRequest({ 
+        reason: ownerReason.trim(), 
+        additionalInfo: ownerInfo.trim() || undefined 
+      });
       toast.success('Gửi yêu cầu thành công');
       setShowOwnerForm(false);
       setOwnerInfo('');
@@ -139,9 +124,33 @@ export default function ProfilePage() {
     } finally {
       setOwnerSubmitting(false);
     }
-  };
+  }, [ownerReason, ownerInfo]);
   type MenuKey = 'orders' | 'wallet' | 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details';
-  const [activeMenu, setActiveMenu] = useState<MenuKey>('settings');
+  
+  // Get initial menu from URL query or default to null (no default menu)
+  const getInitialMenu = (): MenuKey | null => {
+    const menuFromQuery = router.query.menu as MenuKey | undefined;
+    if (menuFromQuery && ['orders', 'wallet', 'discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+      return menuFromQuery;
+    }
+    return null;
+  };
+  
+  const [activeMenu, setActiveMenu] = useState<MenuKey | null>(getInitialMenu());
+  
+  // Update menu when URL query changes
+  useEffect(() => {
+    const menuFromQuery = router.query.menu as MenuKey | undefined;
+    if (menuFromQuery && ['orders', 'wallet', 'discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+      setActiveMenu(menuFromQuery);
+    }
+  }, [router.query.menu]);
+  
+  // Update URL when menu changes
+  const handleMenuChange = useCallback((menu: MenuKey) => {
+    setActiveMenu(menu);
+    router.replace({ pathname: router.pathname, query: { ...router.query, menu } }, undefined, { shallow: true });
+  }, [router]);
 
   // Reset password verification when switching away from changePassword menu
   useEffect(() => {
@@ -151,7 +160,6 @@ export default function ProfilePage() {
       setVerificationError('');
     }
   }, [activeMenu]);
-  // Verification renders inline; no toggle button
 
   // Inline change password state
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
@@ -164,7 +172,7 @@ export default function ProfilePage() {
   const [pwErrors, setPwErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
   const [showPw, setShowPw] = useState<{ new: boolean; confirm: boolean }>({ new: false, confirm: false });
 
-  const handleVerifyPasswordForChange = async () => {
+  const handleVerifyPasswordForChange = useCallback(async () => {
     if (!verificationPassword.trim()) {
       setVerificationError('Vui lòng nhập mật khẩu');
       return;
@@ -189,26 +197,31 @@ export default function ProfilePage() {
     } finally {
       setIsVerifyingPassword(false);
     }
-  };
+  }, [verificationPassword]);
 
-  const submitInlineChangePassword = async (e: React.FormEvent) => {
+  const submitInlineChangePassword = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: typeof pwErrors = {};
     const v = validatePassword(pwForm.newPassword);
     if (!v.isValid) errors.newPassword = v.message;
-    if (!pwForm.confirmPassword.trim()) errors.confirmPassword = 'Vui lòng nhập lại mật khẩu mới';
-    else if (pwForm.newPassword !== pwForm.confirmPassword) errors.confirmPassword = 'Mật khẩu mới không khớp';
+    if (!pwForm.confirmPassword.trim()) {
+      errors.confirmPassword = 'Vui lòng nhập lại mật khẩu mới';
+    } else if (pwForm.newPassword !== pwForm.confirmPassword) {
+      errors.confirmPassword = 'Mật khẩu mới không khớp';
+    }
     setPwErrors(errors);
     if (Object.keys(errors).length) return;
+    
     setIsChangingPassword(true);
     try {
-      // Sử dụng mật khẩu đã xác thực ở bước đầu làm currentPassword
-      const res = await changePassword({ currentPassword: verificationPassword, newPassword: pwForm.newPassword });
+      const res = await changePassword({ 
+        currentPassword: verificationPassword, 
+        newPassword: pwForm.newPassword 
+      });
       if (res.code === 200) {
         toast.success(res.message || 'Đổi mật khẩu thành công');
         setPwForm({ newPassword: '', confirmPassword: '' });
         setPwErrors({});
-        // Reset verification state after successful password change
         setIsPasswordVerified(false);
         setVerificationPassword('');
       } else {
@@ -219,7 +232,16 @@ export default function ProfilePage() {
     } finally {
       setIsChangingPassword(false);
     }
-  };
+  }, [pwForm, verificationPassword]);
+
+  // Normalize user profile - must be called before early returns
+  const normalizedUserProfile = useMemo((): UserProfile | null => {
+    if (!userProfile) return null;
+    return {
+      ...userProfile,
+      wallet: userProfile.wallet ?? { currency: 'VND', balance: 0 },
+    } as UserProfile;
+  }, [userProfile]);
 
   if (!accessToken) {
     return (
@@ -267,14 +289,9 @@ export default function ProfilePage() {
     );
   }
 
-  if (!userProfile) {
+  if (!userProfile || !normalizedUserProfile) {
     return null;
   }
-
-  const normalizedUserProfile: UserProfile = {
-    ...userProfile,
-    wallet: userProfile.wallet ?? { currency: 'VND', balance: 0 },
-  } as UserProfile;
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden">
@@ -284,15 +301,63 @@ export default function ProfilePage() {
             {/* Sidebar */}
             <aside className="lg:col-span-3">
               <ProfileSidebar
-                active={activeMenu}
-                onChange={(k) => setActiveMenu(k)}
-                user={{ fullName: normalizedUserProfile.fullName, email: normalizedUserProfile.email, avatarUrl: normalizedUserProfile.avatarUrl }}
+                active={activeMenu || 'settings'}
+                onChange={handleMenuChange}
+                user={{ 
+                  fullName: normalizedUserProfile.fullName, 
+                  email: normalizedUserProfile.email, 
+                  avatarUrl: normalizedUserProfile.avatarUrl 
+                }}
               />
             </aside>
 
             {/* Content */}
             <section className="lg:col-span-9">
-              {/* Overview removed as per request */}
+              {!activeMenu && (
+                <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl border border-indigo-100 shadow-lg">
+                  {/* Decorative background elements */}
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-200/20 to-purple-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-pink-200/20 to-purple-200/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+                  
+                  <div className="relative p-12 text-center">
+                    {/* Icon */}
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg mb-6 transform hover:scale-105 transition-transform duration-300">
+                      <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    
+                    {/* Title */}
+                    <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                      Chào mừng bạn trở lại!
+                    </h2>
+                    
+                    {/* Description */}
+                    <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
+                      Quản lý tài khoản, đơn hàng và nhiều hơn thế nữa. Hãy chọn một mục từ menu bên trái để bắt đầu.
+                    </p>
+                    
+                    {/* Quick stats or features */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 max-w-2xl mx-auto">
+                      <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                        <div className="text-2xl font-bold text-indigo-600 mb-1">📦</div>
+                        <div className="text-sm font-semibold text-gray-800">Đơn hàng</div>
+                        <div className="text-xs text-gray-600 mt-1">Theo dõi đơn hàng</div>
+                      </div>
+                      <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                        <div className="text-2xl font-bold text-purple-600 mb-1">💳</div>
+                        <div className="text-sm font-semibold text-gray-800">Ví & Giao dịch</div>
+                        <div className="text-xs text-gray-600 mt-1">Quản lý tài chính</div>
+                      </div>
+                      <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                        <div className="text-2xl font-bold text-pink-600 mb-1">⚙️</div>
+                        <div className="text-sm font-semibold text-gray-800">Cài đặt</div>
+                        <div className="text-xs text-gray-600 mt-1">Tùy chỉnh tài khoản</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {activeMenu === 'orders' && (
                 <div className="rounded-xl overflow-hidden">
@@ -334,7 +399,7 @@ export default function ProfilePage() {
                 <div className="rounded-xl overflow-hidden">
                   <UserProfileHeader
                     userProfile={normalizedUserProfile}
-                    onEditClick={handleEditClick}
+                    onEditClick={() => {}}
                     onAvatarEditClick={handleAvatarEditClick}
                   />
                 </div>
@@ -546,10 +611,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Edit Profile Modal removed - inline editing in settings */}
-
-      {/* Change Password Modal */}
-      {/* Modal không dùng khi đổi inline; vẫn giữ để tái sử dụng nơi khác */}
+      {/* Change Password Modal - kept for reuse elsewhere */}
       <ChangePasswordModal open={false} onOpenChange={() => { }} />
 
       {/* Avatar Upload Modal */}

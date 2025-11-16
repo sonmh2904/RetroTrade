@@ -95,6 +95,17 @@ export const getDisputes = async (params?: {
   return await parseResponse(response);
 };
 
+export const getMyDisputes = async (params?: {
+  status?: string;
+}): Promise<ApiResponse<{ total: number; data: Dispute[] }>> => {
+  const query = new URLSearchParams();
+  if (params?.status) query.append("status", params.status);
+
+  const url = `/dispute/my${query.toString() ? `?${query.toString()}` : ""}`;
+  const response = await api.get(url);
+  return await parseResponse(response);
+};
+
 export const getDisputeById = async (
   id: string
 ): Promise<ApiResponse<Dispute>> => {

@@ -15,6 +15,11 @@ const {
   notifyOrderDisputed
 } = require("../../middleware/orderNotification");
 
+const DiscountController = require("./discount.controller");
+const Discount = require("../../models/Discount/Discount.model");
+const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
+const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
+
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
 }
@@ -94,10 +99,15 @@ module.exports = {
         });
       }
 
-      const { totalAmount, depositAmount, serviceFee, duration, unitName } =
+      // calculateTotals trả về:
+      // - rentalAmount: tiền thuê
+      // - serviceFee: phí dịch vụ (tính trên rentalAmount + depositAmount)
+      // - depositAmount: tiền cọc
+      const { rentalAmount, depositAmount, serviceFee, duration, unitName } =
         result;
 
-      const baseAmountForDiscount = totalAmount + depositAmount;
+      // baseAmountForDiscount = tiền thuê + tiền cọc (để tính discount)
+      const baseAmountForDiscount = rentalAmount + depositAmount;
       let discountInfo = null;
       let finalAmount = baseAmountForDiscount;
       let totalDiscountAmount = 0;
@@ -108,10 +118,6 @@ module.exports = {
     
       if (publicCode) {
         try {
-          const DiscountController = require("./discount.controller");
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
           const validated = await DiscountController.validateAndCompute({
             code: publicCode,
             baseAmount: baseAmountForDiscount, 
@@ -144,10 +150,6 @@ module.exports = {
       
       if (privateCode && finalAmount > 0) {
         try {
-          const DiscountController = require("./discount.controller");
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
           const validated = await DiscountController.validateAndCompute({
             code: privateCode,
             baseAmount: finalAmount, 
@@ -185,7 +187,8 @@ module.exports = {
         
         }
       }
-      const finalOrderAmount = Math.max(0, totalAmount + serviceFee + depositAmount - totalDiscountAmount);
+      // Công thức: Tổng = tiền thuê + tiền cọc + phí dịch vụ - giảm giá
+      const finalOrderAmount = Math.max(0, rentalAmount + depositAmount + serviceFee - totalDiscountAmount);
 
       const cleanDiscountInfo = discountInfo ? {
         code: discountInfo.code,
@@ -214,7 +217,7 @@ module.exports = {
             unitCount: quantity,
             startAt: new Date(finalStartAt),
             endAt: new Date(finalEndAt),
-            totalAmount,
+            totalAmount: rentalAmount, // Lưu rentalAmount vào totalAmount (tiền thuê)
             discount: cleanDiscountInfo || undefined,
             finalAmount: finalOrderAmount,
             depositAmount,
@@ -241,10 +244,6 @@ module.exports = {
      
       if (publicDiscountData) {
         try {
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
-          
           await Discount.updateOne(
             { _id: publicDiscountData.discount._id },
             { $inc: { usedCount: 1 } },
@@ -280,10 +279,6 @@ module.exports = {
     
       if (privateDiscountData) {
         try {
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
-          
           await Discount.updateOne(
             { _id: privateDiscountData.discount._id },
             { $inc: { usedCount: 1 } },
@@ -327,8 +322,9 @@ module.exports = {
         data: {
           orderId: orderIdString,
           orderGuid: newOrder.orderGuid,
-          totalAmount,
-          finalAmount: finalOrderAmount,
+          rentalAmount: rentalAmount, // Tiền thuê
+          totalAmount: rentalAmount, // Giữ lại để tương thích (totalAmount = rentalAmount)
+          finalAmount: finalOrderAmount, // Tổng cuối cùng sau khi trừ discount
           discount: cleanDiscountInfo,
           depositAmount,
           serviceFee,

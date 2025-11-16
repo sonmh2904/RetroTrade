@@ -38,7 +38,12 @@ export function UserDisputes() {
     try {
       const response = await getMyDisputes();
       if (response.code === 200) {
-        setDisputes(response.data || []);
+        // Backend returns { total, data } format
+        const disputesData = response.data;
+        const disputesList = Array.isArray(disputesData) 
+          ? disputesData 
+          : (disputesData?.data || []);
+        setDisputes(disputesList);
       } else {
         setError(response.message || "Không thể tải danh sách khiếu nại");
         toast.error(response.message || "Có lỗi xảy ra");

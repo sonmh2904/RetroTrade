@@ -41,6 +41,7 @@ import {
 import { setCartItems } from "@/store/cart/cartReducer";
 import PopupModal from "@/components/ui/common/PopupModal";
 import { getCurrentServiceFee } from "@/services/serviceFee/serviceFee.api";
+import RentalDatePicker from "@/components/ui/common/RentalDatePicker";
 
 
 export default function CartPage() {
@@ -232,8 +233,36 @@ export default function CartPage() {
         return;
       }
 
-      const startDate = new Date(rentalStartDateTime);
-      const endDate = new Date(rentalEndDateTime);
+      // Convert datetime-local string to ISO string if needed
+      // RentalDatePicker may return datetime-local format from input
+      const startDateISO = rentalStartDateTime.includes("T") && !rentalStartDateTime.includes("Z") && rentalStartDateTime.length === 16
+        ? convertDateTimeLocalToISO(rentalStartDateTime)
+        : rentalStartDateTime;
+      const endDateISO = rentalEndDateTime.includes("T") && !rentalEndDateTime.includes("Z") && rentalEndDateTime.length === 16
+        ? convertDateTimeLocalToISO(rentalEndDateTime)
+        : rentalEndDateTime;
+
+      const startDate = new Date(startDateISO);
+      const endDate = new Date(endDateISO);
+
+      // Validate dates
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        showPopup(
+          "error",
+          "Lỗi",
+          "Thời gian thuê không hợp lệ"
+        );
+        return;
+      }
+
+      if (endDate <= startDate) {
+        showPopup(
+          "error",
+          "Lỗi",
+          "Ngày kết thúc phải sau ngày bắt đầu"
+        );
+        return;
+      }
 
       const diffDays = Math.ceil(
         (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -253,8 +282,8 @@ export default function CartPage() {
 
         await dispatch(
           updateCartItemAction(cartItemId, {
-            rentalStartDate: rentalStartDateTime,
-            rentalEndDate: rentalEndDateTime,
+            rentalStartDate: startDateISO,
+            rentalEndDate: endDateISO,
           })
         );
 
@@ -315,22 +344,25 @@ export default function CartPage() {
     }
   }, [selectedItems.size, cartItems, getDisplayKey]);
 
+  // Helper function to convert datetime-local string to ISO string
+  const convertDateTimeLocalToISO = (dateTimeLocal: string): string => {
+    if (!dateTimeLocal) return "";
+    // datetime-local format: "YYYY-MM-DDTHH:mm"
+    // Convert to ISO: "YYYY-MM-DDTHH:mm:ss.sssZ"
+    const date = new Date(dateTimeLocal);
+    return date.toISOString();
+  };
+
   // Helper functions for editing dates
   const startEditingDates = useCallback(
     (cartItemId: string, rentalStartDate?: string, rentalEndDate?: string) => {
-      // Convert existing date strings to datetime-local format
-      const startDateTime = rentalStartDate
-        ? rentalStartDate.replace("T", "T").substring(0, 16)
-        : "";
-      const endDateTime = rentalEndDate
-        ? rentalEndDate.replace("T", "T").substring(0, 16)
-        : "";
-
+      // RentalDatePicker expects ISO strings, so we pass them directly
+      // It will handle the conversion to datetime-local format internally
       setEditingDates((prev) => ({
         ...prev,
         [cartItemId]: {
-          rentalStartDateTime: startDateTime,
-          rentalEndDateTime: endDateTime,
+          rentalStartDateTime: rentalStartDate || "",
+          rentalEndDateTime: rentalEndDate || "",
         },
       }));
     },
@@ -594,8 +626,10 @@ const handleCheckout = () => {
     return sum;
   }, 0);
 
-  const serviceFee = (subtotal * serviceFeeRate) / 100;
-  const total = subtotal + serviceFee + totalDeposit;
+  // Tính serviceFee trên (tiền thuê + tiền cọc) theo công thức mới
+  const serviceFee = ((subtotal + totalDeposit) * serviceFeeRate) / 100;
+  // Tính tổng: tiền thuê + tiền cọc + phí dịch vụ
+  const total = subtotal + totalDeposit + serviceFee;
 
   // Format price helper
   const formatPrice = (price: number, currency: string) => {
@@ -815,26 +849,46 @@ const handleCheckout = () => {
               return (
                 <div
                   key={item._id}
-                  className={`bg-white rounded-2xl shadow-sm border border-gray-100 p-8 transition-all duration-300 ${
+                  className={`group relative flex gap-4 p-8 rounded-2xl border-2 transition-all duration-300 ${
+                    selectedItems.has(displayKey)
+                      ? "border-emerald-500 bg-gradient-to-br from-emerald-50 to-white shadow-xl ring-2 ring-emerald-200"
+                      : "bg-white border-gray-200 hover:border-emerald-300 hover:shadow-lg opacity-60"
+                  } ${
                     updatingItems.has(item._id)
                       ? "ring-2 ring-emerald-200 shadow-lg"
-                      : "hover:shadow-md"
-                  } ${!selectedItems.has(displayKey) ? "opacity-60" : ""}`}
+                      : ""
+                  }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
                     <div className="flex gap-6">
                       {/* Checkbox */}
-                      <div className="flex items-start gap-4 pt-1">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(displayKey)}
-                          onChange={() => toggleItemSelection(displayKey)}
-                          className="w-6 h-6 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer transition-all mt-1"
-                        />
+                      <div className="flex-shrink-0 pt-1">
+                        <label className="relative flex items-center justify-center cursor-pointer group/checkbox">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(displayKey)}
+                            onChange={() => toggleItemSelection(displayKey)}
+                            className="sr-only peer"
+                            aria-label={`Chọn sản phẩm ${item.title}`}
+                          />
+                          <div className={`relative w-6 h-6 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${
+                            selectedItems.has(displayKey)
+                              ? "bg-emerald-600 border-emerald-600 shadow-md scale-110"
+                              : "bg-white border-gray-300 group-hover/checkbox:border-emerald-400 group-hover/checkbox:bg-emerald-50"
+                          }`}>
+                            {selectedItems.has(displayKey) && (
+                              <Check className="w-4 h-4 text-white" />
+                            )}
+                          </div>
+                        </label>
                       </div>
 
                       {/* Product Image */}
-                      <div className="bg-gray-200 border-2 border-dashed rounded-xl w-32 h-32 flex-shrink-0 overflow-hidden">
+                      <div className={`relative bg-gray-100 rounded-xl w-32 h-32 flex-shrink-0 overflow-hidden ring-2 transition-all ${
+                        selectedItems.has(displayKey)
+                          ? "ring-emerald-300 shadow-md"
+                          : "ring-gray-200 group-hover:ring-emerald-200"
+                      }`}>
                         {item.primaryImage ? (
                           <img
                             src={item.primaryImage}
@@ -844,6 +898,11 @@ const handleCheckout = () => {
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">
                             <Package className="w-14 h-14" />
+                          </div>
+                        )}
+                        {selectedItems.has(displayKey) && (
+                          <div className="absolute top-2 right-2 bg-emerald-600 text-white rounded-full p-1 shadow-lg animate-pulse">
+                            <Check className="w-3 h-3" />
                           </div>
                         )}
                       </div>
@@ -913,70 +972,28 @@ const handleCheckout = () => {
                           {editingDates[item._id] ? (
                             // Edit mode
                             <div className="space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="text-center">
-                                  <label className="block text-xs text-blue-700 font-medium mb-2">
-                                    Thời gian bắt đầu:
-                                  </label>
-                                  <input
-                                    type="datetime-local"
-                                    value={
-                                      editingDates[item._id].rentalStartDateTime
-                                    }
-                                    onChange={(e) =>
-                                      updateEditingDates(
-                                        item._id,
-                                        "rentalStartDateTime",
-                                        e.target.value
-                                      )
-                                    }
-                                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-center"
-                                    min={(() => {
-                                      const now = new Date();
-                                      const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-                                      const minTime = new Date(
-                                        now.getTime() - bufferTime
-                                      );
-                                      return minTime
-                                        .toISOString()
-                                        .substring(0, 16);
-                                    })()}
-                                  />
-                                </div>
-                                <div className="text-center">
-                                  <label className="block text-xs text-blue-700 font-medium mb-2">
-                                    Thời gian kết thúc:
-                                  </label>
-                                  <input
-                                    type="datetime-local"
-                                    value={
-                                      editingDates[item._id].rentalEndDateTime
-                                    }
-                                    onChange={(e) =>
-                                      updateEditingDates(
-                                        item._id,
-                                        "rentalEndDateTime",
-                                        e.target.value
-                                      )
-                                    }
-                                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-center"
-                                    min={
-                                      editingDates[item._id]
-                                        .rentalStartDateTime ||
-                                      (() => {
-                                        const now = new Date();
-                                        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-                                        const minTime = new Date(
-                                          now.getTime() - bufferTime
-                                        );
-                                        return minTime
-                                          .toISOString()
-                                          .substring(0, 16);
-                                      })()
-                                    }
-                                  />
-                                </div>
-                              </div>
+                              <RentalDatePicker
+                                rentalStartDate={editingDates[item._id].rentalStartDateTime}
+                                rentalEndDate={editingDates[item._id].rentalEndDateTime}
+                                onStartDateChange={(value) =>
+                                  updateEditingDates(
+                                    item._id,
+                                    "rentalStartDateTime",
+                                    value
+                                  )
+                                }
+                                onEndDateChange={(value) =>
+                                  updateEditingDates(
+                                    item._id,
+                                    "rentalEndDateTime",
+                                    value
+                                  )
+                                }
+                                size="sm"
+                                showLabel={false}
+                                disabled={updatingItems.has(item._id)}
+                                itemId={item.itemId}
+                              />
                               <div className="flex justify-center gap-2">
                                 <Button
                                   size="sm"
@@ -1150,17 +1167,23 @@ const handleCheckout = () => {
                   </div>
                 )}
 
-                <div className="flex justify-between">
-                  <span>Tiền thuê</span>
-                  <span>{subtotal.toLocaleString("vi-VN")}₫</span>
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-emerald-50">Tiền thuê</span>
+                  <span className="font-semibold text-white">
+                    {subtotal.toLocaleString("vi-VN")}₫
+                  </span>
                 </div>
-                <div className="flex justify-between text-yellow-200">
-                  <span>Phí dịch vụ ({serviceFeeRate}%)</span>
-                  <span>{serviceFee.toLocaleString("vi-VN")}₫</span>
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-yellow-200">Phí dịch vụ ({serviceFeeRate}%)</span>
+                  <span className="font-semibold text-yellow-100">
+                    {serviceFee.toLocaleString("vi-VN")}₫
+                  </span>
                 </div>
-                <div className="flex justify-between text-amber-200">
-                  <span>Tiền cọc</span>
-                  <span>{totalDeposit.toLocaleString("vi-VN")}₫</span>
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-amber-200">Tiền cọc</span>
+                  <span className="font-semibold text-amber-100">
+                    {totalDeposit.toLocaleString("vi-VN")}₫
+                  </span>
                 </div>
                 <div className="flex justify-between text-yellow-200 text-xs">
                   <span>(Hoàn lại tiền cọc sau khi trả đồ)</span>
