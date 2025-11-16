@@ -52,7 +52,7 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   const [openConfirm, setOpenConfirm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // Hiển thị 10 đơn hàng mỗi trang
+  const itemsPerPage = 10; 
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 

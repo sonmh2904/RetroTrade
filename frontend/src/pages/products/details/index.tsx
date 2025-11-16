@@ -44,6 +44,7 @@ import RatingSection from "@/components/ui/products/rating";
 import { useDispatch } from "react-redux";
 import { fetchOrderList } from "@/store/order/orderActions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {jwtDecode} from "jwt-decode";
 interface ProductDetailDto {
   _id: string;
   Title: string;
@@ -103,15 +104,19 @@ export default function ProductDetailPage() {
   const [selectedPlan, setSelectedPlan] = useState<
     "hour" | "day" | "week" | "month"
   >("day");
-  const [durationUnits, setDurationUnits] = useState<string>(""); 
+  const [durationUnits, setDurationUnits] = useState<string>("");
   const [dateError, setDateError] = useState<string>("");
   const [ownerTopItems, setOwnerTopItems] = useState<any[]>([]);
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
-    const isAuthenticated = useSelector((state: RootState) => !!state.auth.accessToken);
+  const isAuthenticated = useSelector(
+    (state: RootState) => !!state.auth.accessToken
+  );
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
-const dispatch = useAppDispatch();
- const { orders = [] } = useAppSelector((state) => state.order || { orders: [] });
+  const dispatch = useAppDispatch();
+  const { orders = [] } = useAppSelector(
+    (state) => state.order || { orders: [] }
+  );
   const completedOrders = useMemo(() => {
     if (!id || !Array.isArray(orders)) return [];
     return orders
@@ -128,7 +133,7 @@ const dispatch = useAppDispatch();
     if (isAuthenticated && orders.length === 0) {
       dispatch(fetchOrderList());
     }
-  }, [isAuthenticated,]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!id) return;
@@ -147,7 +152,32 @@ const dispatch = useAppDispatch();
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [favoriteCount, setFavoriteCount] = useState(0);
+  // Lấy thông tin user trong  (accessToken)
 
+  const currentUserId = useMemo(() => {
+    if (!accessToken) return null;
+    try {
+      const decoded: any = jwtDecode(accessToken);
+      // Backend có thể lưu userId ở: sub, _id, userId, id, userGuid...
+      return (
+        decoded.sub ||
+        decoded._id ||
+        decoded.userId ||
+        decoded.id ||
+        decoded.userGuid ||
+        null
+      );
+    } catch (error) {
+      console.error("Invalid token", error);
+      return null;
+    }
+  }, [accessToken]);
+
+  const isOwner = useMemo(() => {
+    if (!currentUserId || !product?.Owner) return false;
+    const ownerId = product.Owner._id || product.Owner.userGuid;
+    return currentUserId === ownerId;
+  }, [currentUserId, product?.Owner]);
   // Get authentication state
 
   // Fetch favorite status when product or authentication changes
@@ -162,7 +192,8 @@ const dispatch = useAppDispatch();
           const data = await res.json();
           const favorites = data.data || [];
           const isFav = favorites.some(
-            (fav: any) => fav.productId?._id === id || fav.productId?._id?.$oid === id
+            (fav: any) =>
+              fav.productId?._id === id || fav.productId?._id?.$oid === id
           );
           setIsFavorite(isFav);
         }
@@ -219,17 +250,18 @@ const dispatch = useAppDispatch();
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const errorMsg = errorData.message || `Lỗi! Mã trạng thái: ${res.status}`;
+        const errorMsg =
+          errorData.message || `Lỗi! Mã trạng thái: ${res.status}`;
 
         if (res.status === 400) {
           if (errorMsg.includes("đã được yêu thích") && !isFavorite) {
             setIsFavorite(true);
-            setFavoriteCount(prev => prev + 1);
+            setFavoriteCount((prev) => prev + 1);
             toast.success("Đã thêm vào yêu thích!");
             return;
           } else if (errorMsg.includes("chưa được yêu thích") && isFavorite) {
             setIsFavorite(false);
-            setFavoriteCount(prev => Math.max(0, prev - 1));
+            setFavoriteCount((prev) => Math.max(0, prev - 1));
             return;
           }
         }
@@ -239,11 +271,12 @@ const dispatch = useAppDispatch();
       // Toggle favorite status on success
       const newFavoriteStatus = !isFavorite;
       setIsFavorite(newFavoriteStatus);
-      setFavoriteCount(prev => newFavoriteStatus ? prev + 1 : Math.max(0, prev - 1));
+      setFavoriteCount((prev) =>
+        newFavoriteStatus ? prev + 1 : Math.max(0, prev - 1)
+      );
 
-      toast.success(newFavoriteStatus
-        ? "Đã thêm vào yêu thích!"
-        : "Đã xóa khỏi yêu thích!"
+      toast.success(
+        newFavoriteStatus ? "Đã thêm vào yêu thích!" : "Đã xóa khỏi yêu thích!"
       );
     } catch (err: any) {
       console.error("Error toggling favorite:", err);
@@ -261,7 +294,9 @@ const dispatch = useAppDispatch();
         const res = await getTopViewedItemsByOwner(ownerId, 6);
         const data = res?.data ?? res;
         const items = data?.data?.items || data?.items || [];
-        const filtered = (items || []).filter((it: any) => it?._id !== product?._id).slice(0, 5);
+        const filtered = (items || [])
+          .filter((it: any) => it?._id !== product?._id)
+          .slice(0, 5);
         setOwnerTopItems(filtered);
       } catch (e) {
         console.warn("Failed to load owner's featured items", e);
@@ -276,10 +311,15 @@ const dispatch = useAppDispatch();
       const catId = (product?.Category as any)?._id;
       if (!catId) return;
       try {
-        const res = await getProductsByCategoryId(catId, { page: 1, limit: 12 });
+        const res = await getProductsByCategoryId(catId, {
+          page: 1,
+          limit: 12,
+        });
         const data = res?.data ?? res;
         const items = data?.data?.items || data?.items || [];
-        const filtered = (items || []).filter((it: any) => it?._id !== product?._id).slice(0, 8);
+        const filtered = (items || [])
+          .filter((it: any) => it?._id !== product?._id)
+          .slice(0, 8);
         setSimilarItems(filtered);
       } catch (e) {
         console.warn("Failed to load similar items", e);
@@ -428,10 +468,10 @@ const dispatch = useAppDispatch();
     return baseUnit === "hour"
       ? "mỗi giờ"
       : baseUnit === "day"
-        ? "mỗi ngày"
-        : baseUnit === "week"
-          ? "mỗi tuần"
-          : "mỗi tháng";
+      ? "mỗi ngày"
+      : baseUnit === "week"
+      ? "mỗi tuần"
+      : "mỗi tháng";
   }, [baseUnit]);
 
   const totalUnits = useMemo(() => {
@@ -455,7 +495,10 @@ const dispatch = useAppDispatch();
       const start = new Date(dateFrom);
       const end = new Date(dateTo);
       const msPerDay = 24 * 60 * 60 * 1000;
-      const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / msPerDay) + 1);
+      const days = Math.max(
+        1,
+        Math.ceil((end.getTime() - start.getTime()) / msPerDay) + 1
+      );
 
       let calculatedUnits = 0;
       if (selectedPlan === "hour") calculatedUnits = days * 24;
@@ -472,7 +515,15 @@ const dispatch = useAppDispatch();
     }
 
     return 0;
-  }, [product, dateFrom, dateTo, dateError, selectedPlan, pricePerUnit, durationUnits]);
+  }, [
+    product,
+    dateFrom,
+    dateTo,
+    dateError,
+    selectedPlan,
+    pricePerUnit,
+    durationUnits,
+  ]);
 
   const handlePrev = () => {
     setSelectedImageIndex((prev) => (prev - 1 + images.length) % images.length);
@@ -481,7 +532,6 @@ const dispatch = useAppDispatch();
   const handleNext = () => {
     setSelectedImageIndex((prev) => (prev + 1) % images.length);
   };
-
 
   const handleRentNow = () => {
     if (!product) return;
@@ -736,31 +786,33 @@ const dispatch = useAppDispatch();
                 >
                   So sánh sản phẩm
                 </button>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="h-full">
-                    <AddToCartButton
-                      itemId={product._id}
-                      availableQuantity={product.AvailableQuantity ?? 0}
-                      size="md"
-                      variant="outline"
-                      showText={true}
-                      className={`w-full h-full justify-center py-2.5 ${
-                        outOfStock ? "opacity-50 cursor-not-allowed" : ""
+                {!isOwner && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-full">
+                      <AddToCartButton
+                        itemId={product._id}
+                        availableQuantity={product.AvailableQuantity ?? 0}
+                        size="md"
+                        variant="outline"
+                        showText={true}
+                        className={`w-full h-full justify-center py-2.5 ${
+                          outOfStock ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      />
+                    </div>
+                    <button
+                      onClick={handleRentNow}
+                      disabled={outOfStock}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg h-full ${
+                        outOfStock
+                          ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                          : "bg-blue-600 text-white hover:bg-blue-700"
                       }`}
-                    />
+                    >
+                      <Zap className="w-5 h-5" /> Thuê ngay
+                    </button>
                   </div>
-                  <button
-                    onClick={handleRentNow}
-                    disabled={outOfStock}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg h-full ${
-                      outOfStock
-                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
-                  >
-                    <Zap className="w-5 h-5" /> Thuê ngay
-                  </button>
-                </div>
+                )}
 
                 <div className="rounded-xl bg-white p-4 space-y-4">
                   <div className="flex items-start gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
@@ -817,99 +869,106 @@ const dispatch = useAppDispatch();
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-gray-900">
-                        {product.Owner?.DisplayName || product.Owner?.FullName || "Người dùng"}
+                        {product.Owner?.DisplayName ||
+                          product.Owner?.FullName ||
+                          "Người dùng"}
                       </span>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                         <CheckCircle className="w-3 h-3" /> Chủ cho thuê
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={async () => {
-                        const ownerId =
-                          (product as any)?.Owner?._id ||
-                          (product as any)?.Owner?.userGuid ||
-                          (product as any)?.Owner?.UserGuid;
-                        if (!ownerId) {
-                          toast.error("Không tìm thấy thông tin người bán");
-                          return;
-                        }
-
-                        if (!accessToken) {
-                          toast.error(
-                            "Vui lòng đăng nhập để sử dụng tính năng chat"
-                          );
-                          router.push("/auth/login");
-                          return;
-                        }
-
-                        try {
-                          // Load danh sách cuộc trò chuyện hiện có
-                          const conversationsRes = await getConversations();
-                          if (!conversationsRes.ok) {
-                            toast.error(
-                              "Không thể tải danh sách cuộc trò chuyện"
-                            );
+                    {!isOwner && (
+                      <button
+                        onClick={async () => {
+                          const ownerId =
+                            (product as any)?.Owner?._id ||
+                            (product as any)?.Owner?.userGuid ||
+                            (product as any)?.Owner?.UserGuid;
+                          if (!ownerId) {
+                            toast.error("Không tìm thấy thông tin người bán");
                             return;
                           }
 
-                          const conversationsData =
-                            await conversationsRes.json();
-                          const conversations = conversationsData.data || [];
-
-                          // Tìm cuộc trò chuyện đã tồn tại với người bán này
-                          const existingConversation = conversations.find(
-                            (conv: Conversation) => {
-                              const userId1 = String(
-                                conv.userId1._id || conv.userId1
-                              );
-                              const userId2 = String(
-                                conv.userId2._id || conv.userId2
-                              );
-                              const ownerIdStr = String(ownerId);
-                              return (
-                                userId1 === ownerIdStr || userId2 === ownerIdStr
-                              );
-                            }
-                          );
-
-                          if (existingConversation) {
-                            // Đi đến trang chat với conversation ID
-                            router.push(
-                              `/auth/messages?conversationId=${existingConversation._id}`
+                          if (!accessToken) {
+                            toast.error(
+                              "Vui lòng đăng nhập để sử dụng tính năng chat"
                             );
-                          } else {
-                            // Tạo cuộc trò chuyện mới
-                            const createRes = await createConversation(ownerId);
-                            if (createRes.ok) {
-                              const createData = await createRes.json();
-                              const newConversation =
-                                createData.data || createData;
-                              router.push(
-                                `/auth/messages?conversationId=${newConversation._id}`
-                              );
-                              toast.success("Đã tạo cuộc trò chuyện mới");
-                            } else {
-                              const errorData = await createRes
-                                .json()
-                                .catch(() => ({}));
-                              toast.error(
-                                errorData.message ||
-                                  "Không thể tạo cuộc trò chuyện"
-                              );
-                            }
+                            router.push("/auth/login");
+                            return;
                           }
-                        } catch (error) {
-                          console.error("Error opening chat:", error);
-                          toast.error("Có lỗi xảy ra khi mở chat");
-                        }
-                      }}
-                      className="px-3 py-1.5 text-sm rounded-md border text-red-600 border-red-200 bg-red-50 hover:bg-red-100"
-                    >
-                      Chat ngay
-                    </button>
+
+                          try {
+                            // Load danh sách cuộc trò chuyện hiện có
+                            const conversationsRes = await getConversations();
+                            if (!conversationsRes.ok) {
+                              toast.error(
+                                "Không thể tải danh sách cuộc trò chuyện"
+                              );
+                              return;
+                            }
+
+                            const conversationsData =
+                              await conversationsRes.json();
+                            const conversations = conversationsData.data || [];
+
+                            // Tìm cuộc trò chuyện đã tồn tại với người bán này
+                            const existingConversation = conversations.find(
+                              (conv: Conversation) => {
+                                const userId1 = String(
+                                  conv.userId1._id || conv.userId1
+                                );
+                                const userId2 = String(
+                                  conv.userId2._id || conv.userId2
+                                );
+                                const ownerIdStr = String(ownerId);
+                                return (
+                                  userId1 === ownerIdStr ||
+                                  userId2 === ownerIdStr
+                                );
+                              }
+                            );
+
+                            if (existingConversation) {
+                              // Đi đến trang chat với conversation ID
+                              router.push(
+                                `/auth/messages?conversationId=${existingConversation._id}`
+                              );
+                            } else {
+                              // Tạo cuộc trò chuyện mới
+                              const createRes = await createConversation(
+                                ownerId
+                              );
+                              if (createRes.ok) {
+                                const createData = await createRes.json();
+                                const newConversation =
+                                  createData.data || createData;
+                                router.push(
+                                  `/auth/messages?conversationId=${newConversation._id}`
+                                );
+                                toast.success("Đã tạo cuộc trò chuyện mới");
+                              } else {
+                                const errorData = await createRes
+                                  .json()
+                                  .catch(() => ({}));
+                                toast.error(
+                                  errorData.message ||
+                                    "Không thể tạo cuộc trò chuyện"
+                                );
+                              }
+                            }
+                          } catch (error) {
+                            console.error("Error opening chat:", error);
+                            toast.error("Có lỗi xảy ra khi mở chat");
+                          }
+                        }}
+                        className="px-3 py-1.5 text-sm rounded-md border text-red-600 border-red-200 bg-red-50 hover:bg-red-100"
+                      >
+                        Chat ngay
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         const ownerGuid =
@@ -1208,14 +1267,10 @@ const dispatch = useAppDispatch();
               </p>
             </div>
 
-     
             <div className="bg-white rounded-xl shadow-sm border overflow-hidden mt-6">
               <div className="p-6">
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  <RatingSection
-                    itemId={product._id}
-                    orders={orders}
-                  />
+                  <RatingSection itemId={product._id} orders={orders} />
                 </div>
               </div>
             </div>

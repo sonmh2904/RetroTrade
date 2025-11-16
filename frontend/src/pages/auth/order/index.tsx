@@ -1018,7 +1018,7 @@ export default function Checkout() {
         } else {
           sessionStorage.removeItem("checkoutItems");
         }
-        router.push("/auth/order");
+        router.push("/auth/order/my-order");
       } else if (successCount > 0) {
         toast.warning(
           `Đã xử lý thành công ${successCount} đơn hàng. ${failedItemMessages.length} đơn thất bại: ${failedItemMessages.join(", ")}`
