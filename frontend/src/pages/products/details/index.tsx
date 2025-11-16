@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/router";
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
 
 const ProductComparisonModal = dynamic(
-  () => import('@/components/ui/products/ProductComparisonModal'),
+  () => import("@/components/ui/products/ProductComparisonModal"),
   { ssr: false }
 );
 import AddToCartButton from "@/components/ui/common/AddToCartButton";
@@ -19,9 +19,12 @@ import {
   removeFromFavorites,
   getFavorites,
   getComparableProducts,
-  getRatingsByItem,
 } from "@/services/products/product.api";
-import { createConversation, getConversations, Conversation } from "@/services/messages/messages.api";
+import {
+  createConversation,
+  getConversations,
+  Conversation,
+} from "@/services/messages/messages.api";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
 import {
@@ -44,7 +47,7 @@ import RatingSection from "@/components/ui/products/rating";
 import { useDispatch } from "react-redux";
 import { fetchOrderList } from "@/store/order/orderActions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 interface ProductDetailDto {
   _id: string;
   Title: string;
@@ -90,6 +93,8 @@ const formatPrice = (price: number, currency: string) => {
   return `$${price}`;
 };
 
+// toggleFavorite moved inside ProductDetailPage to access component state/hooks
+
 export default function ProductDetailPage() {
   const router = useRouter();
   const { id } = router.query as { id?: string };
@@ -107,9 +112,6 @@ export default function ProductDetailPage() {
   const [ownerTopItems, setOwnerTopItems] = useState<any[]>([]);
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
-  const [ratingAverage, setRatingAverage] = useState<number>(0);
-  const [ratingCount, setRatingCount] = useState<number>(0);
-
   const isAuthenticated = useSelector(
     (state: RootState) => !!state.auth.accessToken
   );
@@ -118,7 +120,6 @@ export default function ProductDetailPage() {
   const { orders = [] } = useAppSelector(
     (state) => state.order || { orders: [] }
   );
-
   const completedOrders = useMemo(() => {
     if (!id || !Array.isArray(orders)) return [];
     return orders
@@ -144,27 +145,6 @@ export default function ProductDetailPage() {
     };
     fetchDetail();
   }, [id]);
-
-  useEffect(() => {
-    const fetchRatingSummary = async () => {
-      if (!product?._id) return;
-      try {
-        const res = await getRatingsByItem(product._id);
-        const list = Array.isArray(res?.data) ? res.data : [];
-        setRatingCount(list.length);
-        if (list.length > 0) {
-          const sum = list.reduce((acc: number, r: any) => acc + (Number(r.rating) || 0), 0);
-          setRatingAverage(sum / list.length);
-        } else {
-          setRatingAverage(0);
-        }
-      } catch (e) {
-        setRatingAverage(0);
-        setRatingCount(0);
-      }
-    };
-    fetchRatingSummary();
-  }, [product?._id]);
 
   // Handle compare button click
   const handleCompare = useCallback(() => {
@@ -362,6 +342,16 @@ export default function ProductDetailPage() {
     [product]
   );
 
+  // Legacy simple multiples (will be replaced by unit-aware prices below)
+  // const weeklyPriceLegacy = useMemo(
+  //   () => (product ? product.BasePrice * 7 : 0),
+  //   [product]
+  // );
+  // const monthlyPriceLegacy = useMemo(
+  //   () => (product ? product.BasePrice * 30 : 0),
+  //   [product]
+  // );
+
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
@@ -369,6 +359,7 @@ export default function ProductDetailPage() {
     return d.toISOString().split("T")[0];
   }, []);
 
+  // Normalize unit from backend to one of: 'hour' | 'day' | 'week' | 'month'
   const baseUnit = useMemo(() => {
     const raw = product?.PriceUnit?.UnitName?.toString().toLowerCase() || "day";
     if (raw.includes("giờ") || raw.includes("hour")) return "hour" as const;
@@ -377,11 +368,23 @@ export default function ProductDetailPage() {
     return "day" as const;
   }, [product]);
 
+  // Available plans depending on product unit
   const availablePlans = useMemo<("hour" | "day" | "week" | "month")[]>(() => {
     if (baseUnit === "hour") return ["hour", "day", "week", "month"];
     if (baseUnit === "week") return ["week", "month"];
     if (baseUnit === "month") return ["month"]; // fallback if month-only products exist
     return ["day", "week", "month"];
+  }, [baseUnit]);
+
+  // Initialize default dates: from today to tomorrow
+  useEffect(() => {
+    setDateFrom((prev) => prev || todayStr);
+    setDateTo((prev) => prev || tomorrowStr);
+  }, [todayStr, tomorrowStr]);
+
+  // Default selected plan to base unit when product changes
+  useEffect(() => {
+    setSelectedPlan(baseUnit);
   }, [baseUnit]);
 
   const unitsFromDates = useMemo(() => {
@@ -411,6 +414,7 @@ export default function ProductDetailPage() {
     return Math.ceil(days / 30);
   }, [dateFrom, dateTo, selectedPlan, todayStr]);
 
+  // Derive price per unit based on the base unit from backend
   const hourUnitPrice = useMemo(() => {
     if (!product) return 0;
     if (baseUnit === "hour") return product.BasePrice;
@@ -485,9 +489,11 @@ export default function ProductDetailPage() {
     return price * units;
   }, [pricePerUnit, totalUnits, product]);
 
+  // Update total price display when dates or plan changes
   const displayTotalPrice = useMemo(() => {
     if (!product) return 0;
 
+    // If dates are selected, calculate based on actual duration
     if (dateFrom && dateTo && !dateError) {
       const start = new Date(dateFrom);
       const end = new Date(dateTo);
@@ -506,6 +512,7 @@ export default function ProductDetailPage() {
       return (pricePerUnit || 0) * calculatedUnits;
     }
 
+    // If manual units are entered, use those
     if (durationUnits && Number(durationUnits) > 0) {
       return (pricePerUnit || 0) * Number(durationUnits);
     }
@@ -531,12 +538,6 @@ export default function ProductDetailPage() {
 
   const handleRentNow = () => {
     if (!product) return;
-
-    if (!isAuthenticated) {
-      toast.error("Vui lòng đăng nhập để thuê sản phẩm");
-      router.push("/auth/login");
-      return;
-    }
 
     if (!dateFrom || !dateTo) {
       toast.error("Vui lòng chọn thời gian thuê");
@@ -738,20 +739,13 @@ export default function ProductDetailPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center text-yellow-500">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < Math.round(ratingAverage || 0)
-                            ? "fill-yellow-500 text-yellow-500"
-                            : "text-gray-300"
-                        }`}
-                      />
-                    ))}
+                    <Star className="w-4 h-4 fill-yellow-500" />
+                    <Star className="w-4 h-4 fill-yellow-500" />
+                    <Star className="w-4 h-4 fill-yellow-500" />
+                    <Star className="w-4 h-4 fill-yellow-500" />
+                    <Star className="w-4 h-4" />
                   </div>
-                  <span className="text-sm text-gray-500">
-                    ({ratingCount} đánh giá)
-                  </span>
+                  <span className="text-sm text-gray-500">(12 đánh giá)</span>
                 </div>
 
                 <div className="flex items-center gap-4 text-sm text-gray-500">
