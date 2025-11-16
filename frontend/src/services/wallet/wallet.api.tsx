@@ -166,12 +166,24 @@ export const getRecentWalletTransactions = async () => {
   }
 };
 // API lấy tất cả giao dịch ví của người dùng
-export const getUserWalletTransactions  = async () => {
+export const getUserWalletTransactions = async () => {
   try {
     const res = await instance.get("/wallet/user/transactions");
     return await parseFetchResponse(res);
   } catch (error) {
     console.error("[wallet.api] getAllWalletTransactions error:", error);
+    throw error;
+  }
+};
+// 
+// Lấy toàn bộ danh sách ngân hàng cho select mã ngân hàng trên FE
+export const getAllBanks = async () => {
+  try {
+    const res = await instance.get("/wallet/banks"); // Giả sử backend đã route /api/banks
+    // Nếu route là /api/banks thì chỉ cần sửa lại cho đúng
+    return await parseFetchResponse(res);
+  } catch (error) {
+    console.error("[bank.api] getAllBanks error:", error);
     throw error;
   }
 };
