@@ -60,46 +60,40 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
           return nextRatings;
         });
 
-        // Sử dụng total từ server
-        const totalRatings = res.total ?? nextRatings.length;
+        // Lấy tất cả ratings để tính toán chính xác
+        let allRatings = nextRatings;
+        if (res.total > nextRatings.length && page === 1) {
+          // Fetch tất cả ratings nếu đây là lần đầu và còn nhiều hơn
+          const allRes = await getRatingsByOwner(targetOwnerId, { page: 1, limit: 1000 });
+          allRatings = Array.isArray(allRes.ratings) ? allRes.ratings : [];
+          setOwnerRatings(allRatings);
+        }
 
-        // Tính loaded stats để fallback
-        const loadedCounts = [5, 4, 3, 2, 1].map((star) =>
-          nextRatings.filter((r) => Number(r.rating) === star).length
+        // Áp dụng logic tính toán thủ công của user
+        const averageRating = allRatings.length > 0
+          ? (allRatings.reduce((acc, r) => acc + Number(r.rating || 0), 0) / allRatings.length).toFixed(1)
+          : "0.0";
+
+        const countByStar = [5, 4, 3, 2, 1].map(
+          (star) => allRatings.filter((r) => Number(r.rating) === star).length
         );
-        const loadedAverage =
-          nextRatings.length > 0
-            ? nextRatings.reduce((acc, curr) => acc + Number(curr.rating || 0), 0) /
-              nextRatings.length
-            : 0;
 
-        // Sử dụng server stats nếu có, fallback to loaded
-        const counts = (res as any).counts && Array.isArray((res as any).counts) && (res as any).counts.length === 5
-          ? (res as any).counts.map((c: number) => Number(c))
-          : loadedCounts;
-        const average = (res as any).average !== undefined
-          ? Number((res as any).average)
-          : loadedAverage;
-
-        const limitValue = res.limit ?? limit;
-        const currentPage = res.page ?? page;
-        const totalPages = Math.max(1, Math.ceil(totalRatings / limitValue));
-
-        const newStats = {
-          total: totalRatings,
-          average: parseFloat(average.toFixed(1)), // Lưu 1 chữ số thập phân cho UI
-          counts,
-          page: currentPage,
-          limit: limitValue,
-          hasMore: currentPage < totalPages,
+        // Tạo stats mới từ tính toán thủ công
+        const newStats: OwnerRatingStats = {
+          total: allRatings.length,
+          average: Number(averageRating),
+          counts: countByStar,
+          page: page,
+          limit: limit,
+          hasMore: res.total > page * limit
         };
 
         setOwnerRatingStats(newStats);
+        setFilteredOwnerRatings(allRatings);
+
         if (onStatsUpdate) {
           onStatsUpdate(newStats);
         }
-
-        // Không gọi apply ở đây nữa, để useEffect xử lý
       } catch (error) {
         console.error("Failed to fetch owner ratings", error);
         toast.error("Không thể tải đánh giá cửa hàng");
@@ -157,8 +151,9 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
         <div className="w-px h-20 bg-gray-200 hidden lg:block"></div>
 
         <div className="flex-1 w-full">
-          {[5, 4, 3, 2, 1].map((rating, index) => {
-            const count = ownerRatingStats.counts[index] || 0;
+          {[5, 4, 3, 2, 1].map((rating) => {
+            // counts array is [5 sao, 4 sao, 3 sao, 2 sao, 1 sao]
+            const count = ownerRatingStats.counts[5 - rating] || 0;
             const percent = ownerRatingStats.total ? (count / ownerRatingStats.total) * 100 : 0;
             return (
               <div key={rating} className="flex items-center mb-2">
@@ -186,8 +181,7 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
           Tất cả ({ownerRatingStats.total})
         </button>
         {[5, 4, 3, 2, 1].map((star) => {
-          const starIndex = [5, 4, 3, 2, 1].indexOf(star);
-          const count = ownerRatingStats.counts[starIndex] || 0;
+          const count = ownerRatingStats.counts[5 - star] || 0;
           return (
             <button
               key={star}

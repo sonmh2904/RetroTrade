@@ -1,0 +1,233 @@
+[33mb584f14[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32msonmhhe172086[m[33m, [m[1;31morigin/sonmhhe172086[m[33m)[m update logic for addToCart, Rent Now, Chat now buttons in product details page
+[33mf692457[m update UI store page and fix logic highlight products in homepage
+[33mff65126[m create frontend for rating in store page and fix logic in backend
+[33m177ca01[m create function in backend to get rating for store page
+[33m0cba4fb[m fix
+[33maadc39c[m Checkout erorr
+[33m8ecfba5[m fix
+[33meb1b8e0[m update header
+[33m9016f2d[m Merge branch 'sonmhhe172086' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33m542440d[m update fe & be of comparasion products
+[33mdaf50dc[m fix fe product detail owner
+[33m8e42402[m  update UI for homepage and about us
+[33m49b7bcb[m update UI for product highlight and change UI in product page
+[33mccc351b[m Refactor JWT token handling across multiple components by replacing jwt-decode with a custom decodeToken utility. This change improves consistency and simplifies token decoding logic in the application.
+[33m10006dd[m Rating Product!
+[33m8df0031[m update UI for store page
+[33m7ea3e13[m merge
+[33m059f8c6[m Merge branch 'duclmhe173155' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33m0581c41[m Implement stage rewards and reset functionality for LifeTree; add points conversion to discounts in loyalty system. Update related models, controllers, and routes to support new features.
+[33m6662928[m Enhance PopupModal behavior and improve payment process in Checkout component. Added detailed error messages for insufficient wallet balance and refactored payment handling logic. Updated API endpoint for order payment.
+[33m7d57d8f[m fix discount
+[33mac5c871[m Refactor tax management to service fee management, including new service fee model, controller, and routes. Update server and frontend components to handle service fee operations, replacing tax references with service fee logic.
+[33m3c23161[m fix form terms , add terms management in sidebar admin
+[33m5ad83a7[m Merge branch 'sonmhhe172086' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33me8edcd2[m create terms page , admin CRUD terms system
+[33m93f1dff[m update UI for products in store, add favorite in store page
+[33m9c3747d[m Update isContractSigned done
+[33m47b91cb[m Merge branch 'main' into duclmhe173155
+[33m2716ca3[m Restore uncommitted local changes from backup
+[33m1547632[m Merge pull request #18 from dinhduclinh/huyennthe172781
+[33m24d4671[m update order auth index
+[33m29dc4b1[m update docker
+[33mad48fa7[m merge main
+[33m7ba02d6[m Merge branch 'main' into huyennthe172781
+[33m0514a2c[m package
+[33m9e64c88[m Update [id].tsx
+[33m36e749d[m order index
+[33mc616f44[m update wallet api
+[33m47a2d48[m transactions viewall user
+[33mc32bfe6[m wallet index user
+[33mdde3732[m wallet index admin
+[33m2ea685d[m pupupModal.tsx
+[33m7ed2732[m update header tsx
+[33mdd2cae3[m update wallet routers
+[33mec7cbdf[m update wallet controller
+[33me991f9a[m payment controller
+[33m401104c[m update admin controller
+[33mc7d9b4e[m update order controller
+[33mae396f8[m Merge branch 'linhddhe173104' of https://github.com/dinhduclinh/RetroTrade
+[33m6fed99f[m update information pop up compare products
+[33mb2a1151[m add compare products feature in product details page
+[33mfaed7f5[m fix problem with UI and chat in product detail
+[33m2257722[m Merge branch 'linhddhe173104' of https://github.com/dinhduclinh/RetroTrade into sonmhhe172086
+[33md669f2f[m Update UI for Shop page
+[33m566e59a[m fix merge
+[33m9d465ae[m Merge branch 'duclmhe173155' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33m0990f8c[m Add user ID card information management and verification request handling
+[33m1f3cbf7[m Merge linhdd branch
+[33mbfd499e[m Users cannot change the position of other people's signatures
+[33mb901d20[m add button contract in order
+[33mf963f2c[m Order dispute resolution by moderator
+[33me5e420c[m Merge branch 'linhddhe173104' into duclmhe173155
+[33me56ff6f[m Add bamboo life game features including tree growth mechanics, user background management, and state handling. Implement backend routes for watering and fertilizing trees, and integrate frontend components for user interaction and display. Add necessary assets for backgrounds and tree stages.
+[33m7e4f7f7[m merge
+[33m00b0a82[m fix merge
+[33m371aae9[m update hero-section in homepage
+[33mb94667a[m update and fix UI homepage, fix solve in store
+[33m321a095[m remove ttf file
+[33md6c6fd5[m create contract , signature contract , export pdf
+[33m89935f2[m Dispute Details
+[33mf651cf1[m create discount + loyalty pointpoint
+[33m973cb86[m Handle Dispute Order of Owner
+[33ma7c5acc[m dispute controller
+[33m77260c6[m Add discount management features including CRUD operations for discounts, user assignment, and validation. Update order handling to support discount codes and adjust frontend components for discount display and management. Refactor related routes and services for better integration.
+[33m59df0f5[m CRUD Contract Template
+[33m418b99d[m Merge pull request #15 from dinhduclinh/main
+[33m7ced121[m Merge pull request #14 from dinhduclinh/huyennthe172781
+[33m55348dd[m[33m ([m[1;32mmain[m[33m)[m Merge branch 'main' of https://github.com/dinhduclinh/RetroTrade
+[33m484f4be[m delete transaction
+[33mf3c9225[m Merge branch 'linhddhe173104' of https://github.com/dinhduclinh/RetroTrade into sonmhhe172086
+[33m75baff0[m resolve conflig after merge with duclm
+[33m0507fb1[m Merge branch 'sonmhhe172086' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33m6e948c7[m Merge pull request #13 from dinhduclinh/duclmhe173155
+[33mad23faf[m Refactor order routes to remove role-based authorization for order creation. Enhance order submission handling in the frontend to track success and failure of individual orders, providing detailed feedback to users and managing cart items accordingly.
+[33mc82fe78[m fix
+[33mcb1a6c9[m Merge branch 'sonmhhe172086' of https://github.com/dinhduclinh/RetroTrade
+[33me289509[m fix logic in product detail
+[33mac867d1[m Merge branch 'sonmhhe172086' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33me565a52[m Merge branch 'duclmhe173155' of https://github.com/dinhduclinh/RetroTrade into duclmhe173155
+[33mfba21dd[m Implement SSE for real-time notifications and unread count updates. Remove deprecated unread count endpoint and refactor notification handling in the frontend to utilize SSE. Add user address management features including CRUD operations for user addresses.
+[33mc88698b[m Convert VI in Order Status
+[33m79f4699[m Fix bug progress
+[33m3ae562f[m Fix error Merge
+[33mce84116[m Merge branch DucLM
+[33mfd5894d[m Merge branch 'main' of https://github.com/dinhduclinh/RetroTrade
+[33mabdf54f[m Implement tax management features, including auto-update of tax status, audit logging, and complaint submission. Add new routes and controllers for tax and audit functionalities, and enhance user authentication with account status checks. Update UI components for better user experience and integrate new services for tax handling.
+[33me656606[m update detail information & UI in product detail page
+[33mfeb7617[m add favorite product in product detail & fix UI button
+[33m086e0be[m Merge branch 'sonmhhe172086' into linhddhe173104
+[33mef0afa4[m Merge branch 'main' of https://github.com/dinhduclinh/RetroTrade into sonmhhe172086
+[33mb275501[m Merge branch 'duclmhe173155'
+[33m57915b6[m fix z-indexindex
+[33mfa60a02[m resolve conflig after merge with linhdd
+[33m9b89e44[m Merge branch 'linhddhe173104' of https://github.com/dinhduclinh/RetroTrade into sonmhhe172086
+[33m23dbf7f[m add view shop and fix highlight product in product page
+[33m849f4d8[m Merge branch 'duclmhe173155'
+[33m0aa35ca[m Refactor index page: remove unused imports and clean up component structure
+[33m475fc0a[m Merge branch 'tuanpmhe171964' into duclmhe173155
+[33me5900b4[m Implement cart item validation and deletion, add order routes, enhance moderator sidebar with collapse functionality, and introduce featured products slider component.
+[33m0c62c25[m Merge
+[33m3fd4959[m merge
+[33m4e4fc16[m Merge branch 'main' of https://github.com/dinhduclinh/RetroTrade
+[33m8c4363e[m fix
+[33m3bf6a6d[m update header item
+[33m31e26f2[m fix be+fe chat realtime
+[33m034781d[m Merge branch 'tuanpmhe171964' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33mb20c142[m signature management by user
+[33ma638ace[m Merge branch 'sonmhhe172086' into linhddhe173104
+[33mbb60085[m add top-highlight product in product page
+[33m7b4b6e1[m fix
+[33m021f99c[m update table top hl of moderator
+[33m1da2f74[m my favorite page
+[33m5abecf4[m Order Comfirn&Completed  Status
+[33mc0705fd[m Merge branch 'tuanpmhe171964' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33mb9cd59e[m Merge branch 'linhddhe173104' of https://github.com/dinhduclinh/RetroTrade into sonmhhe172086
+[33m66b3373[m add , remove favorite
+[33m3f5f69e[m resolve conflig after merge
+[33m9f049bc[m Order status
+[33m9f7ae76[m update myproduct , add product detail of owner
+[33m6aedec0[m Order confirm
+[33m99b4736[m merge
+[33md3cf92c[m fix
+[33m6ad5832[m Order pendding
+[33m6d3ced7[m chat realtime
+[33m1b567fb[m Order simple-v1
+[33md349c03[m Enhance messaging and socket functionality
+[33m2954c77[m Merge branch 'linhddhe173104' into duclmhe173155
+[33m6da6d6e[m Refactor notification handling and owner request management
+[33m4bfbbba[m Merge Notifi form duc branch
+[33m686e07c[m fix merge duclmhe173155
+[33m89ec92f[m Change addreess in order
+[33m65f4beb[m Implement item selection and checkout functionality in cart page
+[33m97b479f[m Merge code add to cart
+[33m88f8200[m Merge pull request #12 from dinhduclinh/main
+[33m34e3cc3[m Merge pull request #11 from dinhduclinh/huyennthe172781
+[33m88874ab[m Merge branch 'huyennthe172781' of https://github.com/dinhduclinh/RetroTrade into huyennthe172781
+[33m0c4da47[m update
+[33m2e46e31[m Merge pull request #10 from dinhduclinh/main
+[33m3e71614[m fix
+[33m3ef3233[m Add notification and owner request management features
+[33m5810af1[m Merge branch 'main' of https://github.com/dinhduclinh/RetroTrade
+[33me7bcd01[m merge huyennt
+[33m426a83b[m Merge pull request #9 from dinhduclinh/huyennthe172781
+[33m44e4a18[m update payment notification
+[33m1e4eb45[m Merge branch 'sonmhhe172086' into linhddhe173104
+[33mf2f62b8[m Merge pull request #8 from dinhduclinh/main
+[33m94bfaeb[m Merge pull request #7 from dinhduclinh/huyennthe172781
+[33m7b3415b[m Merge branch 'huyennthe172781' of https://github.com/dinhduclinh/RetroTrade into huyennthe172781
+[33m51c4bf2[m messages
+[33m6969ae2[m Merge pull request #6 from dinhduclinh/huyennthe172781
+[33m37bc079[m Merge branch 'main' into huyennthe172781
+[33mf8e3bbc[m update index admin
+[33ma1f776c[m fix validate
+[33m4034113[m update app
+[33mfc8eb28[m user wallet
+[33ma8039da[m manager wallet admin
+[33m3e8e666[m update header
+[33m350d64c[m index of router
+[33ma881de5[m wallet.router
+[33mc5aaf05[m admin wallet controller
+[33mbd068ad[m user wallet controller
+[33m6114b6d[m update wallettransaction
+[33mb04a17c[m Order in backend
+[33m60a3da1[m update UI product page and product detail page, fix filter, add sample product
+[33m1291f3c[m fix auto text add/update product , update validate product
+[33mb587a2a[m Merge pull request #5 from dinhduclinh/huyennthe172781
+[33m5e18d98[m bankaccount controller
+[33mb89fb96[m wallettransactionmodel edit
+[33mc63a752[m fix UI product management
+[33mad8c0c3[m Merge branch 'sonmhhe172086' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33m71f52ef[m top product hightlight management
+[33mcecda50[m fix error product page
+[33mfbf3fc7[m Fix FormDelete of Blog in Moderator
+[33mdee9efa[m Merge branch 'duclmhe173155' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33mf97dced[m fix conflig after merge
+[33maa117a9[m update UI product page & product detail and add store
+[33m14209d7[m update trending product
+[33m5d5bb6b[m fix UI product page & backend search and filter product
+[33mc3e91b7[m Merge branch 'linhddhe173104' into duclmhe173155
+[33m1380e61[m Merge branch 'main' into duclmhe173155
+[33mac96545[m Enhance user verification process: Added face verification functionality using face-api.js, integrated image upload with Cloudinary, and improved user feedback with detailed error messages. Updated user model to allow unique email and phone combinations, and refined user management routes for better role handling.
+[33m95a2d9d[m fix merge
+[33m8d4adda[m Change Error Message
+[33mdf91934[m fix update product load address
+[33mf650e41[m save reject season in system , save address product
+[33m88c2757[m product list pending, approve/reject product send email to user
+[33m4a58c2d[m Merge branch 'duclmhe173155' of https://github.com/dinhduclinh/RetroTrade into linhddhe173104
+[33m6fdc130[m update sort category table , not input slug
+[33m32ea54f[m create category management table in moderator dashboard
+[33m5f2d22b[m Implemented phone number verification with OTP, integrated Firebase emulator for local development,
+[33mcb9b2e7[m edit delete user post comments
+[33m0d12e92[m Merge pull request #4 from dinhduclinh/huyennthe172781
+[33mc8d1a9c[m bank
+[33m0ea2938[m Merge pull request #3 from dinhduclinh/huyennthe172781
+[33m2921f21[m Add cart functionality to product detail page: Integrated Redux for cart management, added error handling for adding items to cart, and improved user notifications. Updated product image alt attributes for better accessibility.
+[33ma4adf90[m Merge branch 'linhddhe173104' into duclmhe173155
+[33m3008647[m model wallet
+[33m46048ee[m Enhance product pages: Added HTTPS configuration for remote images, replaced Next.js Image component with standard img tags to avoid remote host config issues, and integrated AddToCartButton for improved cart functionality. Updated total price calculation logic in product detail page.
+[33m5af1127[m fix merge
+[33m777e0fe[m Merge branch 'linhddhe173104' into duclmhe173155
+[33m33a385c[m fix send/load fail request
+[33m154de0e[m config input address product
+[33m213ff40[m Add cart functionality: Implemented cart item management with backend API integration, including adding, updating, removing items, and fetching cart details. Enhanced frontend components for cart interactions and improved user experience with modal notifications and state management.
+[33md5ec77d[m edit UI product list page and product detail page
+[33m795088f[m update after merge with linhdd
+[33m30aa15d[m complete fe and be of product list page and product detail page
+[33m939b15c[m fix fe
+[33m329fbe7[m Merge branch 'tuanpmhe171964' into duclmhe173155
+[33me90b7b7[m check completed functions
+[33m58c029a[m Merge Duc Brand
+[33m59881ca[m Comment function
+[33md8d4948[m Merge pull request #2 from dinhduclinh/duclmhe173155
+[33m8acf721[m Enhance backend and frontend functionality: Added body-parser middleware for URL-encoded data, refined blog post handling in controllers, improved error handling in authentication middleware, and updated UI components for better user experience. Removed unused image files and optimized API calls for blog management.
+[33mca133d8[m Merge branch 'tuanpmhe171964' into duclmhe173155
+[33m8c3d4b4[m Blog manage
+[33m5946900[m Update user roles and UI components: change 'user' role to 'renter', update role management UI, and implement dark mode toggle functionality. Add Vietnamese provinces and wards data for location management. Refactor product management pages for better organization and remove unused components.
+[33m6e28a29[m Merge pull request #1 from dinhduclinh/duclmhe173155
+[33m8ac1f7e[m done backend and frontend base for product page
+[33mb6116ac[m Merge branch 'duclmhe173155' of https://github.com/dinhduclinh/RetroTrade into sonmhhe172086
+[33mf28ad31[m create backend for product public page
+[33m032538b[m Fix UI
+[33mbf5a387[m Refactor UI components and routes: standardize imports to use common directory, update blog routes, and remove unused post management table. Add new admin and moderator components for better organization.
+[33mfd15b3b[m fix set avatar

@@ -532,6 +532,12 @@ export default function ProductDetailPage() {
   const handleRentNow = () => {
     if (!product) return;
 
+    if (!isAuthenticated) {
+      toast.error("Vui lòng đăng nhập để thuê sản phẩm");
+      router.push("/auth/login");
+      return;
+    }
+
     if (!dateFrom || !dateTo) {
       toast.error("Vui lòng chọn thời gian thuê");
       return;
