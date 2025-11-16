@@ -303,6 +303,7 @@ export interface OwnerRating {
 }
 
 export interface OwnerRatingsResult {
+  average: number;
   success: boolean;
   message?: string;
   ratings: OwnerRating[];
@@ -338,6 +339,7 @@ export const getRatingsByOwner = async (
       total: Number(payload.total) || 0,
       page: Number(payload.page) || params?.page || 1,
       limit: Number(payload.limit) || params?.limit || 20,
+      average: Number(payload.average) || 0,
     };
   } catch (error: any) {
     console.error("Error fetching owner ratings:", error);
@@ -348,6 +350,7 @@ export const getRatingsByOwner = async (
       total: 0,
       page: params?.page || 1,
       limit: params?.limit || 20,
+      average: 0,
     };
   }
 };

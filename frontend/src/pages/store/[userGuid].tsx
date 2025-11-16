@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import type { RootState } from "@/store/redux_store";
 import { MapPin, Star, Bookmark, ShieldCheck, Truck, BadgeCheck, Clock3, ChevronLeft, ChevronRight, Loader2, Eye, ChevronDown, MessageCircle, Zap } from "lucide-react";
-import { getFavorites, getPublicStoreByUserGuid } from "@/services/products/product.api";
+import { getFavorites, getPublicStoreByUserGuid, getRatingsByOwner } from "@/services/products/product.api";
 import OwnerRatingsSection from "@/components/owner/OwnerRatingsSection";
 import type { OwnerRatingStats } from "@/components/owner/OwnerRatingsSection";
 import AddToCartButton from "@/components/ui/common/AddToCartButton";
@@ -79,6 +79,7 @@ export default function OwnerStorePage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [favoriteLoading, setFavoriteLoading] = useState<Set<string>>(new Set());
   const [ownerRatingStats, setOwnerRatingStats] = useState<OwnerRatingStats | null>(null);
+  const [storeStats, setStoreStats] = useState<{ inStockCount: number; categoryCount: number; totalProducts: number } | null>(null);
   const isAuthenticated = useAppSelector((state: RootState) => !!state.auth.accessToken);
   const accessToken = useAppSelector((state: RootState) => state.auth.accessToken);
   const dispatch = useAppDispatch();
@@ -292,6 +293,39 @@ export default function OwnerStorePage() {
     }
   }
 
+  // Fetch store stats separately using existing API
+  const fetchStoreStats = useCallback(async (userGuid: string) => {
+    try {
+      // Get all products with a large limit to calculate stats
+      const res = await getPublicStoreByUserGuid(String(userGuid), { limit: 1000, page: 1 });
+      const { items: allItems } = res?.data || res || { items: [] };
+      
+      // Calculate stats from all items
+      const inStockCount = allItems.filter((it: Product) => (it.AvailableQuantity ?? 0) > 0).length;
+      const categories = Array.from(new Set(allItems.map((it: Product) => it.Category?.name).filter(Boolean)));
+      
+      setStoreStats({
+        inStockCount,
+        categoryCount: categories.length,
+        totalProducts: allItems.length
+      });
+    } catch (e) {
+      console.error("Failed to fetch store stats", e);
+      // Set default stats on error
+      setStoreStats({
+        inStockCount: 0,
+        categoryCount: 0,
+        totalProducts: 0
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ownerInfo && userGuid) {
+      fetchStoreStats(userGuid);
+    }
+  }, [ownerInfo, userGuid]);
+
   // Load more handler for load more mode
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || products.length >= total) return;
@@ -385,8 +419,9 @@ export default function OwnerStorePage() {
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                   <span className="font-semibold text-gray-900">
-                    {ownerRatingStats?.average?.toFixed(1) ?? ownerInfo.reputationScore?.toFixed(1) ?? "5.0"}
+                    {ownerRatingStats?.average?.toFixed(1) || ownerInfo.reputationScore?.toFixed(1) || "5.0"}
                   </span>
+                  <span className="text-gray-500">({ownerRatingStats?.total || 0})</span>
                 </div>
                 <div className="hidden md:block w-px h-4 bg-gray-300" />
                 <div className="flex items-center gap-1">
@@ -414,15 +449,11 @@ export default function OwnerStorePage() {
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100">
                   <div className="text-gray-600 text-sm">Còn hàng</div>
-                  <div className="text-2xl font-bold text-gray-900">{
-                    displayItems.filter((it) => (it.AvailableQuantity ?? 0) > 0).length
-                  }</div>
+                  <div className="text-2xl font-bold text-gray-900">{storeStats?.inStockCount ?? 0}</div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-100">
                   <div className="text-gray-600 text-sm">Danh mục</div>
-                  <div className="text-2xl font-bold text-gray-900">{
-                    availableCategories.length
-                  }</div>
+                  <div className="text-2xl font-bold text-gray-900">{storeStats?.categoryCount ?? 0}</div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-100">
                   <div className="text-gray-600 text-sm">Lượt đánh giá</div>
@@ -636,9 +667,6 @@ export default function OwnerStorePage() {
           {/* Pagination (for pagination mode) */}
           {!isLoadMoreMode && totalPages > 1 && (
             <div className="flex flex-col sm:flex-row items-center justify-between mt-12 space-y-4 sm:space-y-0">
-              <div className="text-sm text-gray-500">
-                Trang {currentPage} / {totalPages} ({total} sản phẩm)
-              </div>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 
                 <button

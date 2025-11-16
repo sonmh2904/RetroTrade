@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useDispatch, useSelector } from "react-redux"
+import { useRouter } from "next/navigation"
 import { RootState, AppDispatch } from "@/store/redux_store"
 import { addItemToCartAction, fetchCartItemCount } from "@/store/cart/cartActions"
 import { Button } from "@/components/ui/common/button"
@@ -28,6 +29,7 @@ export default function AddToCartButton({
   disabled = false
 }: AddToCartButtonProps) {
   const dispatch = useDispatch<AppDispatch>()
+  const router = useRouter()
   const { accessToken } = useSelector((state: RootState) => state.auth)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -68,6 +70,10 @@ export default function AddToCartButton({
     
     if (!accessToken) {
       showPopup("error", "Lỗi", "Vui lòng đăng nhập để thêm vào giỏ hàng");
+      // Redirect to login page after showing error
+      setTimeout(() => {
+        router.push('/auth/login');
+      }, 1500);
       return;
     }
 
@@ -131,8 +137,8 @@ export default function AddToCartButton({
     }
   }
 
-  // Show disabled button if not logged in or item is not available
-  if (!accessToken || availableQuantity === 0) {
+  // Show disabled button only if item is not available
+  if (availableQuantity === 0) {
     return (
       <Button
         size={size}
