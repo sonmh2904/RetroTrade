@@ -314,10 +314,10 @@ async function convertPointsToDiscount(userId, points) {
           minOrderAmount: 0,
           startAt: now,
           endAt: oneMonthLater,
-          usageLimit: 1, // Chỉ dùng được 1 lần
+          usageLimit: 0, // Không giới hạn tổng (vì đã có perUserLimit trong assignment)
           usedCount: 0,
           isPublic: false, // Private discount
-          allowedUsers: [userId], // Chỉ user này dùng được
+          allowedUsers: [userId], // Thêm vào allowedUsers để có thể query trong listAvailable
           active: true,
           createdBy: userId,
           notes: `Discount ${discountPercent}% từ quy đổi ${points} RT Points`,
