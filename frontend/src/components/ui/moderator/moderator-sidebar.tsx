@@ -136,7 +136,7 @@ export function ModeratorSidebar({
       description: "Xác thực danh tính người dùng",
     },
     {
-      id: "disputes" as const,
+      id: "dispute" as const,
       label: "Xử lý khiếu nại",
       icon: AlertTriangle,
       path: "/moderator/dispute-management",
