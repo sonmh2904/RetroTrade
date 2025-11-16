@@ -152,8 +152,8 @@ export default function ProductDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [favoriteCount, setFavoriteCount] = useState(0);
-  // Lấy thông tin user trong  (accessToken)
 
+  // Lấy thông tin user trong  (accessToken)
   const currentUserId = useMemo(() => {
     if (!accessToken) return null;
     try {
@@ -172,7 +172,7 @@ export default function ProductDetailPage() {
       return null;
     }
   }, [accessToken]);
-
+  //check chủ sở hữu
   const isOwner = useMemo(() => {
     if (!currentUserId || !product?.Owner) return false;
     const ownerId = product.Owner._id || product.Owner.userGuid;
