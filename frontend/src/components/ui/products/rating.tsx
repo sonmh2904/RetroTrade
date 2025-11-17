@@ -60,6 +60,8 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   const [loading, setLoading] = useState(false);
   const [editingRatingId, setEditingRatingId] = useState<string | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
 
   // Decode token
   useEffect(() => {
@@ -186,7 +188,6 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   // Delete rating
   const handleDeleteRating = async (ratingId: string) => {
     if (!currentUser) return;
-    if (!confirm("Bạn có chắc chắn muốn xóa đánh giá này?")) return;
 
     try {
       await deleteRating(ratingId, currentUser._id);
@@ -204,7 +205,6 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
     setRating(r.rating);
     setComment(r.comment);
     setImages(null); // Optionally: set images if supporting editing
-    window.scrollTo({ top: 0, behavior: "smooth" });
     setActiveDropdown(null);
   };
 
@@ -317,7 +317,10 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
                           </button>
                           <button
                             className="w-full text-left px-3 py-1 text-red-600 hover:bg-gray-100"
-                            onClick={() => handleDeleteRating(r._id)}
+                            onClick={() => {
+                              setActiveDropdown(null);
+                              setDeleteConfirmId(r._id); // mở modal
+                            }}
                           >
                             Xóa
                           </button>
@@ -424,6 +427,43 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
           Bạn chỉ có thể đánh giá sản phẩm sau khi hoàn thành đơn hàng và chưa
           từng đánh giá trước đó.
         </p>
+      )}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop kính mờ */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setDeleteConfirmId(null)}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-white/80 backdrop-blur-md rounded-lg shadow-lg p-5 w-80 animate-fadeIn z-10">
+            <h2 className="text-lg font-semibold">Xác nhận xoá</h2>
+            <p className="text-gray-600 mt-2">
+              Bạn có chắc chắn muốn xoá đánh giá này không? Hành động này không
+              thể hoàn tác.
+            </p>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                className="px-3 py-1 rounded border"
+                onClick={() => setDeleteConfirmId(null)}
+              >
+                Hủy
+              </button>
+
+              <button
+                className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                onClick={async () => {
+                  await handleDeleteRating(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

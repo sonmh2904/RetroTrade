@@ -51,42 +51,62 @@ exports.createRating = async (req, res) => {
 exports.updateRating = async (req, res) => {
   try {
     const { id } = req.params;
-    const {  rating, comment, images } = req.body;
+    const { rating, comment } = req.body;
 
     const review = await Rating.findById(id);
     if (!review)
       return res.status(404).json({ message: "Không tìm thấy đánh giá." });
 
-  const userId = req.user._id; // từ middleware auth
-  if (review.renterId.toString() !== userId) {
-    return res
-      .status(403)
-      .json({ message: "Bạn không có quyền chỉnh sửa đánh giá này." });
-  }
+    const userId = req.user._id;
+    if (review.renterId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        message: "Bạn không có quyền chỉnh sửa đánh giá này.",
+      });
+    }
 
-    review.rating = rating ?? review.rating;
-    review.comment = comment ?? review.comment;
-    review.images = images ?? review.images;
+    if (rating) review.rating = rating;
+    if (comment) review.comment = comment;
+
+    // Nếu có ảnh mới
+    if (req.files && req.files.length > 0) {
+      const uploaded = await uploadToCloudinary(
+        req.files,
+        "retrotrade/ratings"
+      );
+
+      const imageUrls = uploaded.map((img) => img.Url);
+
+      review.images = imageUrls; // ghi đè
+
+      // nếu muốn append
+      // review.images.push(...imageUrls);
+    }
+
     review.isEdited = true;
-
     await review.save();
 
-    res.json({ message: "Cập nhật đánh giá thành công!", rating: review });
+    res.json({
+      message: "Cập nhật đánh giá thành công!",
+      rating: review,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Lỗi khi update rating:", err);
     res.status(500).json({ message: "Lỗi khi cập nhật đánh giá." });
   }
 };
 
 
+
+
 exports.deleteRating = async (req, res) => {
   try {
     const { id } = req.params;
-    const { renterId } = req.body;
+    const renterId = req.user?.id || req.body.renterId; 
 
     const review = await Rating.findById(id);
     if (!review)
       return res.status(404).json({ message: "Không tìm thấy đánh giá." });
+
 
     if (review.renterId.toString() !== renterId) {
       return res
@@ -94,15 +114,23 @@ exports.deleteRating = async (req, res) => {
         .json({ message: "Bạn không có quyền xóa đánh giá này." });
     }
 
+    if (review.isDeleted) {
+      return res.status(400).json({ message: "Đánh giá đã bị xóa trước đó." });
+    }
+
     review.isDeleted = true;
     await review.save();
 
-    res.json({ message: "Đã xóa đánh giá thành công." });
+    res.json({
+      message: "Đã xóa đánh giá thành công.",
+      deletedId: review._id,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Lỗi xóa đánh giá:", err);
     res.status(500).json({ message: "Lỗi khi xóa đánh giá." });
   }
 };
+
 
 
 exports.getRatingsByItem = async (req, res) => {
