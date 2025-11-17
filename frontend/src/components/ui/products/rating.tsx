@@ -4,6 +4,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   getRatingsByItem,
   createRating,
+  updateRating,
+  deleteRating,
 } from "@/services/products/product.api";
 import { Star } from "lucide-react";
 import { useSelector } from "react-redux";
@@ -50,12 +52,16 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [filteredRatings, setFilteredRatings] = useState<Rating[]>([]);
   const [filterStar, setFilterStar] = useState<number | null>(null);
+
+  // Form state
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState("");
   const [images, setImages] = useState<FileList | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editingRatingId, setEditingRatingId] = useState<string | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-
+  // Decode token
   useEffect(() => {
     if (accessToken) {
       try {
@@ -67,7 +73,7 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
     }
   }, [accessToken]);
 
-  // Lấy đánh giá
+  // Fetch ratings
   const fetchRatings = async () => {
     try {
       const res = await getRatingsByItem(itemId);
@@ -75,7 +81,7 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
       setRatings(data);
       setFilteredRatings(data);
     } catch (err) {
-      console.error("Lỗi lấy đánh giá:", err);
+      console.error("Error fetching ratings:", err);
       setRatings([]);
       setFilteredRatings([]);
     }
@@ -85,28 +91,27 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
     fetchRatings();
   }, [itemId]);
 
-  // Kiểm tra user có thể đánh giá
-const canReview = useMemo(() => {
-  if (!currentUser) return false;
+  // Check if user can review
+  const canReview = useMemo(() => {
+    if (!currentUser) return false;
 
-  const eligibleOrder = orders.find(
-    (order) =>
-      order.itemId === itemId &&
-      order.orderStatus.toLowerCase() === "completed" && 
-      order.renterId._id.toString() === currentUser._id.toString()
-  );
+    const eligibleOrder = orders.find(
+      (order) =>
+        order.itemId === itemId &&
+        order.orderStatus.toLowerCase() === "completed" &&
+        order.renterId._id.toString() === currentUser._id.toString()
+    );
 
-  if (!eligibleOrder) return false;
+    if (!eligibleOrder) return false;
 
-  const hasRated = ratings.some(
-    (r) =>
-      r.itemId === itemId &&
-      r.renterId._id.toString() === currentUser._id.toString()
-  );
+    const hasRated = ratings.some(
+      (r) =>
+        r.itemId === itemId &&
+        r.renterId._id.toString() === currentUser._id.toString()
+    );
 
-  return !hasRated;
-}, [orders, ratings, itemId, currentUser]);
-
+    return !hasRated;
+  }, [orders, ratings, itemId, currentUser]);
 
   const reviewableOrderId = useMemo(() => {
     if (!currentUser) return null;
@@ -119,7 +124,6 @@ const canReview = useMemo(() => {
     return order?._id || null;
   }, [orders, itemId, currentUser]);
 
-
   const handleFilter = (star: number | null) => {
     setFilterStar(star);
     if (star === null) {
@@ -129,52 +133,82 @@ const canReview = useMemo(() => {
     }
   };
 
-  // Gửi đánh giá
+  // Submit rating (create/update)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canReview || !reviewableOrderId) {
-    toast.error("Bạn không đủ điều kiện để đánh giá sản phẩm này.");
+    if (!currentUser) return;
+
+    if (!canReview && !editingRatingId) {
+      toast.error("Bạn không đủ điều kiện để đánh giá sản phẩm này.");
       return;
     }
 
     try {
       setLoading(true);
       const formData = new FormData();
-      formData.append("orderId", reviewableOrderId);
+      if (!editingRatingId && reviewableOrderId) {
+        formData.append("orderId", reviewableOrderId);
+      }
       formData.append("itemId", itemId);
-      formData.append("renterId", currentUser!._id);
+      formData.append("renterId", currentUser._id);
       formData.append("rating", rating.toString());
       formData.append("comment", comment);
-     if (images) {
-       Array.from(images)
-         .slice(0, 5)
-         .forEach((file) => formData.append("images", file));
-     }
+      if (images) {
+        Array.from(images)
+          .slice(0, 5)
+          .forEach((file) => formData.append("images", file));
+      }
 
-      const res = await createRating(formData);
-      const message = res?.data?.message || "Đánh giá thành công!";
-       toast.success(message); 
+      if (editingRatingId) {
+        await updateRating(editingRatingId, formData);
+        toast.success("Cập nhật đánh giá thành công!");
+      } else {
+        await createRating(formData);
+        toast.success("Đánh giá thành công!");
+      }
 
-      // Refresh đánh giá
+      // Refresh ratings
       await fetchRatings();
 
       // Reset form
       setComment("");
       setImages(null);
       setRating(5);
+      setEditingRatingId(null);
     } catch (err: any) {
-      console.error("Lỗi gửi đánh giá:", err);
-      alert(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Có lỗi khi gửi đánh giá"
-      );
+      console.error("Error submitting rating:", err);
+      toast.error(err?.message || "Có lỗi xảy ra");
     } finally {
       setLoading(false);
     }
   };
 
-  // Trung bình sao
+  // Delete rating
+  const handleDeleteRating = async (ratingId: string) => {
+    if (!currentUser) return;
+    if (!confirm("Bạn có chắc chắn muốn xóa đánh giá này?")) return;
+
+    try {
+      await deleteRating(ratingId, currentUser._id);
+      toast.success("Xóa đánh giá thành công!");
+      setActiveDropdown(null);
+      fetchRatings();
+    } catch (err: any) {
+      toast.error(err?.message || "Xóa đánh giá thất bại");
+    }
+  };
+
+  // Edit rating
+  const handleEditRating = (r: Rating) => {
+    setEditingRatingId(r._id);
+    setRating(r.rating);
+    setComment(r.comment);
+    setImages(null); // Optionally: set images if supporting editing
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setActiveDropdown(null);
+  };
+
+  // Average rating
   const averageRating =
     ratings.length > 0
       ? (
@@ -190,7 +224,7 @@ const canReview = useMemo(() => {
     <div className="mt-6 border-t pt-4">
       <h2 className="text-xl font-semibold mb-4">Đánh giá sản phẩm</h2>
 
-      {/* Thống kê tổng */}
+      {/* Tổng quan */}
       <div className="bg-white border rounded-lg p-4 mb-4 flex flex-col md:flex-row md:items-center md:justify-between">
         <div className="text-center md:text-left">
           <p className="text-4xl font-bold text-yellow-500">{averageRating}</p>
@@ -242,57 +276,98 @@ const canReview = useMemo(() => {
         <p className="text-gray-500">Chưa có đánh giá nào.</p>
       ) : (
         <div className="space-y-4">
-          {filteredRatings.map((r) => (
-            <div
-              key={r._id}
-              className="border rounded-lg p-3 bg-white shadow-sm"
-            >
-              <div className="flex items-center gap-2">
-                <img
-                  src={r.renterId?.avatarUrl || "/user.png"}
-                  alt=""
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-                <span className="font-medium">{r.renterId?.fullName}</span>
-              </div>
-              <div className="flex items-center mt-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    size={16}
-                    className={
-                      i < r.rating
-                        ? "fill-yellow-400 text-yellow-400"
-                        : "text-gray-300"
-                    }
-                  />
-                ))}
-              </div>
-              <p className="text-gray-700 mt-2">{r.comment}</p>
-              {r.images && r.images.length > 0 && (
-                <div className="flex gap-2 mt-2">
-                  {r.images.map((img, i) => (
+          {filteredRatings.map((r) => {
+            const isOwner = currentUser?._id === r.renterId._id;
+
+            return (
+              <div
+                key={r._id}
+                className="border rounded-lg p-3 bg-white shadow-sm relative"
+              >
+                <div className="flex items-center gap-2 justify-between">
+                  <div className="flex items-center gap-2">
                     <img
-                      key={i}
-                      src={img}
+                      src={r.renterId?.avatarUrl || "/user.png"}
                       alt=""
-                      className="w-20 h-20 object-cover rounded-md"
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                    <span className="font-medium">{r.renterId?.fullName}</span>
+                  </div>
+
+                  {isOwner && (
+                    <div className="relative">
+                      <button
+                        className="p-1 hover:bg-gray-200 rounded-full"
+                        onClick={() =>
+                          setActiveDropdown(
+                            r._id === activeDropdown ? null : r._id
+                          )
+                        }
+                      >
+                        ⋮
+                      </button>
+
+                      {activeDropdown === r._id && (
+                        <div className="absolute right-0 mt-1 w-28 bg-white border rounded shadow-md z-10">
+                          <button
+                            className="w-full text-left px-3 py-1 hover:bg-gray-100"
+                            onClick={() => handleEditRating(r)}
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-1 text-red-600 hover:bg-gray-100"
+                            onClick={() => handleDeleteRating(r._id)}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center mt-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      size={16}
+                      className={
+                        i < r.rating
+                          ? "fill-yellow-400 text-yellow-400"
+                          : "text-gray-300"
+                      }
                     />
                   ))}
                 </div>
-              )}
-              <small className="text-gray-400 block mt-1">
-                {new Date(r.createdAt).toLocaleString("vi-VN")}
-              </small>
-            </div>
-          ))}
+                <p className="text-gray-700 mt-2">{r.comment}</p>
+                {r.images && r.images.length > 0 && (
+                  <div className="flex gap-2 mt-2">
+                    {r.images.map((img, i) => (
+                      <img
+                        key={i}
+                        src={img}
+                        alt=""
+                        className="w-20 h-20 object-cover rounded-md"
+                      />
+                    ))}
+                  </div>
+                )}
+                <small className="text-gray-400 block mt-1">
+                  {new Date(r.createdAt).toLocaleString("vi-VN")}
+                </small>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Form đánh giá */}
-      {canReview && currentUser && (
+      {(canReview || editingRatingId) && currentUser && (
         <form onSubmit={handleSubmit} className="mt-6 border-t pt-4">
-          <h3 className="font-semibold mb-2">Viết đánh giá của bạn</h3>
+          <h3 className="font-semibold mb-2">
+            {editingRatingId ? "Chỉnh sửa đánh giá" : "Viết đánh giá của bạn"}
+          </h3>
           <div className="flex items-center gap-1 mb-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star
@@ -323,7 +398,7 @@ const canReview = useMemo(() => {
             onChange={(e) => {
               if (e.target.files && e.target.files.length > 5) {
                 toast.error("Bạn chỉ có thể đăng tối đa 5 ảnh.");
-                e.target.value = ""; 
+                e.target.value = "";
                 setImages(null);
               } else {
                 setImages(e.target.files);
@@ -335,12 +410,16 @@ const canReview = useMemo(() => {
             disabled={loading}
             className="mt-3 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60"
           >
-            {loading ? "Đang gửi..." : "Gửi đánh giá"}
+            {loading
+              ? "Đang gửi..."
+              : editingRatingId
+              ? "Cập nhật đánh giá"
+              : "Gửi đánh giá"}
           </button>
         </form>
       )}
 
-      {!canReview && currentUser && (
+      {!canReview && !editingRatingId && currentUser && (
         <p className="mt-4 text-sm text-gray-500">
           Bạn chỉ có thể đánh giá sản phẩm sau khi hoàn thành đơn hàng và chưa
           từng đánh giá trước đó.

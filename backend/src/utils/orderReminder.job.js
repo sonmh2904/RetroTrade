@@ -10,6 +10,7 @@ cron.schedule("* * * * *", async () => {
     const orders = await Order.find({
       orderStatus: "confirmed",
       startAt: { $lte: new Date() },
+      notifiedStart: false,
     })
       .populate("renterId", "email fullName")
       .populate("ownerId", "email fullName");
@@ -21,11 +22,15 @@ cron.schedule("* * * * *", async () => {
       }
 
       // Gửi email đến chủ sở hữu
-      await sendEmail({
-        to: order.ownerId.email,
-        subject: "Nhắc nhở chuẩn bị hàng để bàn giao",
-        text: `Đơn hàng #${order._id} đã đến thời gian bắt đầu thuê.\nHãy chuẩn bị và bàn giao vật phẩm đúng lịch.`,
-      });
+     await sendEmail(
+       order.ownerId.email,
+       "Nhắc nhở chuẩn bị hàng để bàn giao",
+       `
+    <p>Đơn hàng #${order._id} đã đến thời gian bắt đầu thuê.</p>
+    <p>Hãy chuẩn bị và bàn giao vật phẩm đúng lịch.</p>
+  `
+     );
+
 
       console.log(
         `🔔 Reminder sent for order ${order._id} → owner: ${order.ownerId.email}`

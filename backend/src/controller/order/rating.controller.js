@@ -51,17 +51,18 @@ exports.createRating = async (req, res) => {
 exports.updateRating = async (req, res) => {
   try {
     const { id } = req.params;
-    const { renterId, rating, comment, images } = req.body;
+    const {  rating, comment, images } = req.body;
 
     const review = await Rating.findById(id);
     if (!review)
       return res.status(404).json({ message: "Không tìm thấy đánh giá." });
 
-    if (review.renterId.toString() !== renterId) {
-      return res
-        .status(403)
-        .json({ message: "Bạn không có quyền chỉnh sửa đánh giá này." });
-    }
+  const userId = req.user._id; // từ middleware auth
+  if (review.renterId.toString() !== userId) {
+    return res
+      .status(403)
+      .json({ message: "Bạn không có quyền chỉnh sửa đánh giá này." });
+  }
 
     review.rating = rating ?? review.rating;
     review.comment = comment ?? review.comment;
