@@ -92,6 +92,11 @@ fetchBanks()
 
 setInterval(fetchBanks, 1000 * 60 * 60 * 12); // Update tự động mỗi 12h (hoặc 24h tùy lịch trình)
 
+require('./src/cronJobs/refundJob');
+console.log(' Cron jobs đã được nạp và chạy');
+
+
+
 
 // Routes
 router(app);
