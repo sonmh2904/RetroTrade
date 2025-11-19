@@ -142,6 +142,7 @@ export default function SignContractPage() {
   const token = useSelector((state: RootState) => state.auth.accessToken);
   const currentUser = useMemo(() => decodeToken(token), [token]);
   const currentUserId = currentUser?._id;
+  const isOwnerOfOrder = currentUserId === order?.ownerId._id; // Check owner of item
 
   const loadUserSignature = useCallback(async (): Promise<void> => {
     try {
@@ -882,26 +883,34 @@ export default function SignContractPage() {
                   {previewContent}
                 </pre>
               </div>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowPreviewModal(false)}
-                  className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600"
-                >
-                  Hủy
-                </button>
-                <button
-                  onClick={handleConfirmCreate}
-                  disabled={loadingAction}
-                  className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {loadingAction ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4" />
-                  )}
-                  Xác nhận tạo hợp đồng
-                </button>
-              </div>
+
+              {isOwnerOfOrder ? ( // Code chỉ có Owner mới được tạo mẫu hợp đồng
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowPreviewModal(false)}
+                    className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600"
+                  >
+                    Hủy
+                  </button>
+
+                  <button
+                    onClick={handleConfirmCreate}
+                    disabled={loadingAction}
+                    className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loadingAction ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    Xác nhận tạo hợp đồng
+                  </button>
+                </div>
+              ) : (
+                <p className="text-red-500 font-medium text-right">
+                  Chỉ có chủ sở hữu của sản phẩm mới được tạo mẫu hợp đồng
+                </p>
+              )}
             </div>
           </div>
         )}

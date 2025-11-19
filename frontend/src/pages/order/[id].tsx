@@ -305,7 +305,7 @@ export default function OrderDetail() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <Package className="w-6 h-6 text-blue-600" />
-                Sản phẩm thuê
+                Sản phẩm thuê 
               </h2>
               <div className="flex gap-6 items-start">
                 <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
