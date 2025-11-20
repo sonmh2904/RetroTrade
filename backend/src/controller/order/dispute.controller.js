@@ -387,9 +387,9 @@ const unassignDispute = async (req, res) => {
 
 const resolveDispute = async (req, res) => {
   try {
-    const { decision, notes, refundAmount } = req.body;
+    const { decision, notes, refundAmount, refundPercentage, refundTo } = req.body;
     const dispute = await Report.findById(req.params.id)
-      .populate("orderId", "orderGuid")
+      .populate("orderId", "orderGuid totalAmount finalAmount")
       .populate("reporterId", "fullName email")
       .populate("reportedUserId", "fullName email");
 
@@ -425,22 +425,59 @@ const resolveDispute = async (req, res) => {
       });
     }
 
+    // Lấy orderId và order để tính toán hoàn tiền
+    const orderIdValue = dispute.orderId._id || dispute.orderId;
+    const order = await Order.findById(orderIdValue).select("totalAmount finalAmount");
+    
+    if (!order) {
+      return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
+    }
+
+    // Tính toán refundAmount từ refundPercentage nếu có
+    let calculatedRefundAmount = 0;
+    if (refundPercentage && refundPercentage > 0) {
+      // Sử dụng finalAmount nếu có, nếu không dùng totalAmount
+      const baseAmount = order.finalAmount || order.totalAmount;
+      calculatedRefundAmount = Math.round((baseAmount * refundPercentage) / 100);
+    } else if (refundAmount) {
+      calculatedRefundAmount = Number(refundAmount);
+    }
+
+    // Validate refundTo nếu có hoàn tiền
+    if (calculatedRefundAmount > 0 && !refundTo) {
+      return res.status(400).json({
+        message: "Vui lòng chỉ định người nhận hoàn tiền (refundTo: 'reporter' hoặc 'reportedUser').",
+      });
+    }
+
+    if (calculatedRefundAmount > 0 && !["reporter", "reportedUser"].includes(refundTo)) {
+      return res.status(400).json({
+        message: "refundTo phải là 'reporter' hoặc 'reportedUser'.",
+      });
+    }
+
+    // Validate refundPercentage
+    if (refundPercentage !== undefined && (refundPercentage < 0 || refundPercentage > 100)) {
+      return res.status(400).json({
+        message: "refundPercentage phải nằm trong khoảng 0-100.",
+      });
+    }
+
     dispute.status = "Resolved";
     dispute.resolution = {
       decision,
       notes,
-      refundAmount: refundAmount || 0,
+      refundAmount: calculatedRefundAmount,
+      refundPercentage: refundPercentage || 0,
+      refundTo: calculatedRefundAmount > 0 ? refundTo : null,
     };
     dispute.handledBy = req.user._id;
     dispute.handledAt = new Date();
     await dispute.save();
 
-    // Lấy orderId (có thể là ObjectId hoặc object đã populate)
-    const orderIdValue = dispute.orderId._id || dispute.orderId;
-
     await Order.findByIdAndUpdate(orderIdValue, {
       orderStatus: "completed",
-      paymentStatus: refundAmount > 0 ? "refunded" : "paid",
+      paymentStatus: calculatedRefundAmount > 0 ? "refunded" : "paid",
     });
 
     // Lấy thông tin moderator xử lý
@@ -459,10 +496,16 @@ const resolveDispute = async (req, res) => {
       if (order) orderGuid = order.orderGuid;
     }
 
-    const refundText =
-      refundAmount > 0
-        ? ` và được hoàn tiền ${refundAmount.toLocaleString("vi-VN")} VNĐ`
-        : "";
+    // Xác định người nhận hoàn tiền
+    const refundRecipientId = calculatedRefundAmount > 0 && refundTo === "reporter" 
+      ? (dispute.reporterId._id || dispute.reporterId)
+      : calculatedRefundAmount > 0 && refundTo === "reportedUser"
+      ? (dispute.reportedUserId._id || dispute.reportedUserId)
+      : null;
+
+    const refundText = calculatedRefundAmount > 0
+      ? ` và được hoàn tiền ${calculatedRefundAmount.toLocaleString("vi-VN")} VNĐ (${dispute.resolution.refundPercentage}%)`
+      : "";
 
     // Lấy reporterId và reportedUserId (có thể là ObjectId hoặc object đã populate)
     const reporterIdValue = dispute.reporterId._id || dispute.reporterId;
@@ -470,33 +513,49 @@ const resolveDispute = async (req, res) => {
       dispute.reportedUserId._id || dispute.reportedUserId;
 
     // Thông báo cho người tạo tranh chấp
+    const reporterRefundText = refundRecipientId && refundRecipientId.toString() === reporterIdValue.toString()
+      ? ` và bạn được hoàn tiền ${calculatedRefundAmount.toLocaleString("vi-VN")} VNĐ (${dispute.resolution.refundPercentage}%)`
+      : calculatedRefundAmount > 0
+      ? ` và ${refundTo === "reportedUser" ? "người bị báo cáo" : "người tạo tranh chấp"} được hoàn tiền ${calculatedRefundAmount.toLocaleString("vi-VN")} VNĐ (${dispute.resolution.refundPercentage}%)`
+      : "";
+
     await createNotification(
       reporterIdValue,
       "Dispute Resolved",
       "Tranh chấp đã được xử lý",
-      `Tranh chấp về đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${refundText}.`,
+      `Tranh chấp về đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${reporterRefundText}.`,
       {
         disputeId: dispute._id,
         orderId: orderIdValue,
         orderGuid: orderGuid,
         decision: decision,
-        refundAmount: refundAmount || 0,
+        refundAmount: calculatedRefundAmount,
+        refundPercentage: dispute.resolution.refundPercentage,
+        refundTo: dispute.resolution.refundTo,
         handledBy: req.user._id,
       }
     );
 
     // Thông báo cho người bị báo cáo
+    const reportedRefundText = refundRecipientId && refundRecipientId.toString() === reportedUserIdValue.toString()
+      ? ` và bạn được hoàn tiền ${calculatedRefundAmount.toLocaleString("vi-VN")} VNĐ (${dispute.resolution.refundPercentage}%)`
+      : calculatedRefundAmount > 0
+      ? ` và ${refundTo === "reporter" ? "người tạo tranh chấp" : "người bị báo cáo"} được hoàn tiền ${calculatedRefundAmount.toLocaleString("vi-VN")} VNĐ (${dispute.resolution.refundPercentage}%)`
+      : "";
+
     await createNotification(
       reportedUserIdValue,
       "Dispute Resolved",
       "Tranh chấp đã được xử lý",
-      `Tranh chấp về đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${refundText}.`,
+      `Tranh chấp về đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${reportedRefundText}.`,
       {
         disputeId: dispute._id,
         orderId: orderIdValue,
         orderGuid: orderGuid,
         decision: decision,
-        refundAmount: refundAmount || 0,
+        refundAmount: calculatedRefundAmount,
+        refundPercentage: dispute.resolution.refundPercentage,
+        refundTo: dispute.resolution.refundTo,
         handledBy: req.user._id,
       }
     );

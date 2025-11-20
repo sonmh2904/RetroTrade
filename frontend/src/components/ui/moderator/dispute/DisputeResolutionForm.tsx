@@ -50,34 +50,59 @@ const DECISIONS = [
 interface DisputeResolutionFormProps {
   disputeId: string;
   totalAmount: number;
+  reporterName?: string;
+  reportedUserName?: string;
   onSuccess?: () => void;
 }
 
 export default function DisputeResolutionForm({
   disputeId,
   totalAmount,
+  reporterName = "Người tạo tranh chấp",
+  reportedUserName = "Người bị báo cáo",
   onSuccess,
 }: DisputeResolutionFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [decision, setDecision] = useState<string>("");
-  const [refundAmount, setRefundAmount] = useState<string>("");
+  const [refundPercentage, setRefundPercentage] = useState<string>("");
+  const [refundTo, setRefundTo] = useState<"reporter" | "reportedUser" | "">("");
   const [notes, setNotes] = useState<string>("");
+
+  // Tính toán số tiền hoàn từ phần trăm
+  const calculatedRefundAmount = refundPercentage
+    ? Math.round((totalAmount * Number(refundPercentage)) / 100)
+    : 0;
 
 const handleSubmit = async () => {
   if (!decision) return toast.error("Vui lòng chọn quyết định xử lý");
-  if (["refund_full", "refund_partial"].includes(decision) && !refundAmount) {
-    return toast.error("Vui lòng nhập số tiền hoàn");
+  
+  if (["refund_full", "refund_partial"].includes(decision)) {
+    if (!refundPercentage || Number(refundPercentage) <= 0 || Number(refundPercentage) > 100) {
+      return toast.error("Vui lòng nhập phần trăm hoàn tiền hợp lệ (0-100%)");
+    }
+    if (!refundTo) {
+      return toast.error("Vui lòng chọn người nhận hoàn tiền");
+    }
   }
 
   setLoading(true);
   try {
-    await resolveDispute(disputeId, {
+    const payload: any = {
       decision,
       notes: notes.trim() || undefined,
-      refundAmount:
-        decision === "refund_full" ? totalAmount : Number(refundAmount),
-    });
+    };
+
+    if (["refund_full", "refund_partial"].includes(decision)) {
+      if (decision === "refund_full") {
+        payload.refundPercentage = 100;
+      } else {
+        payload.refundPercentage = Number(refundPercentage);
+      }
+      payload.refundTo = refundTo;
+    }
+
+    await resolveDispute(disputeId, payload);
 
     toast.success("Xử lý tranh chấp thành công!");
     onSuccess?.();
@@ -134,32 +159,59 @@ const handleSubmit = async () => {
           </div>
 
           {["refund_full", "refund_partial"].includes(decision) && (
-            <div className="bg-white rounded-2xl p-6 border-2 border-dashed border-orange-300">
-              <Label className="text-lg font-semibold flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-orange-600" />
-                Số tiền hoàn trả
-              </Label>
-              <Input
-                type="number"
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                placeholder={
-                  decision === "refund_full"
-                    ? totalAmount.toString()
-                    : "Nhập số tiền..."
-                }
-                className="mt-2 text-2xl font-bold"
-                disabled={decision === "refund_full" || loading}
-                min="0"
-                max={totalAmount}
-              />
-              <p className="text-sm text-gray-600 mt-2">
-                Tối đa:{" "}
-                <span className="font-bold text-orange-600">
-                  {totalAmount.toLocaleString()}₫
-                </span>
-                {decision === "refund_full" && " → Tự động hoàn toàn bộ"}
-              </p>
+            <div className="bg-white rounded-2xl p-6 border-2 border-dashed border-orange-300 space-y-4">
+              <div>
+                <Label className="text-lg font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                  Phần trăm hoàn tiền (%)
+                </Label>
+                <Input
+                  type="number"
+                  value={refundPercentage}
+                  onChange={(e) => setRefundPercentage(e.target.value)}
+                  placeholder={decision === "refund_full" ? "100" : "Nhập phần trăm (0-100)..."}
+                  className="mt-2 text-2xl font-bold"
+                  disabled={decision === "refund_full" || loading}
+                  min="0"
+                  max="100"
+                  step="0.1"
+                />
+                {refundPercentage && Number(refundPercentage) > 0 && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Số tiền hoàn:{" "}
+                    <span className="font-bold text-orange-600">
+                      {calculatedRefundAmount.toLocaleString("vi-VN")}₫
+                    </span>
+                    {" "}({Number(refundPercentage)}% của {totalAmount.toLocaleString("vi-VN")}₫)
+                  </p>
+                )}
+                {decision === "refund_full" && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    → Tự động hoàn 100% ({totalAmount.toLocaleString("vi-VN")}₫)
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label className="text-lg font-semibold">Hoàn tiền cho ai?</Label>
+                <Select
+                  value={refundTo}
+                  onValueChange={(value) => setRefundTo(value as "reporter" | "reportedUser")}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="mt-2 h-14 text-lg">
+                    <SelectValue placeholder="Chọn người nhận hoàn tiền..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="reporter" className="text-lg py-3">
+                      <span className="text-blue-600">●</span> {reporterName} (Người tạo tranh chấp)
+                    </SelectItem>
+                    <SelectItem value="reportedUser" className="text-lg py-3">
+                      <span className="text-red-600">●</span> {reportedUserName} (Người bị báo cáo)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 

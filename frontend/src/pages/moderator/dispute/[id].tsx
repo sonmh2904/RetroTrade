@@ -96,6 +96,8 @@ interface Dispute {
     decision: string;
     notes?: string;
     refundAmount: number;
+    refundPercentage?: number;
+    refundTo?: "reporter" | "reportedUser";
   };
   handledBy?: { _id: string; fullName: string };
   handledAt?: string;
@@ -656,6 +658,8 @@ export default function DisputeDetailPage() {
           <DisputeResolutionForm
             disputeId={dispute._id}
             totalAmount={order.totalAmount}
+            reporterName={dispute.reporterId?.fullName || dispute.reporterId?.email || "Người tạo tranh chấp"}
+            reportedUserName={dispute.reportedUserId?.fullName || dispute.reportedUserId?.email || "Người bị báo cáo"}
             onSuccess={() => {
               toast.success("Đã xử lý xong! Đang tải lại...");
               setTimeout(() => {

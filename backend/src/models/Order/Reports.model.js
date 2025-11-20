@@ -46,6 +46,8 @@ const reportSchema = new Schema({
     decision: { type: String },
     notes: { type: String },
     refundAmount: { type: Number, default: 0 },
+    refundPercentage: { type: Number, default: 0, min: 0, max: 100 }, // Phần trăm hoàn tiền (0-100)
+    refundTo: { type: String, enum: ["reporter", "reportedUser"], default: null }, // Hoàn tiền cho ai
   },
   assignedBy: {
     type: Types.ObjectId,
