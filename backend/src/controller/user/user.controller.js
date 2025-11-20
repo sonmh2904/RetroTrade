@@ -355,6 +355,80 @@ module.exports.banUser = async (req, res) => {
             // Continue even if email fails - ban is still successful
         }
 
+        // Send email to system about banned user
+        try {
+            const systemEmail = process.env.EMAIL_USER || process.env.SYSTEM_EMAIL;
+            if (systemEmail) {
+                const systemEmailSubject = `[RetroTrade] Thông báo khóa tài khoản người dùng`;
+                const systemEmailHtml = `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <div style="background-color: #fee2e2; border-left: 4px solid #dc2626; padding: 16px; margin-bottom: 20px;">
+                            <h2 style="color: #dc2626; margin: 0; font-size: 20px;">⚠️ Thông báo khóa tài khoản</h2>
+                        </div>
+                        
+                        <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+                            <p style="color: #374151; font-size: 16px; margin: 0 0 16px 0;">
+                                Hệ thống RetroTrade thông báo:
+                            </p>
+                            
+                            <div style="background-color: #f3f4f6; border-left: 4px solid #6b7280; padding: 16px; margin: 20px 0;">
+                                <p style="color: #374151; font-size: 14px; margin: 0 0 8px 0;">
+                                    <strong>Thông tin người dùng bị khóa:</strong>
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Họ tên:</strong> ${user.fullName || user.displayName || 'N/A'}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Email:</strong> ${user.email || 'N/A'}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Số điện thoại:</strong> ${user.phone || 'N/A'}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>User ID:</strong> ${user._id}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>User GUID:</strong> ${user.userGuid || 'N/A'}
+                                </p>
+                            </div>
+                            
+                            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0;">
+                                <p style="color: #92400e; font-size: 14px; margin: 0 0 8px 0;">
+                                    <strong>Lý do khóa tài khoản:</strong>
+                                </p>
+                                <p style="color: #92400e; font-size: 14px; margin: 0; white-space: pre-wrap;">${reason.trim()}</p>
+                            </div>
+                            
+                            <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0;">
+                                <p style="color: #1e40af; font-size: 14px; margin: 0 0 8px 0;">
+                                    <strong>Thông tin quản trị viên:</strong>
+                                </p>
+                                <p style="color: #1e40af; font-size: 14px; margin: 4px 0;">
+                                    <strong>Người thực hiện:</strong> ${admin.fullName || admin.email || admin._id}
+                                </p>
+                                <p style="color: #1e40af; font-size: 14px; margin: 4px 0;">
+                                    <strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}
+                                </p>
+                            </div>
+                            
+                            <p style="color: #6b7280; font-size: 14px; margin: 20px 0 0 0; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+                                Trân trọng,<br>
+                                <strong>Hệ thống RetroTrade</strong>
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 12px;">
+                            <p>Email này được gửi tự động từ hệ thống.</p>
+                        </div>
+                    </div>
+                `;
+                await sendEmail(systemEmail, systemEmailSubject, systemEmailHtml);
+            }
+        } catch (systemEmailError) {
+            console.error("Error sending ban notification email to system:", systemEmailError);
+            // Continue even if system email fails - ban is still successful
+        }
+
         return res.json({ 
             code: 200, 
             message: "Khóa tài khoản thành công", 

@@ -465,8 +465,8 @@ export function DisputeManagement() {
 
       {/* Pagination */}
       {total > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sm:px-6 rounded-b-lg">
-          <div className="flex justify-between flex-1 sm:hidden">
+        <div className="flex items-center justify-center px-4 py-3 bg-gray-50 border-t border-gray-200 sm:px-6 rounded-b-lg">
+          <div className="flex justify-center items-center gap-2 flex-1 sm:hidden">
             <button
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={pagination.currentPage === 1}
@@ -482,25 +482,23 @@ export function DisputeManagement() {
               Sau
             </button>
           </div>
-          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-600">
-                Hiển thị{" "}
-                <span className="font-medium text-gray-900">
-                  {total === 0
-                    ? 0
-                    : (pagination.currentPage - 1) * pagination.itemsPerPage + 1}
-                </span>{" "}
-                đến{" "}
-                <span className="font-medium text-gray-900">
-                  {Math.min(
-                    pagination.currentPage * pagination.itemsPerPage,
-                    total
-                  )}
-                </span>{" "}
-                của <span className="font-medium text-gray-900">{total}</span> kết
-                quả
-              </p>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-center sm:gap-4">
+            <div className="text-sm text-gray-600">
+              Hiển thị{" "}
+              <span className="font-medium text-gray-900">
+                {total === 0
+                  ? 0
+                  : (pagination.currentPage - 1) * pagination.itemsPerPage + 1}
+              </span>{" "}
+              đến{" "}
+              <span className="font-medium text-gray-900">
+                {Math.min(
+                  pagination.currentPage * pagination.itemsPerPage,
+                  total
+                )}
+              </span>{" "}
+              của <span className="font-medium text-gray-900">{total}</span> kết
+              quả
             </div>
             <div className="flex items-center gap-2">
               <select

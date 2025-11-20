@@ -302,7 +302,10 @@ function RenterRequestsContent() {
                   </div>
                 </div>
                 <div className="text-right font-semibold text-blue-600">
-                  {order.totalAmount.toLocaleString()} {order.currency}
+                  {order.finalAmount !== undefined
+                    ? order.finalAmount.toLocaleString()
+                    : "-"}{" "}
+                  {order.currency}
                 </div>
               </CardHeader>
 

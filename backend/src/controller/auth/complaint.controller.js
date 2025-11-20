@@ -36,14 +36,16 @@ const submitComplaint = async (req, res) => {
             const admins = await User.find({ role: 'admin', isDeleted: false });
             
             for (const admin of admins) {
-                await createNotification({
-                    userId: admin._id,
-                    type: 'complaint',
-                    title: 'Khiếu nại mới về tài khoản bị khóa',
-                    message: `Người dùng ${email} đã gửi khiếu nại về tài khoản bị khóa. Vui lòng xem xét.`,
-                    link: `/admin/complaints/${complaint._id}`,
-                    relatedUserId: user ? user._id : null
-                });
+                await createNotification(
+                    admin._id,
+                    'complaint',
+                    'Khiếu nại mới về tài khoản bị khóa',
+                    `Người dùng ${email} đã gửi khiếu nại về tài khoản bị khóa. Vui lòng xem xét.`,
+                    {
+                        link: `/admin/complaints/${complaint._id}`,
+                        relatedUserId: user ? user._id : null
+                    }
+                );
 
                 // Send email to admin (optional)
                 try {
@@ -355,15 +357,19 @@ const handleComplaint = async (req, res) => {
         // Send notification to user if exists
         if (complaint.userId) {
             try {
-                await createNotification({
-                    userId: complaint.userId,
-                    type: 'complaint',
-                    title: action === 'resolve' ? 'Khiếu nại đã được chấp nhận' : 'Khiếu nại đã được xem xét',
-                    message: action === 'resolve' 
-                        ? 'Khiếu nại của bạn đã được chấp nhận. Tài khoản của bạn đã được mở khóa.'
-                        : 'Khiếu nại của bạn đã được xem xét. Vui lòng kiểm tra email để biết thêm chi tiết.',
-                    link: action === 'resolve' ? '/auth/login' : '/auth/banned'
-                });
+                const title = action === 'resolve' ? 'Khiếu nại đã được chấp nhận' : 'Khiếu nại đã được xem xét';
+                const body = action === 'resolve' 
+                    ? 'Khiếu nại của bạn đã được chấp nhận. Tài khoản của bạn đã được mở khóa.'
+                    : 'Khiếu nại của bạn đã được xem xét. Vui lòng kiểm tra email để biết thêm chi tiết.';
+                const link = action === 'resolve' ? '/auth/login' : '/auth/banned';
+                
+                await createNotification(
+                    complaint.userId,
+                    'complaint',
+                    title,
+                    body,
+                    { link }
+                );
             } catch (notifError) {
                 console.error("Error creating notification:", notifError);
             }
