@@ -305,7 +305,7 @@ export default function OrderDetail() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <Package className="w-6 h-6 text-blue-600" />
-                Sản phẩm thuê 
+                Sản phẩm thuê
               </h2>
               <div className="flex gap-6 items-start">
                 <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
@@ -646,10 +646,7 @@ export default function OrderDetail() {
                 </div>
 
                 <div className="flex justify-between text-cyan-200">
-                  <span>
-                    Phí dịch vụ
-                    {taxRate !== null ? ` (${taxRate}%)` : ""}
-                  </span>
+                  <span>Phí dịch vụ</span>
                   <span>
                     {(order.serviceFee || 0).toLocaleString("vi-VN")}₫
                   </span>
@@ -662,13 +659,69 @@ export default function OrderDetail() {
                   </span>
                 </div>
 
+                {order.discount &&
+                  ((order.discount.amountApplied ?? 0) > 0 ||
+                    (order.discount.secondaryAmountApplied ?? 0) > 0 ||
+                    (order.discount.totalAmountApplied ?? 0) > 0) && (
+                    <div className="flex justify-between text-green-200 border-t border-emerald-400 pt-3">
+                      <span>Giảm giá</span>
+                      <span className="font-medium">
+                        -
+                        {(
+                          order.discount.totalAmountApplied ||
+                          order.discount.amountApplied ||
+                          0
+                        ).toLocaleString("vi-VN")}
+                        ₫
+                      </span>
+                    </div>
+                  )}
+
                 <div className="border-t border-emerald-400 pt-3">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Tổng thanh toán</span>
                     <span className="text-2xl">
-                      {order.totalAmount.toLocaleString("vi-VN")}₫
+                      {(order.finalAmount || order.totalAmount).toLocaleString(
+                        "vi-VN"
+                      )}
+                      ₫
                     </span>
                   </div>
+                  {order.discount &&
+                    (order.discount.code || order.discount.secondaryCode) && (
+                      <div className="mt-2 text-xs text-emerald-200/80">
+                        {order.discount.code && (
+                          <div>
+                            Mã công khai: {order.discount.code}{" "}
+                            {order.discount.type === "percent"
+                              ? `(${order.discount.value}%)`
+                              : `(${(order.discount.value ?? 0).toLocaleString(
+                                  "vi-VN"
+                                )}₫)`}{" "}
+                            -{" "}
+                            {(order.discount.amountApplied || 0).toLocaleString(
+                              "vi-VN"
+                            )}
+                            ₫
+                          </div>
+                        )}
+                        {order.discount.secondaryCode && (
+                          <div>
+                            Mã riêng tư: {order.discount.secondaryCode}{" "}
+                            {order.discount.secondaryType === "percent"
+                              ? `(${order.discount.secondaryValue}%)`
+                              : `(${order.discount.secondaryValue?.toLocaleString(
+                                  "vi-VN"
+                                )}₫)`}{" "}
+                            -{" "}
+                            {(
+                              order.discount.secondaryAmountApplied || 0
+                            ).toLocaleString("vi-VN")}
+                            ₫
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
               </div>
             </div>

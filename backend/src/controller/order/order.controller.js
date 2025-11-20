@@ -14,6 +14,9 @@ const {
   notifyOrderCancelled,
   notifyOrderDisputed
 } = require("../../middleware/orderNotification");
+const Discount = require("../../models/Discount/Discount.model");
+const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
+const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
@@ -30,13 +33,13 @@ module.exports = {
         itemId,
         quantity = 1,
         startAt,
-        endAt,
         rentalStartDate,
+        endAt,
         rentalEndDate,
         paymentMethod = "Wallet",
         shippingAddress,
         note = "",
-        discountCode,
+        discountCode, // legacy
         publicDiscountCode,
         privateDiscountCode,
       } = req.body;
@@ -44,161 +47,152 @@ module.exports = {
       const finalStartAt = startAt || rentalStartDate;
       const finalEndAt = endAt || rentalEndDate;
 
+      // === VALIDATE REQUIRED FIELDS ===
       if (!itemId || !finalStartAt || !finalEndAt || !shippingAddress) {
         await session.abortTransaction();
-        return res.status(400).json({
-          message: "Thiếu các trường bắt buộc",
-        });
+        return res.status(400).json({ message: "Thiếu các trường bắt buộc" });
       }
 
+      // === LOAD ITEM ===
       const item = await Item.findById(itemId).session(session);
       if (!item || item.IsDeleted || item.StatusId !== 2) {
         await session.abortTransaction();
         return res.status(404).json({ message: "Sản phẩm không có sẵn" });
       }
-
       if (item.AvailableQuantity < quantity) {
         await session.abortTransaction();
         return res.status(400).json({ message: "Số lượng không đủ" });
       }
 
+      // === CALCULATE TOTALS ===
       const images = await ItemImages.find({
         ItemId: item._id,
         IsPrimary: true,
         IsDeleted: false,
       })
         .sort({ Ordinal: 1 })
-        .select("Url -_id")
+        .select("Url")
         .lean()
         .session(session);
 
-      const result = await calculateTotals(
+      const calc = await calculateTotals(
         item,
         quantity,
         finalStartAt,
         finalEndAt
       );
-      if (!result) {
+      if (!calc) {
         await session.abortTransaction();
-        return res.status(400).json({
-          message: "Không thể tính tiền thuê",
-          debug: {
-            itemId,
-            PriceUnitId: item.PriceUnitId,
-            BasePrice: item.BasePrice,
-            DepositAmount: item.DepositAmount,
-            quantity,
-            startAt: finalStartAt,
-            endAt: finalEndAt,
-          },
-        });
+        return res.status(400).json({ message: "Không thể tính tiền thuê" });
       }
 
-      const { totalAmount, depositAmount, serviceFee, duration, unitName } =
-        result;
+      const {
+        totalAmount,
+        rentalAmount,
+        depositAmount,
+        serviceFee,
+        duration,
+        unitName,
+      } = calc;
 
-      const baseAmountForDiscount = totalAmount + depositAmount;
-      let discountInfo = null;
-      let finalAmount = baseAmountForDiscount;
+      // === DISCOUNT LOGIC (CHỈ ÁP DỤNG TRÊN TIỀN THUÊ) ===
+      const baseForDiscount = rentalAmount; // ← Đây là điểm then chốt
       let totalDiscountAmount = 0;
-      const discountCodes = [];
-      
-      const publicCode = publicDiscountCode || (discountCode ? discountCode : null);
+      let discountInfo = null;
+
+      const publicCode = publicDiscountCode || discountCode;
       const privateCode = privateDiscountCode;
-    
+
+      const DiscountController = require("./discount.controller");
+
+      // --- Public Discount ---
       if (publicCode) {
-        try {
-          const DiscountController = require("./discount.controller");
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
-          const validated = await DiscountController.validateAndCompute({
-            code: publicCode,
-            baseAmount: baseAmountForDiscount, 
-            ownerId: item.OwnerId,
-            itemId: item._id,
-            userId: renterId,
-          });
-          if (validated.valid && validated.discount.isPublic) {
-            finalAmount = Math.max(0, baseAmountForDiscount - validated.amount);
-            totalDiscountAmount += validated.amount;
-            discountCodes.push(publicCode.toUpperCase());
+        const result = await DiscountController.validateAndCompute({
+          code: publicCode,
+          baseAmount: baseForDiscount,
+          ownerId: item.OwnerId,
+          itemId: item._id,
+          userId: renterId,
+        });
+
+        if (result.valid && result.discount.isPublic) {
+          totalDiscountAmount += result.amount;
+          discountInfo = {
+            code: publicCode.toUpperCase(),
+            type: result.discount.type,
+            value: result.discount.value,
+            amountApplied: result.amount,
+            _publicDiscountData: {
+              discount: result.discount,
+              amount: result.amount,
+            },
+          };
+        } else if (!result.valid) {
+          console.log(
+            `[DISCOUNT] Public code thất bại: ${publicCode} - Lý do: ${result.reason}`
+          );
+        }
+      }
+
+      // --- Private Discount (chỉ áp dụng nếu còn tiền thuê để giảm) ---
+      if (privateCode && totalDiscountAmount < rentalAmount) {
+        const remainingRental = rentalAmount - totalDiscountAmount;
+        const result = await DiscountController.validateAndCompute({
+          code: privateCode,
+          baseAmount: remainingRental,
+          ownerId: item.OwnerId,
+          itemId: item._id,
+          userId: renterId,
+        });
+
+        if (result.valid && !result.discount.isPublic) {
+          const applyAmt = Math.min(result.amount, remainingRental);
+          totalDiscountAmount += applyAmt;
+
+          if (discountInfo) {
+            discountInfo.secondaryCode = privateCode.toUpperCase();
+            discountInfo.secondaryType = result.discount.type;
+            discountInfo.secondaryValue = result.discount.value;
+            discountInfo.secondaryAmountApplied = applyAmt;
+            discountInfo.totalAmountApplied = totalDiscountAmount;
+          } else {
             discountInfo = {
-              code: publicCode.toUpperCase(),
-              type: validated.discount.type,
-              value: validated.discount.value,
-              amountApplied: validated.amount,
+              code: privateCode.toUpperCase(),
+              type: result.discount.type,
+              value: result.discount.value,
+              amountApplied: applyAmt,
             };
-        
-            if (!discountInfo._publicDiscountData) {
-              discountInfo._publicDiscountData = {
-                discount: validated.discount,
-                amount: validated.amount,
-              };
-            }
           }
-        } catch (e) {
-         
+          discountInfo._privateDiscountData = {
+            discount: result.discount,
+            amount: applyAmt,
+          };
+        } else if (!result.valid) {
+          console.log(
+            `[DISCOUNT] Private code thất bại: ${privateCode} - Lý do: ${result.reason}`
+          );
         }
       }
-      
-      if (privateCode && finalAmount > 0) {
-        try {
-          const DiscountController = require("./discount.controller");
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
-          const validated = await DiscountController.validateAndCompute({
-            code: privateCode,
-            baseAmount: finalAmount, 
-            ownerId: item.OwnerId,
-            itemId: item._id,
-            userId: renterId,
-          });
-          if (validated.valid && !validated.discount.isPublic) {
-            finalAmount = Math.max(0, finalAmount - validated.amount);
-            totalDiscountAmount += validated.amount;
-            // Update discountInfo to include both codes
-            if (discountInfo) {
-              discountInfo.secondaryCode = privateCode.toUpperCase();
-              discountInfo.secondaryType = validated.discount.type;
-              discountInfo.secondaryValue = validated.discount.value;
-              discountInfo.secondaryAmountApplied = validated.amount;
-              discountInfo.totalAmountApplied = totalDiscountAmount;
-            } else {
-              discountInfo = {
-                code: privateCode.toUpperCase(),
-                type: validated.discount.type,
-                value: validated.discount.value,
-                amountApplied: validated.amount,
-              };
-            }
-            // Store discount info for later use (after order is created)
-            if (!discountInfo._privateDiscountData) {
-              discountInfo._privateDiscountData = {
-                discount: validated.discount,
-                amount: validated.amount,
-              };
-            }
+
+      // === TÍNH TOÁN CUỐI CÙNG ===
+      const finalOrderAmount = Math.max(0, totalAmount - totalDiscountAmount);
+
+      const cleanDiscountInfo = discountInfo
+        ? {
+            code: discountInfo.code,
+            type: discountInfo.type,
+            value: discountInfo.value,
+            amountApplied: discountInfo.amountApplied || 0,
+            secondaryCode: discountInfo.secondaryCode,
+            secondaryType: discountInfo.secondaryType,
+            secondaryValue: discountInfo.secondaryValue,
+            secondaryAmountApplied: discountInfo.secondaryAmountApplied || 0,
+            totalAmountApplied:
+              discountInfo.totalAmountApplied || totalDiscountAmount,
           }
-        } catch (e) {
-        
-        }
-      }
-      const finalOrderAmount = Math.max(0, totalAmount + serviceFee + depositAmount - totalDiscountAmount);
+        : null;
 
-      const cleanDiscountInfo = discountInfo ? {
-        code: discountInfo.code,
-        type: discountInfo.type,
-        value: discountInfo.value,
-        amountApplied: discountInfo.amountApplied || 0,
-        secondaryCode: discountInfo.secondaryCode,
-        secondaryType: discountInfo.secondaryType,
-        secondaryValue: discountInfo.secondaryValue,
-        secondaryAmountApplied: discountInfo.secondaryAmountApplied || 0,
-        totalAmountApplied: discountInfo.totalAmountApplied || totalDiscountAmount,
-      } : null;
-
+      // === TẠO ORDER ===
       const orderDoc = await Order.create(
         [
           {
@@ -207,7 +201,7 @@ module.exports = {
             itemId: item._id,
             itemSnapshot: {
               title: item.Title,
-              images: images.map((img) => img.Url),
+              images: images.map((i) => i.Url),
               basePrice: item.BasePrice,
               priceUnit: String(item.PriceUnitId),
             },
@@ -233,99 +227,58 @@ module.exports = {
         { session }
       );
 
-      
+      const newOrder = orderDoc[0];
 
-      const publicDiscountData = discountInfo?._publicDiscountData;
-      const privateDiscountData = discountInfo?._privateDiscountData;
+      // === CẬP NHẬT DISCOUNT USAGE (usedCount, assignment, redemption) ===
+      const updateDiscountUsage = async (data) => {
+        if (!data) return;
+        const { discount, amount } = data;
+        
+        await Discount.updateOne(
+          { _id: discount._id },
+          { $inc: { usedCount: 1 } },
+          { session }
+        );
 
-     
-      if (publicDiscountData) {
-        try {
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
-          
-          await Discount.updateOne(
-            { _id: publicDiscountData.discount._id },
-            { $inc: { usedCount: 1 } },
-            { session }
-          );
-          
-          try {
-            await DiscountAssignment.updateOne(
-              { discountId: publicDiscountData.discount._id, userId: renterId },
-              { $inc: { usedCount: 1 } },
-              { session }
-            );
-          } catch (assignErr) {
-          
-          }
-          
-          try {
-            await DiscountRedemption.create([{
-              discountId: publicDiscountData.discount._id,
-              userId: renterId,
-              orderId: newOrder._id,
-              amountApplied: publicDiscountData.amount,
-              status: "applied",
-            }], { session });
-          } catch (redemptionErr) {
-            console.error("Error creating public discount redemption:", redemptionErr);
-          }
-        } catch (incErr) {
-          console.error("Error incrementing public discount:", incErr);
-        }
-      }
-
-    
-      if (privateDiscountData) {
-        try {
-          const Discount = require("../../models/Discount.model");
-          const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-          const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
-          
-          await Discount.updateOne(
-            { _id: privateDiscountData.discount._id },
-            { $inc: { usedCount: 1 } },
-            { session }
-          );
-          
+        if (!discount.isPublic) {
           await DiscountAssignment.updateOne(
-            { discountId: privateDiscountData.discount._id, userId: renterId },
+            { discountId: discount._id, userId: renterId },
             { $inc: { usedCount: 1 } },
             { session }
           );
-          
-          try {
-            await DiscountRedemption.create([{
-              discountId: privateDiscountData.discount._id,
+        }
+
+        await DiscountRedemption.create(
+          [
+            {
+              discountId: discount._id,
               userId: renterId,
               orderId: newOrder._id,
-              amountApplied: privateDiscountData.amount,
+              amountApplied: amount,
               status: "applied",
-            }], { session });
-          } catch (redemptionErr) {
-            console.error("Error creating private discount redemption:", redemptionErr);
-          }
-        } catch (incErr) {
-          console.error("Error incrementing private discount:", incErr);
-        }
-      }
+            },
+          ],
+          { session }
+        ).catch((err) => console.error("Redemption error:", err));
+      };
 
+      await updateDiscountUsage(discountInfo?._publicDiscountData);
+      await updateDiscountUsage(discountInfo?._privateDiscountData);
+
+      // === COMMIT & RESPONSE ===
       await session.commitTransaction();
       session.endSession();
 
-      const newOrder = orderDoc[0];
+      console.log(
+        `Order created - ID: ${newOrder._id} | Discount: ${totalDiscountAmount}đ`
+      );
 
-      // Đảm bảo orderId là string
-      const orderIdString = newOrder._id.toString();
+      await notifyOrderCreated(newOrder);
 
-      console.log(" Order created successfully - ID:", orderIdString, "Guid:", newOrder.orderGuid);
-      await notifyOrderCreated(newOrder); // Gửi notification khi tạo đơn
       return res.status(201).json({
         message: "Tạo đơn hàng thành công",
         data: {
-          orderId: orderIdString,
+          orderId: newOrder._id.toString(),
           orderGuid: newOrder.orderGuid,
           totalAmount,
           finalAmount: finalOrderAmount,
@@ -339,7 +292,7 @@ module.exports = {
     } catch (err) {
       await session.abortTransaction();
       session.endSession();
-      console.error("Lỗi khi tạo đơn hàng :", err);
+      console.error("Lỗi tạo đơn hàng:", err);
       return res.status(500).json({
         message: "Lỗi máy chủ",
         error: err.message,
@@ -779,7 +732,8 @@ module.exports = {
         return res.status(404).json({ message: "Order not found" });
 
       // Allow moderator and admin to view any order
-      const isModeratorOrAdmin = req.user.role === "moderator" || req.user.role === "admin";
+      const isModeratorOrAdmin =
+        req.user.role === "moderator" || req.user.role === "admin";
       if (
         !isModeratorOrAdmin &&
         ![order.renterId._id.toString(), order.ownerId._id.toString()].includes(
@@ -802,7 +756,6 @@ module.exports = {
       const userId = req.user._id;
       const { status, paymentStatus, search, page = 1, limit = 20 } = req.query;
 
-    
       const filter = {
         isDeleted: false,
         $or: [{ renterId: userId }, { ownerId: userId }],

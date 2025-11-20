@@ -556,21 +556,21 @@ module.exports = {
         if (!codeUpper) return { valid: false, reason: "INVALID_CODE" };
         
         // Tìm discount với code (case-insensitive search)
-        let discount = await Discount.findOne({ 
-          code: { $regex: new RegExp(`^${codeUpper}$`, 'i') }
-        }).lean();
+       let discount = await Discount.findOne({ code: codeUpper }).lean();
         
-        if (!discount) {
-          // Debug: Tìm tất cả discounts của user để xem có gì
-          const userDiscounts = await Discount.find({ 
-            allowedUsers: userId
-          }).select('code isPublic allowedUsers active').lean();
-          
-          console.error("Discount not found for code:", codeUpper, "userId:", userId);
-          console.error("User's available discounts:", userDiscounts.map(d => ({ code: d.code, isPublic: d.isPublic, active: d.active })));
-          
-          return { valid: false, reason: "INVALID_CODE" };
-        }
+     if (!discount) {
+       console.log("[DISCOUNT] Not found with code:", codeUpper);
+       const similar = await Discount.find({
+         code: { $regex: codeUpper, $options: "i" },
+       })
+         .select("code")
+         .limit(5);
+       console.log(
+         "[DISCOUNT] Similar codes in DB:",
+         similar.map((d) => d.code)
+       );
+       return { valid: false, reason: "INVALID_CODE" };
+     }
         
         // Kiểm tra active sau khi tìm thấy
         if (!discount.active) {

@@ -65,7 +65,7 @@ const calculateRentalAmount = (order: Order): number => {
   return basePrice * duration * count;
 };
 
-// Helper functions to convert status to Vietnamese
+
 const getOrderStatusLabel = (status: string): string => {
   const statusMap: Record<string, string> = {
     pending: "Chờ xác nhận",
