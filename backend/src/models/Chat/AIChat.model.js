@@ -16,9 +16,13 @@ const AIMessageSchema = new Schema(
         distance: { type: String },
       },
     ],
-    orderId: { type: Schema.Types.ObjectId, ref: "Order" }, 
+    orderId: { type: Schema.Types.ObjectId, ref: "Order" },
+    // Lưu products để có thể dùng lại trong context (khi hỏi "tốt nhất" sau khi đã list)
+    products: { type: Schema.Types.Mixed, default: [] }, // Array of products
+    recommendations: { type: Schema.Types.Mixed, default: [] }, // Array of recommendations
+    bestProduct: { type: Schema.Types.Mixed, default: null }, // Single best product
   },
-  { _id: false }
+  { _id: false, strict: false } // strict: false để cho phép lưu dynamic fields
 );
 
 const AIChatSchema = new Schema({

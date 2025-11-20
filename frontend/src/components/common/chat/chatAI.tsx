@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
 import { useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
 import { RootState } from "@/store/redux_store";
 import { decodeToken } from "@/utils/jwtHelper";
 import EmojiPicker from "./EmojiPicker";
@@ -14,20 +16,28 @@ import { toast } from "sonner";
 
 const AI_SESSION_KEY = "aiSessionId";
 
+interface ProductSuggestion {
+  itemId: string;
+  title: string;
+  price: number;
+  detail: string;
+  rating: number;
+  distance: string;
+  fullAddress?: string;
+  estimatedDistance?: number;
+  images?: string[];
+}
+
 interface AIMessage {
   id: string;
   role: "user" | "model";
   content: string;
   timestamp: Date;
-  productSuggestions?: Array<{
-    id: string;
-    title: string;
-    price: number;
-    detail: string;
-    rating: number;
-    distance: string;
-  }>;
+  productSuggestions?: ProductSuggestion[];
   orderId?: string;
+  products?: ProductSuggestion[]; 
+  recommendations?: ProductSuggestion[]; 
+  bestProduct?: ProductSuggestion; 
 }
 
 interface ChatAIProps {
@@ -42,6 +52,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
   isEmbedded = false,
 }) => {
   const { accessToken } = useSelector((state: RootState) => state.auth);
+  const router = useRouter();
   const user = React.useMemo(() => decodeToken(accessToken), [accessToken]);
 
   const [aiSessionId, setAiSessionId] = useState<string | null>(() => {
@@ -85,6 +96,197 @@ const ChatAI: React.FC<ChatAIProps> = ({
     }
   }, [isOpen, user, aiSessionLoaded]);
 
+  // Helper để clean markdown * (loại bỏ italic/strong)
+  const cleanMarkdown = useCallback((text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, "$1") // Bold
+      .replace(/\*(.*?)\*/g, "$1") // Italic
+      .replace(/__(.*?)__/g, "$1") // Underline
+      .replace(/`(.*?)`/g, "$1"); // Inline code
+  }, []);
+
+  // Helper render product suggestions (clickable links)
+  const renderProductSuggestions = useCallback(
+    (
+      suggestions: ProductSuggestion[],
+      // keep param name but now only used to render product cards (no "Gợi ý" label)
+      type: "products" | "best" = "products"
+    ) => {
+      if (!suggestions?.length) return null;
+
+      // Render only product cards (no "Gợi ý" header)
+      return (
+        <div className="mt-3 p-0 rounded-lg">
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {suggestions.slice(0, 5).map((p, i) => (
+              <button
+                key={p.itemId || i}
+                onClick={() => {
+                  const itemIdStr = safeToString(
+                    (p as unknown as RawRecord).itemId ?? p.itemId
+                  );
+                  if (itemIdStr)
+                    router.push(
+                      `/products/details?id=${encodeURIComponent(itemIdStr)}`
+                    );
+                }}
+                className="w-full text-left p-3 bg-gray-700/50 rounded-lg hover:bg-gray-600/70 transition-all border border-gray-600 hover:border-blue-500 group"
+              >
+                <div className="flex gap-3">
+                  {p.images?.[0] && (
+                    <Image
+                      src={p.images[0]}
+                      alt={p.title}
+                      width={64} // w-16
+                      height={64} // h-16
+                      className="rounded object-cover flex-shrink-0"
+                      onError={(e) => {
+                        // Next/Image không cho thay đổi style trực tiếp
+                        // → cần state để ẩn ảnh khi lỗi
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-white truncate group-hover:text-blue-400 transition-colors">
+                      {p.title}
+                    </div>
+                    <div className="text-green-400 text-sm font-semibold mt-1">
+                      {p.price?.toLocaleString("vi-VN")}₫
+                    </div>
+                    {p.fullAddress && (
+                      <div className="text-gray-400 text-xs mt-1 truncate">
+                        📍 {p.fullAddress}
+                      </div>
+                    )}
+                    {p.estimatedDistance && (
+                      <div className="text-blue-400 text-xs mt-1">
+                        📏 Khoảng cách: {p.estimatedDistance}km
+                      </div>
+                    )}
+                    <div className="text-blue-400 text-xs mt-2 font-medium">
+                      👆 Click để xem chi tiết →
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    [router]
+  );
+
+  type RawRecord = Record<string, unknown>;
+
+  const isObject = (v: unknown): v is RawRecord =>
+    v !== null && typeof v === "object";
+
+  const safeToString = (id: unknown): string => {
+    if (id === null || id === undefined) return "";
+    if (typeof id === "string") return id;
+    if (typeof id === "number") return String(id);
+    if (isObject(id)) {
+      const maybeToStr = (id as { toString?: () => string }).toString;
+      if (typeof maybeToStr === "function") {
+        try {
+          const s = maybeToStr.call(id);
+          if (s && !s.includes("[object")) return s;
+        } catch {}
+      }
+      if ("$oid" in id && typeof (id as RawRecord)["$oid"] === "string")
+        return (id as RawRecord)["$oid"] as string;
+      if ("$uuid" in id && typeof (id as RawRecord)["$uuid"] === "string")
+        return (id as RawRecord)["$uuid"] as string;
+      if ("_id" in id) return safeToString((id as RawRecord)["_id"]);
+    }
+    try {
+      return String(id);
+    } catch {
+      return "";
+    }
+  };
+
+  const normalizeId = (id: unknown): string => {
+    return safeToString(id);
+  };
+
+  const emptyProduct = (): ProductSuggestion => ({
+    itemId: "",
+    title: "",
+    price: 0,
+    detail: "",
+    rating: 0,
+    distance: "",
+    fullAddress: "",
+    estimatedDistance: undefined,
+    images: [],
+  });
+
+  const normalizeProduct = (p: unknown): ProductSuggestion => {
+    if (!isObject(p)) return emptyProduct();
+
+    const getStr = (k: string) =>
+      (p[k] && typeof p[k] === "string" ? (p[k] as string) : "") || "";
+
+    const id = normalizeId(
+      (p as RawRecord)._id ?? (p as RawRecord).itemId ?? (p as RawRecord).id
+    );
+    const title = getStr("Title") || getStr("title");
+    const detail =
+      getStr("ShortDescription") ||
+      getStr("detail") ||
+      getStr("Description") ||
+      "";
+    const basePriceRaw =
+      (p as RawRecord).BasePrice ?? (p as RawRecord).price ?? 0;
+    const price =
+      typeof basePriceRaw === "number"
+        ? basePriceRaw
+        : Number(basePriceRaw) || 0;
+    const addressParts = [
+      (p as RawRecord).Address,
+      (p as RawRecord).District,
+      (p as RawRecord).City,
+    ].filter((v) => typeof v === "string" && v) as string[];
+    const fullAddress =
+      getStr("FullAddress") || getStr("fullAddress") || addressParts.join(", ");
+    const estimatedDistance =
+      typeof (p as RawRecord).estimatedDistance === "number"
+        ? ((p as RawRecord).estimatedDistance as number)
+        : undefined;
+    const rawImages = (p as RawRecord).Images ?? (p as RawRecord).images;
+    const images: string[] = Array.isArray(rawImages)
+      ? (rawImages as unknown[])
+          .map((img) => {
+            if (typeof img === "string") return img;
+            if (isObject(img))
+              return (
+                ((img as RawRecord).Url as string) ||
+                ((img as RawRecord).url as string) ||
+                ""
+              );
+            return "";
+          })
+          .filter(Boolean)
+      : [];
+
+    const cityOrDistance = getStr("City") || getStr("city") || "";
+
+    return {
+      itemId: id,
+      title: title || "",
+      price,
+      detail,
+      rating: 0,
+      distance: cityOrDistance,
+      fullAddress,
+      estimatedDistance,
+      images,
+    };
+  };
+
   const loadAIChat = useCallback(async () => {
     if (!user || aiSessionLoaded) return;
 
@@ -97,7 +299,9 @@ const ChatAI: React.FC<ChatAIProps> = ({
           const data = await res.json();
           currentSessionId = data.data.sessionId;
           setAiSessionId(currentSessionId);
-          localStorage.setItem(AI_SESSION_KEY, currentSessionId);
+          if (currentSessionId) {
+            localStorage.setItem(AI_SESSION_KEY, currentSessionId);
+          }
         } else {
           const errorData = await res.json().catch(() => ({}));
           toast.error(
@@ -112,12 +316,56 @@ const ChatAI: React.FC<ChatAIProps> = ({
         const res = await getAIChatHistory(currentSessionId);
         if (res.ok) {
           const data = await res.json();
-          setAiMessages(
-            data.data.messages.map((msg: any) => ({
-              ...msg,
-              role: msg.role === "ai" ? "model" : msg.role,
-            })) || []
-          );
+          const normalized = (data.data.messages || []).map((m: unknown) => {
+            if (!isObject(m)) return m as AIMessage;
+            const mm = { ...(m as RawRecord) } as RawRecord;
+            if (Array.isArray(mm.products)) {
+              mm.products = mm.products.map((x) =>
+                normalizeProduct(x)
+              ) as unknown;
+            }
+            if (Array.isArray(mm.productSuggestions)) {
+              mm.productSuggestions = mm.productSuggestions.map((x) =>
+                normalizeProduct(x)
+              ) as unknown;
+            }
+            if (Array.isArray(mm.recommendations)) {
+              mm.recommendations = mm.recommendations.map((x) =>
+                normalizeProduct(x)
+              ) as unknown;
+            }
+            if (mm.bestProduct) {
+              mm.bestProduct = normalizeProduct(mm.bestProduct);
+            }
+            const safeRole = (mm.role === "user" ? "user" : "model") as
+              | "user"
+              | "model";
+            const safeContent =
+              typeof mm.content === "string" ? mm.content : "";
+            const safeTimestamp = mm.timestamp
+              ? new Date(String(mm.timestamp))
+              : new Date();
+            return {
+              id: normalizeId(
+                mm.id ?? mm._id ?? mm.itemId ?? safeTimestamp.getTime()
+              ),
+              role: safeRole,
+              content: safeContent,
+              timestamp: safeTimestamp,
+              productSuggestions: Array.isArray(mm.productSuggestions)
+                ? (mm.productSuggestions as ProductSuggestion[])
+                : undefined,
+              products: Array.isArray(mm.products)
+                ? (mm.products as ProductSuggestion[])
+                : undefined,
+              recommendations: Array.isArray(mm.recommendations)
+                ? (mm.recommendations as ProductSuggestion[])
+                : undefined,
+              bestProduct: mm.bestProduct as ProductSuggestion | undefined,
+              orderId: typeof mm.orderId === "string" ? mm.orderId : undefined,
+            } as AIMessage;
+          });
+          setAiMessages(normalized);
         } else {
           const errorData = await res.json().catch(() => ({}));
           toast.warning("Không tải được lịch sử chat AI");
@@ -148,14 +396,45 @@ const ChatAI: React.FC<ChatAIProps> = ({
       const res = await sendAIMessage(aiSessionId, userMsg.content);
       if (res.ok) {
         const data = await res.json();
+        const aiResponseData = data.data.response;
+        const formatProductsForDisplay = (
+          products: unknown
+        ): ProductSuggestion[] => {
+          if (!Array.isArray(products)) return [];
+          return (products as unknown[]).map((p) => normalizeProduct(p));
+        };
+
+        // Format productSuggestions từ AI response để đảm bảo itemId là string
+        const formatSuggestions = (
+          suggestions: unknown
+        ): ProductSuggestion[] => {
+          if (!Array.isArray(suggestions)) return [];
+          return (suggestions as unknown[]).map((s) => normalizeProduct(s));
+        };
+
         const aiMsg: AIMessage = {
           id: (Date.now() + 1).toString(),
           role: "model",
-          content: data.data.response.content || data.data.response,
+          content: cleanMarkdown(aiResponseData.content || aiResponseData), // Clean markdown
           timestamp: new Date(),
-          productSuggestions: data.data.response.productSuggestions,
-          orderId: data.data.response.orderId,
+          productSuggestions: formatSuggestions(
+            aiResponseData?.productSuggestions ?? []
+          ),
+          orderId: aiResponseData.orderId,
+          products: formatProductsForDisplay(data.data?.products ?? []),
+          recommendations: formatProductsForDisplay(
+            data.data?.recommendations ?? []
+          ),
+          bestProduct: data.data.bestProduct
+            ? formatProductsForDisplay([data.data.bestProduct])[0]
+            : undefined,
         };
+
+        if (aiMsg.orderId) {
+          toast.success(`Đơn thuê tạo thành công! Order ID: ${aiMsg.orderId}`);
+          router.push(`/order/${aiMsg.orderId}`);
+        }
+
         setAiMessages((prev) => [...prev, aiMsg]);
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -171,7 +450,9 @@ const ChatAI: React.FC<ChatAIProps> = ({
         const errMsg: AIMessage = {
           id: (Date.now() + 2).toString(),
           role: "model",
-          content: `Lỗi: ${errorData.message || "Server AI bận, thử lại sau!"}`,
+          content: `Server AI đang bận ${
+            errorData.message || "Server AI bận, thử lại sau!"
+          }`,
           timestamp: new Date(),
         };
         setAiMessages((prev) => [...prev, errMsg]);
@@ -188,7 +469,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
     } finally {
       setAiLoading(false);
     }
-  }, [aiMessageInput, aiSessionId, aiLoading]);
+  }, [aiMessageInput, aiSessionId, aiLoading, cleanMarkdown, router]);
 
   const handleKeyPress = useCallback(
     (e: React.KeyboardEvent) => {
@@ -325,21 +606,25 @@ const ChatAI: React.FC<ChatAIProps> = ({
                 }`}
               >
                 <div className="text-sm" style={{ whiteSpace: "pre-wrap" }}>
-                  {msg.content}
+                  {msg.role === "model"
+                    ? cleanMarkdown(msg.content)
+                    : msg.content}
                 </div>
-                {msg.productSuggestions?.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {msg.productSuggestions.map((p, i) => (
-                      <div key={i} className="p-2 bg-white/10 rounded text-xs">
-                        {p.title} - {p.price?.toLocaleString()}đ - Rating:{" "}
-                        {p.rating}
-                      </div>
-                    ))}
+                {/* Render bestProduct nếu có (1 cái duy nhất) */}
+                {msg.bestProduct && (
+                  <div className="mt-3 p-3 bg-gradient-to-r from-yellow-900/50 to-orange-900/50 rounded-lg border-2 border-yellow-500">
+                    <p className="text-xs font-bold text-yellow-300 mb-2">
+                      ⭐ SẢN PHẨM TỐT NHẤT
+                    </p>
+                    {renderProductSuggestions([msg.bestProduct], "best")}
                   </div>
                 )}
+                {/* Only show products (actual search results) */}
+                {msg.products &&
+                  renderProductSuggestions(msg.products, "products")}
                 {msg.orderId && (
                   <div className="mt-1 text-xs text-green-400">
-                    Order ID: {msg.orderId}
+                    Order ID: {msg.orderId} (Đã tạo thành công!)
                   </div>
                 )}
                 <small className="opacity-75 mt-1 block text-xs">
