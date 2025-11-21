@@ -1,5 +1,6 @@
 
 const BankAccount = require('../../models/BankAccount.model'); // import model bạn đã tạo
+const { getAllBanks } = require('../../utils/bankUtils');
 
 
 const getAllBankAccounts = async (req, res) => {
@@ -28,10 +29,25 @@ const addBankAccount = async (req, res) => {
         const userId = req.user?._id;
         const { bankCode, bankName, accountNumber, accountName, isDefault } = req.body;
 
-        // validate dữ liệu đầu vào
+        // Validate dữ liệu đầu vào
         if (!bankCode || !bankName || !accountNumber || !accountName) {
             return res.status(400).json({ message: "Thiếu thông tin ngân hàng bắt buộc" });
         }
+
+        // Validate số tài khoản: toàn số, 8-16 ký tự
+        if (!/^\d{8,16}$/.test(accountNumber)) {
+            return res.status(400).json({
+                message: "Số tài khoản phải là số, từ 8-16 ký tự!"
+            });
+        }
+
+        // Validate tên chủ TK: 3-50 ký tự, chữ cái + Tiếng Việt + khoảng trắng/dấu, không khoảng trắng liền tiếp
+        if (!/^[A-Za-zÀ-Ỵà-ỵ\s.'-]{3,50}$/.test(accountName.trim()) || /\s{2,}/.test(accountName.trim())) {
+            return res.status(400).json({
+                message: "Tên chủ tài khoản từ 3-50 ký tự, chỉ chứa chữ cái và khoảng trắng!"
+            });
+        }
+
 
         // Kiểm tra số tài khoản đã tồn tại cùng user chưa để tránh duplicate
         const exists = await BankAccount.findOne({ userId, accountNumber });
@@ -67,6 +83,7 @@ const addBankAccount = async (req, res) => {
         return res.status(500).json({ message: "Lỗi server khi thêm tài khoản ngân hàng", error: error.message });
     }
 };
+
 const deleteBankAccount = async (req, res) => {
     try {
         const userId = req.user?._id || req.user?.userId;
@@ -92,8 +109,25 @@ const deleteBankAccount = async (req, res) => {
         return res.status(500).json({ message: "Lỗi server khi xóa tài khoản", error: error.message });
     }
 };
+
+// Lấy danh sách ngân hàng từ cache để trả về FE
+const getBankList = async (req, res) => {
+    try {
+        const banks = getAllBanks();
+        return res.status(200).json({
+            message: "Lấy danh sách ngân hàng thành công",
+            data: banks
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Lỗi server khi lấy danh sách ngân hàng", error: error.message });
+    }
+};
+
+
+
 module.exports = {
     addBankAccount,
     getAllBankAccounts,
-    deleteBankAccount
+    deleteBankAccount,
+    getBankList
 };

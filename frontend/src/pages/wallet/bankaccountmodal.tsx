@@ -1,4 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { getAllBanks } from "@/services/wallet/wallet.api";
+
+interface IBank {
+  code: string;
+  name: string;
+  shortName?: string;
+  logo?: string;
+}
 
 interface BankAccountModalProps {
   onClose: () => void;
@@ -11,19 +19,45 @@ interface BankAccountModalProps {
   }) => void;
 }
 
-export default function BankAccountModal({ onClose, onAdd }: BankAccountModalProps) {
-  const [bankCode, setBankCode] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [isDefault, setIsDefault] = useState(false);
+const BankAccountModal: React.FC<BankAccountModalProps> = ({ onClose, onAdd }) => {
+  const [bankList, setBankList] = useState<IBank[]>([]);
+  const [bankCode, setBankCode] = useState<string>("");
+  const [bankName, setBankName] = useState<string>("");
+  const [accountNumber, setAccountNumber] = useState<string>("");
+  const [accountName, setAccountName] = useState<string>("");
+  const [isDefault, setIsDefault] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    getAllBanks()
+      .then((data) => {
+        // Nếu data là object {data: [...]}, lấy đúng mảng bên trong
+        let banks = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+        setBankList(banks);
+      })
+      .catch(() => setBankList([]));
+  }, []);
+
+  useEffect(() => {
+    const selectedBank = bankList.find(b => b.code === bankCode);
+    setBankName(selectedBank ? selectedBank.name : "");
+  }, [bankCode, bankList]);
+
+  const handleSubmit = async () => {
+    setError(""); // reset error trước mỗi lần submit
     if (!bankCode || !bankName || !accountNumber || !accountName) {
-      alert("Vui lòng nhập đầy đủ thông tin bắt buộc!");
+      setError("Vui lòng nhập đầy đủ thông tin bắt buộc!");
       return;
     }
-    onAdd({ bankCode, bankName, accountNumber, accountName, isDefault });
+    try {
+      // onAdd nên là async function gọi API (promise)
+      await onAdd({ bankCode, bankName, accountNumber, accountName, isDefault });
+      // Nếu thành công, đóng modal hoặc clear state nếu muốn
+    } catch (err: any) {
+      // Nếu backend trả về lỗi, lấy message từ response hoặc error object
+      const message = err?.response?.data?.message || err.message || "Có lỗi xảy ra!";
+      setError(message);
+    }
   };
 
   return (
@@ -32,21 +66,37 @@ export default function BankAccountModal({ onClose, onAdd }: BankAccountModalPro
         <h2 className="text-2xl font-bold text-center mb-6 text-indigo-700">
           Thêm tài khoản ngân hàng
         </h2>
+        {error && (
+          <div className="text-red-600 mb-2 rounded px-3 py-2 bg-red-50 border border-red-200">
+            {error}
+          </div>
+        )}
 
         <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Mã ngân hàng"
+          <select
             value={bankCode}
-            onChange={(e) => setBankCode(e.target.value)}
+            onChange={e => setBankCode(e.target.value)}
             className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-          />
+            required
+          >
+            <option value="">Chọn mã ngân hàng</option>
+            {Array.isArray(bankList) && bankList.length > 0
+              ? bankList.map(bank => (
+                <option value={bank.code}>
+                  {bank.code}
+                </option>
+              ))
+              : <option disabled value="">Không có dữ liệu ngân hàng</option>
+            }
+          </select>
+
           <input
             type="text"
             placeholder="Tên ngân hàng"
             value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+            disabled
+            readOnly
+            className="w-full border border-gray-300 p-3 rounded-lg bg-gray-100 text-gray-500"
           />
           <input
             type="text"
@@ -97,4 +147,6 @@ export default function BankAccountModal({ onClose, onAdd }: BankAccountModalPro
       `}</style>
     </div>
   );
-}
+};
+
+export default BankAccountModal;

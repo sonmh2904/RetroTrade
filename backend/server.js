@@ -78,24 +78,39 @@ cron.schedule('0 * * * *', async () => {
 
 // Test CORS route
 app.get('/api/v1/test-cors', (req, res) => {
-  res.json({ 
-    message: 'CORS is working!', 
+  res.json({
+    message: 'CORS is working!',
     origin: req.headers.origin,
     timestamp: new Date().toISOString()
   });
 });
+// Import util ngân hàng!
+const { fetchBanks } = require("./src/utils/bankUtils"); // Sửa path đúng thư mục utils của bạn
+
+// Gọi API lấy toàn bộ ngân hàng ngay khi start backend
+fetchBanks()
+  .then(() => console.log(" Đã tải danh sách ngân hàng ban đầu"))
+  .catch(() => console.log("Không tải được danh sách ngân hàng từ VietQR"));
+
+setInterval(fetchBanks, 1000 * 60 * 60 * 12); // Update tự động mỗi 12h (hoặc 24h tùy lịch trình)
+
+require('./src/cronJobs/refundJob');
+console.log(' Cron jobs đã được nạp và chạy');
+
+
+
 
 // Routes
 router(app);
 
 // DB connect
 connectDB()
-  .then(() => console.log("✅ MongoDB connected"))
+  .then(() => console.log(" MongoDB connected"))
   .catch((err) => console.log(err));
 
 // Use server.listen instead of app.listen for socket.io
 server.listen(process.env.PORT, () =>
-  console.log(`🚀 Server running on port ${process.env.PORT}`)
+  console.log(` Server running on port ${process.env.PORT}`)
 );
 
 module.exports = { app, server, io };
