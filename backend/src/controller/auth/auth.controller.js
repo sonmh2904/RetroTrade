@@ -5,6 +5,7 @@ const { sendEmail } = require("../../utils/sendEmail")
 const { generateOtp } = require("../../utils/generateOtp")
 const Otp = require("../../models/otp")
 const { createNotification } = require("../../middleware/createNotification")
+const loyaltyController = require("../loyalty/loyalty.controller")
 
 
 
@@ -73,8 +74,6 @@ module.exports.login = async (req, res) => {
 
         // Cộng RT Points cho đăng nhập hàng ngày (không block nếu lỗi) + tạo thông báo
         try {
-            const loyaltyController = require("../loyalty/loyalty.controller");
-            const { createNotification } = require("../../middleware/createNotification");
             const result = await loyaltyController.addDailyLoginPoints(user._id);
             if (result && result.success && result.transaction) {
                 // Notify user about awarded points
