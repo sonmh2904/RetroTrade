@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/router";
 import { createOrderAction } from "@/store/order/orderActions";
-import { removeItemFromCartAction } from "@/store/cart/cartActions";
+import { removeItemFromCartAction, updateCartItemAction, fetchCartItems } from "@/store/cart/cartActions";
 import type { CartItem } from "@/services/auth/cartItem.api";
-import { format } from "date-fns";
-import { RootState } from "@/store/redux_store";
+import { RootState, AppDispatch } from "@/store/redux_store";
 import { decodeToken } from "@/utils/jwtHelper";
 import { getUserProfile } from "@/services/auth/user.api";
 import {
@@ -24,9 +23,11 @@ import {
   ChevronLeft,
   Edit2,
   X,
-  Save,
   Eye,
   ExternalLink,
+  Loader2,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { 
   type Discount, 
@@ -44,6 +45,7 @@ import { payOrderWithWallet } from "@/services/wallet/wallet.api";
 import PopupModal from "@/components/ui/common/PopupModal";
 
 import { AddressSelector } from "@/components/ui/auth/address/address-selector";
+import RentalDatePicker from "@/components/ui/common/RentalDatePicker";
 
 
 const calculateRentalDays = (item: CartItem): number => {
@@ -76,32 +78,6 @@ const calculateRentalDays = (item: CartItem): number => {
   return Math.max(1, unitCount);
 };
 
-const getRentalDurationText = (
-  duration: number,
-  priceUnit?: string
-): string => {
-  const unit = priceUnit?.toLowerCase();
-  switch (unit) {
-    case "giờ":
-    case "hour":
-    case "hours":
-      return `${duration} giờ`;
-    case "ngày":
-    case "day":
-    case "days":
-      return `${duration} ngày`;
-    case "tuần":
-    case "week":
-    case "weeks":
-      return `${duration} tuần`;
-    case "tháng":
-    case "month":
-    case "months":
-      return `${duration} tháng`;
-    default:
-      return `${duration} ngày`;
-  }
-};
 
 type ApiError = {
   response?: {
@@ -117,7 +93,7 @@ type ApiError = {
 };
 
 export default function Checkout() {
-  const dispatch = useDispatch<any>();
+  const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -137,19 +113,21 @@ export default function Checkout() {
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
   const [errorModalTitle, setErrorModalTitle] = useState("");
   const [errorModalMessage, setErrorModalMessage] = useState("");
-  const [editingItems, setEditingItems] = useState<Record<string, {
-    quantity: number;
-    rentalStartDate: string;
-    rentalEndDate: string;
+  // Tách riêng editing dates (giống cart page)
+  const [editingDates, setEditingDates] = useState<Record<string, {
+    rentalStartDateTime: string;
+    rentalEndDateTime: string;
   }>>({});
   const [itemErrors, setItemErrors] = useState<Record<string, {
-    quantity?: string;
     rentalStartDate?: string;
     rentalEndDate?: string;
   }>>({});
+  const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [useDefaultPhone, setUseDefaultPhone] = useState(true);
+  const [defaultPhone, setDefaultPhone] = useState<string>("");
   const [confirmPopup, setConfirmPopup] = useState<{
     isOpen: boolean;
     title: string;
@@ -229,6 +207,35 @@ export default function Checkout() {
     }));
   };
 
+  // Load missing fullName when address is selected
+  useEffect(() => {
+    if (selectedAddressId && !shipping.fullName) {
+      const decoded = decodeToken(accessToken);
+      if (decoded?.fullName) {
+        setShipping(prev => ({
+          ...prev,
+          fullName: decoded.fullName || "",
+        }));
+      }
+    }
+  }, [selectedAddressId, shipping.fullName, accessToken]);
+
+  // Update phone when useDefaultPhone changes
+  useEffect(() => {
+    if (useDefaultPhone && defaultPhone) {
+      setShipping(prev => ({
+        ...prev,
+        phone: defaultPhone,
+      }));
+    } else if (!useDefaultPhone) {
+      // Clear phone when switching to custom input
+      setShipping(prev => ({
+        ...prev,
+        phone: "",
+      }));
+    }
+  }, [useDefaultPhone, defaultPhone]);
+
  useEffect(() => {
   const loadUserInfo = async () => {
     try {
@@ -241,14 +248,18 @@ export default function Checkout() {
         }));
       }
 
-      // Get phone from user profile
+      // Get phone from user profile and save as default
       const profileResponse = await getUserProfile();
       if (profileResponse?.user?.phone || profileResponse?.data?.phone) {
         const phone = profileResponse.user?.phone || profileResponse.data?.phone || "";
-        setShipping(prev => ({
-          ...prev,
-          phone: phone,
-        }));
+        setDefaultPhone(phone);
+        // Only set to shipping if useDefaultPhone is true
+        if (useDefaultPhone) {
+          setShipping(prev => ({
+            ...prev,
+            phone: phone,
+          }));
+        }
       }
 
     } catch (error) {
@@ -259,7 +270,7 @@ export default function Checkout() {
   if (accessToken) {
     loadUserInfo();
   }
-}, [accessToken]);
+}, [accessToken, useDefaultPhone]);
 
   useEffect(() => {
     if (!hasInitializedSelection) return;
@@ -328,16 +339,12 @@ export default function Checkout() {
     const days = calculateRentalDays(item);
     return sum + item.basePrice * item.quantity * days;
   }, 0);
-
-  console.log("Render - rentalTotal:", rentalTotal, "cartItems:", cartItems.length);
-
   // Tính depositTotal
   const depositTotal = selectedCartItems.reduce(
     (sum, item) => sum + item.depositAmount * item.quantity,
     0
   );
-
-  // Tính serviceFee trên rentalTotal (trước discount) - theo logic backend
+  // Tính serviceFee trên tiền thuê
   const serviceFeeAmount = (rentalTotal * serviceFeeRate) / 100;
 
   // Tính totalDiscountAmount từ public và private discount (chỉ áp dụng khi có sản phẩm được chọn)
@@ -345,36 +352,37 @@ export default function Checkout() {
   const effectivePrivateDiscountAmount = selectedCartItems.length > 0 ? privateDiscountAmount : 0;
   const totalDiscountAmount = effectivePublicDiscountAmount + effectivePrivateDiscountAmount;
 
-  // Tính grandTotal theo logic backend: totalAmount + serviceFee + depositAmount - totalDiscountAmount
-  const grandTotal = Math.max(0, rentalTotal + serviceFeeAmount + depositTotal - totalDiscountAmount);
+  // Tính grandTotal: Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
+  const grandTotal = Math.max(0, rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount);
 
-  // Kiểm tra minOrderAmount cho public discount
+
+  // Kiểm tra minOrderAmount cho public discount (chỉ kiểm tra trên tiền thuê)
   useEffect(() => {
     if (
       publicDiscount &&
       publicDiscount.minOrderAmount &&
-      (rentalTotal + depositTotal) < publicDiscount.minOrderAmount
+      rentalTotal < publicDiscount.minOrderAmount
     ) {
       setPublicDiscount(null);
       setPublicDiscountAmount(0);
       toast.info("Đơn hàng không còn đáp ứng điều kiện tối thiểu của mã giảm giá công khai đã chọn.");
     }
-  }, [publicDiscount, rentalTotal, depositTotal]);
+  }, [publicDiscount, rentalTotal]);
 
-  // Kiểm tra minOrderAmount cho private discount
+  // Kiểm tra minOrderAmount cho private discount (chỉ kiểm tra trên tiền thuê còn lại)
   useEffect(() => {
     if (
       privateDiscount &&
       privateDiscount.minOrderAmount
     ) {
-      const baseAmountAfterPublic = Math.max(0, (rentalTotal + depositTotal) - publicDiscountAmount);
+      const baseAmountAfterPublic = Math.max(0, rentalTotal - publicDiscountAmount);
       if (baseAmountAfterPublic < privateDiscount.minOrderAmount) {
         setPrivateDiscount(null);
         setPrivateDiscountAmount(0);
         toast.info("Đơn hàng không còn đáp ứng điều kiện tối thiểu của mã giảm giá riêng tư đã chọn.");
       }
     }
-  }, [privateDiscount, rentalTotal, depositTotal, publicDiscountAmount]);
+  }, [privateDiscount, rentalTotal, publicDiscountAmount]);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -431,17 +439,21 @@ export default function Checkout() {
     setDiscountError(null);
 
     try {
-      // Tính discount dựa trên tổng tiền (tiền thuê + tiền cọc)
-      const baseAmountForDiscount = rentalTotal + depositTotal;
+      // Tính discount chỉ dựa trên tiền thuê (không bao gồm tiền cọc)
+      // Nếu đang áp dụng mã riêng tư và đã có mã công khai, validate trực tiếp với tiền thuê còn lại
+      let baseAmountForDiscount = rentalTotal;
+      let isPrivateDiscountWithPublic = false;
       
       console.log("Validating discount:", {
         code: codeToApply.toUpperCase(),
         baseAmount: baseAmountForDiscount,
         rentalTotal,
         depositTotal,
+        publicDiscountAmount,
         selectedItemsCount: selectedCartItems.length
       });
       
+      // Validate lần đầu để kiểm tra mã có hợp lệ không
       const response = await validateDiscount({
         code: codeToApply.toUpperCase(),
         baseAmount: baseAmountForDiscount,
@@ -452,6 +464,17 @@ export default function Checkout() {
       if (response.status === "success" && response.data) {
         const discount = response.data.discount;
         let amount = response.data.amount || 0;
+        
+        // Nếu là mã riêng tư và đã có mã công khai, cần validate lại với tiền thuê còn lại
+        if (!discount.isPublic && publicDiscountAmount > 0) {
+          isPrivateDiscountWithPublic = true;
+          baseAmountForDiscount = Math.max(0, rentalTotal - publicDiscountAmount);
+          console.log("Private discount with public discount exists, revalidating with remaining rental:", {
+            originalRental: rentalTotal,
+            publicDiscountAmount,
+            remainingRental: baseAmountForDiscount
+          });
+        }
 
         // Tính lại discount amount để đảm bảo chính xác
         const calculatedAmount = calculateDiscountAmount(
@@ -483,9 +506,9 @@ export default function Checkout() {
           amount: amount,
           rentalTotal: rentalTotal,
           depositTotal: depositTotal,
-          totalAmountForDiscount: rentalTotal + depositTotal,
+          baseAmountForDiscount: rentalTotal, // Chỉ tính trên tiền thuê
           expectedAmount: discount.type === "percent"
-            ? ((rentalTotal + depositTotal) * discount.value) / 100
+            ? (rentalTotal * discount.value) / 100
             : discount.value,
           discount: discount
         });
@@ -508,9 +531,9 @@ export default function Checkout() {
           setPublicDiscountAmount(amount);
           console.log("Set public discount amount:", amount);
 
-          // Nếu đã có mã private, tính lại mã private với baseAmount mới
+          // Nếu đã có mã private, tính lại mã private với baseAmount mới (chỉ trên tiền thuê còn lại)
           if (privateDiscount) {
-            const baseAmountAfterPublic = Math.max(0, baseAmountForDiscount - amount);
+            const baseAmountAfterPublic = Math.max(0, rentalTotal - amount);
             try {
               const revalidatePrivateResponse = await validateDiscount({
                 code: privateDiscount.code.toUpperCase(),
@@ -538,20 +561,60 @@ export default function Checkout() {
             setDiscountLoading(false);
             return;
           }
-          // Tính lại discount amount dựa trên baseAmount sau khi đã trừ mã công khai
-          const baseAmountAfterPublic = Math.max(0, baseAmountForDiscount - publicDiscountAmount);
-          // Validate lại với baseAmount mới
-          try {
-            const revalidateResponse = await validateDiscount({
-              code: discount.code.toUpperCase(),
-              baseAmount: baseAmountAfterPublic,
-            });
-            if (revalidateResponse.status === "success" && revalidateResponse.data) {
-              amount = revalidateResponse.data.amount;
+          
+          // Nếu đã có mã công khai, validate lại với tiền thuê còn lại
+          if (isPrivateDiscountWithPublic) {
+            try {
+              const revalidateResponse = await validateDiscount({
+                code: discount.code.toUpperCase(),
+                baseAmount: baseAmountForDiscount, // Đã được tính = rentalTotal - publicDiscountAmount
+              });
+              if (revalidateResponse.status === "success" && revalidateResponse.data) {
+                // Sử dụng amount từ revalidate (tính trên tiền thuê còn lại)
+                amount = revalidateResponse.data.amount;
+                console.log("Private discount revalidated with remaining rental:", {
+                  code: discount.code,
+                  baseAmountForDiscount,
+                  amount,
+                  publicDiscountAmount,
+                  originalRental: rentalTotal
+                });
+              } else {
+                // Nếu revalidate thất bại, hiển thị lý do cụ thể
+                const errorMsg = revalidateResponse.message || "Mã giảm giá riêng tư không thể áp dụng sau khi trừ mã công khai";
+                const reason = (revalidateResponse as { reason?: string }).reason;
+                let detailedMessage = errorMsg;
+                
+                if (reason === "BELOW_MIN_ORDER") {
+                  const discountInfo = availableDiscounts.find(d => d.code === discount.code.toUpperCase());
+                  if (discountInfo?.minOrderAmount) {
+                    const needed = discountInfo.minOrderAmount - baseAmountForDiscount;
+                    detailedMessage = `Đơn hàng cần thêm ${needed.toLocaleString("vi-VN")}₫ tiền thuê để áp dụng mã này sau khi trừ mã công khai (Tối thiểu: ${discountInfo.minOrderAmount.toLocaleString("vi-VN")}₫, Tiền thuê còn lại: ${baseAmountForDiscount.toLocaleString("vi-VN")}₫)`;
+                  } else {
+                    detailedMessage = `Đơn hàng chưa đạt mức tối thiểu để áp dụng mã này sau khi trừ mã công khai (Tiền thuê còn lại: ${baseAmountForDiscount.toLocaleString("vi-VN")}₫)`;
+                  }
+                }
+                
+                setDiscountError(detailedMessage);
+                setDiscountLoading(false);
+                return;
+              }
+            } catch (e) {
+              console.error("Error revalidating private discount:", e);
+              setDiscountError("Có lỗi xảy ra khi xác thực mã giảm giá riêng tư");
+              setDiscountLoading(false);
+              return;
             }
-          } catch (e) {
-            console.error("Error revalidating discount:", e);
+          } else {
+            // Không có mã công khai, tính lại amount với baseAmount chính xác
+            amount = calculateDiscountAmount(
+              discount.type,
+              discount.value,
+              baseAmountForDiscount,
+              discount.maxDiscountAmount
+            );
           }
+          
           setPrivateDiscount(discount);
           setPrivateDiscountAmount(amount);
           toast.success("Áp dụng mã giảm giá riêng tư thành công!");
@@ -580,14 +643,15 @@ export default function Checkout() {
               detailedMessage = "Mã giảm giá đã hết lượt sử dụng";
               break;
             case "BELOW_MIN_ORDER":
-              const baseAmount = rentalTotal + depositTotal;
+              // minOrderAmount được kiểm tra trên tiền thuê (rentalTotal)
+              const baseAmount = rentalTotal;
               // Try to get minOrderAmount from available discounts
               const discountInfo = availableDiscounts.find(d => d.code === codeToApply.toUpperCase());
               if (discountInfo?.minOrderAmount) {
                 const needed = discountInfo.minOrderAmount - baseAmount;
-                detailedMessage = `Đơn hàng cần thêm ${needed.toLocaleString("vi-VN")}₫ để áp dụng mã này (Tối thiểu: ${discountInfo.minOrderAmount.toLocaleString("vi-VN")}₫, Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫)`;
+                detailedMessage = `Đơn hàng cần thêm ${needed.toLocaleString("vi-VN")}₫ tiền thuê để áp dụng mã này (Tối thiểu: ${discountInfo.minOrderAmount.toLocaleString("vi-VN")}₫, Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫)`;
               } else {
-                detailedMessage = `Đơn hàng chưa đạt mức tối thiểu để áp dụng mã này (Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫)`;
+                detailedMessage = `Đơn hàng chưa đạt mức tối thiểu để áp dụng mã này (Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫ tiền thuê)`;
               }
               break;
             case "NOT_ALLOWED_USER":
@@ -660,176 +724,235 @@ export default function Checkout() {
     handleApplyDiscount(discount.code);
   };
 
-  // Format date to datetime-local input format
-  const formatDateTimeLocal = (dateString: string): string => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
 
-  // Get minimum datetime for date inputs (current time - 5 minutes buffer)
-  const getMinDateTime = (): string => {
-    const now = new Date();
-    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-    const minTime = new Date(now.getTime() - bufferTime);
-    return minTime.toISOString().substring(0, 16);
-  };
+  // Quantity controls - mượn logic từ cart page
+  const updateQuantity = useCallback(
+    async (cartItemId: string, newQuantity: number) => {
+      const cartItem = cartItems.find((item) => item._id === cartItemId);
+      if (!cartItem) {
+        toast.error("Không tìm thấy sản phẩm");
+        return;
+      }
 
-  // Validate item changes
-  const validateItem = (
-    itemId: string,
-    data: {
-      quantity: number;
-      rentalStartDate: string;
-      rentalEndDate: string;
+      if (newQuantity <= 0) {
+        return;
+      }
+
+      if (newQuantity > cartItem.availableQuantity) {
+        toast.error(`Hiện tại chỉ có ${cartItem.availableQuantity} sản phẩm`);
+        return;
+      }
+
+      if (newQuantity > 99) {
+        toast.error("Số lượng không được vượt quá 99 sản phẩm");
+        return;
+      }
+
+      if (!Number.isInteger(newQuantity)) {
+        toast.error("Số lượng phải là số nguyên");
+        return;
+      }
+
+      // Temp item - chỉ update local
+      if (cartItemId.startsWith("temp-")) {
+        const updatedItems = cartItems.map((item) =>
+          item._id === cartItemId ? { ...item, quantity: newQuantity } : item
+        );
+        sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+        setCartItems(updatedItems);
+        return;
+      }
+
+      // Real cart item - update trong database
+      try {
+        setUpdatingItems((prev) => new Set(prev).add(cartItemId));
+        await dispatch(updateCartItemAction(cartItemId, { quantity: newQuantity }));
+        await dispatch(fetchCartItems());
+        
+        const updatedItems = cartItems.map((item) =>
+          item._id === cartItemId ? { ...item, quantity: newQuantity } : item
+        );
+        sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+        setCartItems(updatedItems);
+      } catch {
+        dispatch(fetchCartItems());
+        toast.error("Có lỗi xảy ra khi cập nhật số lượng");
+      } finally {
+        setUpdatingItems((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(cartItemId);
+          return newSet;
+        });
+      }
     },
-    item: CartItem
-  ): {
-    isValid: boolean;
-    errors: {
-      quantity?: string;
-      rentalStartDate?: string;
-      rentalEndDate?: string;
-    };
-  } => {
-    const errors: {
-      quantity?: string;
-      rentalStartDate?: string;
-      rentalEndDate?: string;
-    } = {};
+    [cartItems, dispatch]
+  );
 
-    // Validate quantity
-    if (
-      !data.quantity ||
-      data.quantity < 1 ||
-      !Number.isInteger(data.quantity)
-    ) {
-      errors.quantity = "Số lượng phải là số nguyên dương";
-    } else if (
-      item.availableQuantity !== undefined &&
-      data.quantity > item.availableQuantity
-    ) {
-      errors.quantity = `Số lượng không được vượt quá ${item.availableQuantity} sản phẩm có sẵn`;
-    }
+  // Debounced update for quantity
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedUpdate = useCallback(
+    (cartItemId: string, newQuantity: number) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        updateQuantity(cartItemId, newQuantity);
+      }, 300);
+    },
+    [updateQuantity]
+  );
 
-    // Validate dates
-    const startDate = new Date(data.rentalStartDate);
-    const endDate = new Date(data.rentalEndDate);
-    const now = new Date();
-    const minDateTime = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes buffer
+  // Immediate UI update for quantity
+  const handleQuantityChange = (cartItemId: string, newQuantity: number) => {
+    const cartItem = cartItems.find((item) => item._id === cartItemId);
+    if (!cartItem) return;
 
-    if (!data.rentalStartDate) {
-      errors.rentalStartDate = "Vui lòng chọn ngày bắt đầu";
-    } else if (startDate < minDateTime) {
-      errors.rentalStartDate = "Ngày bắt đầu không được trong quá khứ";
-    }
-
-    if (!data.rentalEndDate) {
-      errors.rentalEndDate = "Vui lòng chọn ngày kết thúc";
-    } else if (endDate < minDateTime) {
-      errors.rentalEndDate = "Ngày kết thúc không được trong quá khứ";
-    }
-
-    if (data.rentalStartDate && data.rentalEndDate && endDate <= startDate) {
-      errors.rentalEndDate = "Ngày kết thúc phải sau ngày bắt đầu";
-    }
-
-    return {
-      isValid: Object.keys(errors).length === 0,
-      errors,
-    };
-  };
-
-  // Start editing item
-  const startEditing = (item: CartItem) => {
-    setEditingItems({
-      ...editingItems,
-      [item._id]: {
-        quantity: item.quantity,
-        rentalStartDate: formatDateTimeLocal(item.rentalStartDate || ""),
-        rentalEndDate: formatDateTimeLocal(item.rentalEndDate || ""),
-      },
-    });
-    setItemErrors({ ...itemErrors, [item._id]: {} });
-  };
-
-  // Cancel editing
-  const cancelEditing = (itemId: string) => {
-    const newEditing = { ...editingItems };
-    delete newEditing[itemId];
-    setEditingItems(newEditing);
-    const newErrors = { ...itemErrors };
-    delete newErrors[itemId];
-    setItemErrors(newErrors);
-  };
-
-  // Update editing field
-  const updateEditingField = (
-    itemId: string,
-    field: string,
-    value: string | number
-  ) => {
-    setEditingItems({
-      ...editingItems,
-      [itemId]: {
-        ...editingItems[itemId],
-        [field]: value,
-      },
-    });
-    // Clear error for this field when user starts typing
-    if (itemErrors[itemId]?.[field as keyof (typeof itemErrors)[string]]) {
-      setItemErrors({
-        ...itemErrors,
-        [itemId]: {
-          ...itemErrors[itemId],
-          [field]: undefined,
-        },
-      });
-    }
-  };
-
-  // Save item changes
-  const saveItem = (item: CartItem) => {
-    const editingData = editingItems[item._id];
-    if (!editingData) return;
-
-    const validation = validateItem(item._id, editingData, item);
-
-
-    if (!validation.isValid) {
-      setItemErrors({
-        ...itemErrors,
-        [item._id]: validation.errors,
-      });
+    if (newQuantity <= 0 || newQuantity > cartItem.availableQuantity || newQuantity > 99) {
       return;
     }
 
-    // Update cartItems
-    const updatedItems = cartItems.map((cartItem) => {
-      if (cartItem._id === item._id) {
-        return {
-          ...cartItem,
-          quantity: editingData.quantity,
-          rentalStartDate: editingData.rentalStartDate,
-          rentalEndDate: editingData.rentalEndDate,
-        };
-      }
-      return cartItem;
-    });
+    // Immediate UI update
+    const updatedCartItems = cartItems.map((item) =>
+      item._id === cartItemId ? { ...item, quantity: newQuantity } : item
+    );
+    setCartItems(updatedCartItems);
+    sessionStorage.setItem("checkoutItems", JSON.stringify(updatedCartItems));
 
-    // Update sessionStorage
-    sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
-    setCartItems(updatedItems);
-
-
-    // Clear editing state
-    cancelEditing(item._id);
+    // Debounced API call
+    debouncedUpdate(cartItemId, newQuantity);
   };
+
+  // Dates editing - mượn logic từ cart page
+  const startEditingDates = useCallback(
+    (cartItemId: string, rentalStartDate?: string, rentalEndDate?: string) => {
+      const startDateTime = rentalStartDate
+        ? rentalStartDate.replace("T", "T").substring(0, 16)
+        : "";
+      const endDateTime = rentalEndDate
+        ? rentalEndDate.replace("T", "T").substring(0, 16)
+        : "";
+
+      setEditingDates((prev) => ({
+        ...prev,
+        [cartItemId]: {
+          rentalStartDateTime: startDateTime,
+          rentalEndDateTime: endDateTime,
+        },
+      }));
+      setItemErrors({ ...itemErrors, [cartItemId]: {} });
+    },
+    [itemErrors]
+  );
+
+  const cancelEditingDates = useCallback((cartItemId: string) => {
+    setEditingDates((prev) => {
+      const newState = { ...prev };
+      delete newState[cartItemId];
+      return newState;
+    });
+    setItemErrors((prev) => {
+      const newState = { ...prev };
+      delete newState[cartItemId];
+      return newState;
+    });
+  }, []);
+
+  const updateEditingDates = useCallback(
+    (
+      cartItemId: string,
+      field: "rentalStartDateTime" | "rentalEndDateTime",
+      value: string
+    ) => {
+      setEditingDates((prev) => ({
+        ...prev,
+        [cartItemId]: {
+          ...prev[cartItemId],
+          [field]: value,
+        },
+      }));
+    },
+    []
+  );
+
+  // Update rental dates - mượn logic từ cart page
+  const updateRentalDates = useCallback(
+    async (
+      cartItemId: string,
+      rentalStartDateTime: string,
+      rentalEndDateTime: string
+    ) => {
+      if (!rentalStartDateTime || !rentalEndDateTime) {
+        toast.error("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc");
+        return;
+      }
+
+      const startDate = new Date(rentalStartDateTime);
+      const endDate = new Date(rentalEndDateTime);
+      const diffDays = Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (diffDays > 365) {
+        toast.error("Thời gian thuê không được vượt quá 365 ngày");
+        return;
+      }
+
+      try {
+        setUpdatingItems((prev) => new Set(prev).add(cartItemId));
+
+        // Temp item - chỉ update local
+        if (cartItemId.startsWith("temp-")) {
+          const updatedItems = cartItems.map((item) =>
+            item._id === cartItemId
+              ? {
+                  ...item,
+                  rentalStartDate: rentalStartDateTime,
+                  rentalEndDate: rentalEndDateTime,
+                }
+              : item
+          );
+          sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+          setCartItems(updatedItems);
+          cancelEditingDates(cartItemId);
+          toast.success("Đã cập nhật thời gian thuê");
+          return;
+        }
+
+        // Real cart item - update trong database
+        await dispatch(
+          updateCartItemAction(cartItemId, {
+            rentalStartDate: rentalStartDateTime,
+            rentalEndDate: rentalEndDateTime,
+          })
+        );
+
+        await dispatch(fetchCartItems());
+
+        const updatedItems = cartItems.map((item) =>
+          item._id === cartItemId
+            ? {
+                ...item,
+                rentalStartDate: rentalStartDateTime,
+                rentalEndDate: rentalEndDateTime,
+              }
+            : item
+        );
+        sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+        setCartItems(updatedItems);
+
+        toast.success("Đã cập nhật thời gian thuê thành công");
+        cancelEditingDates(cartItemId);
+      } catch {
+        toast.error("Có lỗi xảy ra khi cập nhật thời gian thuê");
+      } finally {
+        setUpdatingItems((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(cartItemId);
+          return newSet;
+        });
+      }
+    },
+    [cartItems, dispatch, cancelEditingDates]
+  );
 
   // ham submit mơi 
 
@@ -1018,7 +1141,7 @@ export default function Checkout() {
         } else {
           sessionStorage.removeItem("checkoutItems");
         }
-        router.push("/auth/order");
+        router.push("/auth/order/my-order");
       } else if (successCount > 0) {
         toast.warning(
           `Đã xử lý thành công ${successCount} đơn hàng. ${failedItemMessages.length} đơn thất bại: ${failedItemMessages.join(", ")}`
@@ -1050,13 +1173,28 @@ export default function Checkout() {
   };
 
   const handleSubmit = () => {
+    // Check if address is selected or manually filled
+    const hasSelectedAddress = selectedAddressId !== null;
+    const hasManualAddress = shipping.street && shipping.province;
+    
+    if (!hasSelectedAddress && !hasManualAddress) {
+      toast.error("Vui lòng chọn địa chỉ đã lưu hoặc nhập địa chỉ mới");
+      return;
+    }
+    
     if (
       !shipping.fullName ||
       !shipping.street ||
       !shipping.province ||
       !shipping.phone
     ) {
-      toast.error("Vui lòng điền đầy đủ thông tin địa chỉ");
+      const missingFields = [];
+      if (!shipping.fullName) missingFields.push("Họ và tên");
+      if (!shipping.street) missingFields.push("Địa chỉ");
+      if (!shipping.province) missingFields.push("Tỉnh/Thành phố");
+      if (!shipping.phone) missingFields.push("Số điện thoại");
+      
+      toast.error(`Vui lòng điền đầy đủ thông tin: ${missingFields.join(", ")}`);
       return;
     }
 
@@ -1197,24 +1335,10 @@ export default function Checkout() {
 
                 <div className="space-y-4">
                   {currentItems.map((item) => {
-                    const editingData = editingItems[item._id];
-                    const displayItem: CartItem = editingData
-                      ? {
-                          ...item,
-                          quantity: editingData.quantity,
-                          rentalStartDate: editingData.rentalStartDate,
-                          rentalEndDate: editingData.rentalEndDate,
-                        }
-                      : item;
                     const isSelected = selectedItemIds.includes(item._id);
-
-                    const days = calculateRentalDays(displayItem);
-                    const durationText = getRentalDurationText(
-                      days,
-                      displayItem.priceUnit
-                    );
-                    const itemTotal = displayItem.basePrice * displayItem.quantity * days;
-                    const itemDeposit = displayItem.depositAmount * displayItem.quantity;
+                    const days = calculateRentalDays(item);
+                    const itemTotal = item.basePrice * item.quantity * days;
+                    const itemDeposit = item.depositAmount * item.quantity;
 
                     return (
                       <div
@@ -1288,152 +1412,199 @@ export default function Checkout() {
                                 {item.shortDescription}
                               </p>
                             </div>
-                            {!editingItems[item._id] ? (
+                          </div>
+
+                          {/* Quantity Controls - chỉnh sửa trực tiếp */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-gray-700">Số lượng:</span>
+                            <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-2 border border-gray-200">
                               <button
-                                onClick={() => startEditing(item)}
-                                className="flex-shrink-0 p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                title="Chỉnh sửa"
+                                onClick={() => handleQuantityChange(item._id, item.quantity - 1)}
+                                disabled={updatingItems.has(item._id) || item.quantity <= 1}
+                                className="text-gray-700 hover:text-emerald-600 hover:bg-white h-8 w-8 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                                title="Giảm số lượng"
                               >
-                                <Edit2 className="w-4 h-4" />
+                                <Minus className="w-4 h-4" />
                               </button>
+                              <span className="text-gray-800 font-bold w-10 text-center text-lg">
+                                {item.quantity}
+                              </span>
+                              <button
+                                onClick={() => handleQuantityChange(item._id, item.quantity + 1)}
+                                disabled={updatingItems.has(item._id) || item.quantity >= item.availableQuantity}
+                                className="text-gray-700 hover:text-emerald-600 hover:bg-white h-8 w-8 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                                title="Tăng số lượng"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                            {updatingItems.has(item._id) && (
+                              <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                            )}
+                          </div>
+
+                          {/* Rental Dates - chỉnh sửa trực tiếp như cart page */}
+                          <div
+                            className={`bg-gray-50 px-4 py-3 rounded-lg transition-all duration-300 ${
+                              updatingItems.has(item._id)
+                                ? "opacity-75 bg-gray-100"
+                                : ""
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <Calendar
+                                  className={`w-5 h-5 text-emerald-600 ${
+                                    updatingItems.has(item._id)
+                                      ? "animate-pulse"
+                                      : ""
+                                  }`}
+                                />
+                                <span className="text-base font-medium text-gray-700">
+                                  Thời gian thuê:
+                                </span>
+                                {updatingItems.has(item._id) && (
+                                  <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                                )}
+                              </div>
+                              {!editingDates[item._id] &&
+                                !updatingItems.has(item._id) && (
+                                  <button
+                                    onClick={() =>
+                                      startEditingDates(
+                                        item._id,
+                                        item.rentalStartDate,
+                                        item.rentalEndDate
+                                      )
+                                    }
+                                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-6 px-2 rounded transition-all duration-200 text-xs flex items-center gap-1"
+                                    title="Chỉnh sửa"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Chỉnh sửa</span>
+                                  </button>
+                                )}
+                            </div>
+
+                            {editingDates[item._id] ? (
+                              // Edit mode
+                              <div className="space-y-3">
+                                <RentalDatePicker
+                                  rentalStartDate={editingDates[item._id].rentalStartDateTime}
+                                  rentalEndDate={editingDates[item._id].rentalEndDateTime}
+                                  onStartDateChange={(value) =>
+                                    updateEditingDates(
+                                      item._id,
+                                      "rentalStartDateTime",
+                                      value
+                                    )
+                                  }
+                                  onEndDateChange={(value) =>
+                                    updateEditingDates(
+                                      item._id,
+                                      "rentalEndDateTime",
+                                      value
+                                    )
+                                  }
+                                  startDateError={itemErrors[item._id]?.rentalStartDate}
+                                  endDateError={itemErrors[item._id]?.rentalEndDate}
+                                  size="sm"
+                                  showLabel={false}
+                                  disabled={updatingItems.has(item._id)}
+                                  itemId={item.itemId}
+                                />
+                                <div className="flex justify-center gap-2">
+                                  <button
+                                    onClick={() =>
+                                      updateRentalDates(
+                                        item._id,
+                                        editingDates[item._id].rentalStartDateTime,
+                                        editingDates[item._id].rentalEndDateTime
+                                      )
+                                    }
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 px-3 text-xs rounded transition-all duration-200 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={updatingItems.has(item._id)}
+                                  >
+                                    {updatingItems.has(item._id) ? (
+                                      <>
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Đang lưu...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Check className="w-3 h-3" />
+                                        Lưu
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => cancelEditingDates(item._id)}
+                                    className="border border-gray-300 text-gray-600 hover:bg-gray-50 h-7 px-3 text-xs rounded transition-all duration-200 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={updatingItems.has(item._id)}
+                                  >
+                                    <X className="w-3 h-3" />
+                                    Hủy
+                                  </button>
+                                </div>
+                              </div>
                             ) : (
-                              <div className="flex gap-2 flex-shrink-0">
-                                <button
-                                  onClick={() => saveItem(item)}
-                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                  title="Lưu"
-                                >
-                                  <Save className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => cancelEditing(item._id)}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Hủy"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
+                              // Display mode
+                              <div
+                                className={`transition-all duration-300 ${
+                                  updatingItems.has(item._id)
+                                    ? "opacity-60"
+                                    : "opacity-100"
+                                }`}
+                              >
+                                {item.rentalStartDate && item.rentalEndDate ? (
+                                  <div className="text-sm text-gray-700">
+                                    {(() => {
+                                      const startDate = new Date(item.rentalStartDate);
+                                      const endDate = new Date(item.rentalEndDate);
+                                      const hasTime =
+                                        item.rentalStartDate.includes("T") ||
+                                        item.rentalEndDate.includes("T");
+
+                                      if (hasTime) {
+                                        return `${startDate.toLocaleDateString(
+                                          "vi-VN"
+                                        )} ${startDate.toLocaleTimeString(
+                                          "vi-VN",
+                                          { hour: "2-digit", minute: "2-digit" }
+                                        )} - ${endDate.toLocaleDateString(
+                                          "vi-VN"
+                                        )} ${endDate.toLocaleTimeString(
+                                          "vi-VN",
+                                          { hour: "2-digit", minute: "2-digit" }
+                                        )}`;
+                                      } else {
+                                        return `${startDate.toLocaleDateString(
+                                          "vi-VN"
+                                        )} - ${endDate.toLocaleDateString("vi-VN")}`;
+                                      }
+                                    })()}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-gray-500 italic">
+                                    Chưa chọn thời gian thuê
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
 
-                          {!editingItems[item._id] ? (
-                            <>
-                              <div className="flex flex-wrap gap-2">
-                                <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-semibold border border-blue-200">
-                                  <Package className="w-3.5 h-3.5" />
-                                  {item.quantity} cái
-                                </span>
-                                <span className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-semibold border border-purple-200">
-                                  <Calendar className="w-3.5 h-3.5" />
-                                  {durationText}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg">
-                                <Calendar className="w-4 h-4 text-emerald-600" />
-                                <span className="font-medium">
-                                  {format(
-                                    new Date(item.rentalStartDate!),
-                                    "dd/MM/yyyy HH:mm"
-                                  )} → {format(new Date(item.rentalEndDate!), "dd/MM/yyyy HH:mm")}
-                                </span>
-                              </div>
-                              {item.itemId && (
-                                <div className="pt-2">
-                                  <Link
-                                    href={`/products/details?id=${item.itemId}`}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-emerald-600 text-white rounded-lg hover:from-blue-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg text-sm font-semibold"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                    <span>Xem chi tiết sản phẩm</span>
-                                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-                                  </Link>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="space-y-3 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                              <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                  Số lượng <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max={item.availableQuantity}
-                                  value={editingItems[item._id].quantity}
-                                  onChange={(e) =>
-                                    updateEditingField(
-                                      item._id,
-                                      "quantity",
-                                      parseInt(e.target.value) || 1
-                                    )
-                                  }
-                                  className={`w-full px-3 py-2 text-base border-2 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition ${
-                                    itemErrors[item._id]?.quantity
-                                    ? "border-red-300 bg-red-50"
-                                    : "border-gray-300 hover:border-gray-400"
-                                    }`}
-                                />
-                                <p className="mt-1 text-xs text-gray-500">
-                                  Số lượng có sẵn: {item.availableQuantity} sản phẩm
-                                </p>
-                                {itemErrors[item._id]?.quantity && (
-                                  <p className="mt-1 text-xs text-red-600">
-                                    {itemErrors[item._id].quantity}
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Ngày bắt đầu <span className="text-red-500">*</span>
-                                  </label>
-                                  <input
-                                    type="datetime-local"
-                                    value={editingItems[item._id].rentalStartDate}
-                                    onChange={(e) =>
-                                      updateEditingField(item._id, "rentalStartDate", e.target.value)
-                                    }
-                                    min={getMinDateTime()}
-                                    className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition ${
-                                      itemErrors[item._id]?.rentalStartDate
-                                      ? "border-red-300 bg-red-50"
-                                      : "border-gray-300 hover:border-gray-400"
-                                      }`}
-                                  />
-                                  {itemErrors[item._id]?.rentalStartDate && (
-                                    <p className="mt-1 text-xs text-red-600">
-                                      {itemErrors[item._id].rentalStartDate}
-                                    </p>
-                                  )}
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Ngày kết thúc <span className="text-red-500">*</span>
-                                  </label>
-                                  <input
-                                    type="datetime-local"
-                                    value={editingItems[item._id].rentalEndDate}
-                                    onChange={(e) =>
-                                      updateEditingField(item._id, "rentalEndDate", e.target.value)
-                                    }
-                                    min={editingItems[item._id].rentalStartDate || getMinDateTime()}
-                                    className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition ${
-                                      itemErrors[item._id]?.rentalEndDate
-                                      ? "border-red-300 bg-red-50"
-                                      : "border-gray-300 hover:border-gray-400"
-                                      }`}
-                                  />
-                                  {itemErrors[item._id]?.rentalEndDate && (
-                                    <p className="mt-1 text-xs text-red-600">
-                                      {itemErrors[item._id].rentalEndDate}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
+                          {item.itemId && (
+                            <div className="pt-2">
+                              <Link
+                                href={`/products/details?id=${item.itemId}`}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-emerald-600 text-white rounded-lg hover:from-blue-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg text-sm font-semibold"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Eye className="w-4 h-4" />
+                                <span>Xem chi tiết sản phẩm</span>
+                                <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                              </Link>
                             </div>
                           )}
 
@@ -1546,14 +1717,54 @@ export default function Checkout() {
                     <label className="text-sm font-semibold text-gray-700">
                       Số điện thoại <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      placeholder="Nhập số điện thoại"
-                      className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition shadow-sm hover:border-gray-300"
-                      value={shipping.phone}
-                      onChange={(e) =>
-                        setShipping({ ...shipping, phone: e.target.value })
-                      }
-                    />
+                    
+                    {/* Phone Options */}
+                    <div className="flex gap-4 mb-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="phoneOption"
+                          checked={useDefaultPhone}
+                          onChange={() => setUseDefaultPhone(true)}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          Dùng số mặc định
+                          {defaultPhone && (
+                            <span className="ml-2 text-emerald-600 font-medium">
+                              ({defaultPhone})
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="phoneOption"
+                          checked={!useDefaultPhone}
+                          onChange={() => setUseDefaultPhone(false)}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-gray-700">Nhập số mới</span>
+                      </label>
+                    </div>
+
+                    {/* Phone Input */}
+                    {useDefaultPhone ? (
+                      <div className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-base text-gray-700">
+                        {defaultPhone || "Đang tải số điện thoại..."}
+                      </div>
+                    ) : (
+                      <input
+                        type="tel"
+                        placeholder="Nhập số điện thoại mới"
+                        className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition shadow-sm hover:border-gray-300"
+                        value={shipping.phone}
+                        onChange={(e) =>
+                          setShipping({ ...shipping, phone: e.target.value })
+                        }
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -1854,7 +2065,12 @@ export default function Checkout() {
                                                 </p>
                                               )}
                                               {canUse && (() => {
-                                                const baseAmount = rentalTotal + depositTotal;
+                                                // Preview discount chỉ tính trên tiền thuê (rentalTotal)
+                                                // Nếu là mã riêng tư và đã có mã công khai, tính trên tiền thuê còn lại
+                                                let baseAmount = rentalTotal;
+                                                if (!discount.isPublic && publicDiscountAmount > 0) {
+                                                  baseAmount = Math.max(0, rentalTotal - publicDiscountAmount);
+                                                }
                                                 const previewAmount = calculateDiscountAmount(
                                                   discount.type,
                                                   discount.value,
@@ -2147,8 +2363,7 @@ export default function Checkout() {
           message={errorModalMessage || "Số dư ví của bạn không đủ để thanh toán đơn hàng này. Vui lòng nạp thêm tiền vào ví."}
           buttonText="Đã hiểu"
           secondaryButtonText="Đến ví"
-          onSecondaryButtonClick={() => {
-            console.log("Chuyển đến trang ví");
+          onSecondaryButtonClick={() => {        
             setIsErrorModalOpen(false);
             router.push("/wallet");
           }}

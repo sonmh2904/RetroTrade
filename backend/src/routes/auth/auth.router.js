@@ -28,7 +28,7 @@ router.post('/phone/confirm-firebase', authenticateToken, verifyController.confi
 router.post('/phone/send-otp-firebase', authenticateToken, verifyController.sendOtpViaFirebase);
 router.post('/phone/verify-otp-firebase', authenticateToken, verifyController.verifyOtpViaFirebase);
 
-// Face verification using face-api.js with file upload (3 images: selfie, idCardFront, idCardBack)
+// ID card verification using OCR with file upload (3 images: selfie, idCardFront, idCardBack)
 router.post('/verify-face', authenticateToken, upload.array('images', 3), verifyController.verifyFaceImages);
 
 // Verification request routes

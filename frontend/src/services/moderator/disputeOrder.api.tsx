@@ -15,6 +15,8 @@ export interface Dispute {
     decision: string;
     notes?: string;
     refundAmount: number;
+    refundPercentage?: number;
+    refundTarget?: "reporter" | "reported";
   };
   assignedBy?: { _id: string; fullName: string; email: string };
   assignedAt?: string;
@@ -95,6 +97,17 @@ export const getDisputes = async (params?: {
   return await parseResponse(response);
 };
 
+export const getMyDisputes = async (params?: {
+  status?: string;
+}): Promise<ApiResponse<{ total: number; data: Dispute[] }>> => {
+  const query = new URLSearchParams();
+  if (params?.status) query.append("status", params.status);
+
+  const url = `/dispute/my${query.toString() ? `?${query.toString()}` : ""}`;
+  const response = await api.get(url);
+  return await parseResponse(response);
+};
+
 export const getDisputeById = async (
   id: string
 ): Promise<ApiResponse<Dispute>> => {
@@ -102,10 +115,32 @@ export const getDisputeById = async (
   return await parseResponse(response);
 };
 
+export interface ResolveDisputePayload {
+  decision: string;
+  notes?: string;
+  refundTarget?: "reporter" | "reported";
+  refundPercentage?: number;
+}
+
 export const resolveDispute = async (
   id: string,
-  payload: { decision: string; notes?: string; refundAmount?: number }
+  payload: ResolveDisputePayload
 ): Promise<ApiResponse<Dispute>> => {
   const response = await api.put(`/dispute/${id}/resolve`, payload);
+  return await parseResponse(response);
+};
+
+export const assignDispute = async (
+  id: string
+): Promise<ApiResponse<Dispute>> => {
+  const response = await api.post(`/dispute/${id}/assign`);
+  return await parseResponse(response);
+};
+
+export const unassignDispute = async (
+  id: string,
+  reason?: string
+): Promise<ApiResponse<Dispute>> => {
+  const response = await api.post(`/dispute/${id}/unassign`, { reason });
   return await parseResponse(response);
 };

@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ClipboardList } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -149,11 +149,19 @@ function RenterRequestsContent() {
     setOpenRejectModal(false);
   };
 
-  const handleStartOrder = async (orderId: string) => {
-    const res = await startOrder(orderId);
+  const handleStartOrder = async (order: Order) => {
+    if (order.paymentStatus !== "paid") {
+      return toast.error("Khách hàng chưa thanh toán. Không thể bắt đầu thuê.");
+    }
+
+    if (!order.isContractSigned) {
+      return toast.error("Hợp đồng chưa được ký. Không thể bắt đầu thuê.");
+    }
+
+    const res = await startOrder(order._id);
     if (res.code === 200) {
       toast.success("Đơn hàng đã bắt đầu thuê");
-      setOrders((prev) => prev.filter((o) => o._id !== orderId));
+      setOrders((prev) => prev.filter((o) => o._id !== order._id));
     } else {
       toast.error(res.message || "Không thể bắt đầu thuê");
     }
@@ -254,7 +262,7 @@ function RenterRequestsContent() {
               {/* Header mã đơn */}
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 border-b border-blue-200">
                 <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
-                  <AlertCircle className="w-4 h-4" />
+                  <ClipboardList className="w-4 h-4" />
                   Mã đơn: <span className="font-mono">{order.orderGuid}</span>
                 </div>
               </div>
@@ -294,7 +302,10 @@ function RenterRequestsContent() {
                   </div>
                 </div>
                 <div className="text-right font-semibold text-blue-600">
-                  {order.totalAmount.toLocaleString()} {order.currency}
+                  {order.finalAmount !== undefined
+                    ? order.finalAmount.toLocaleString()
+                    : "-"}{" "}
+                  {order.currency}
                 </div>
               </CardHeader>
 
@@ -327,21 +338,40 @@ function RenterRequestsContent() {
                   </>
                 )}
 
-                {/* Confirmed */}
                 {order.orderStatus === "confirmed" && (
-                  <>
+                  <div className="flex justify-between items-center w-full">
+                    <div className="flex gap-4 items-center">
+                      {order.paymentStatus !== "paid" && (
+                        <div className="flex items-center gap-1 text-red-500">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-xs">Chưa thanh toán</span>
+                        </div>
+                      )}
+
+                      {!order.isContractSigned && (
+                        <div className="flex items-center gap-1 text-red-500">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-xs">Chưa ký hợp đồng</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Nút bên phải */}
                     <Button
                       size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                      disabled={
+                        order.paymentStatus !== "paid" ||
+                        !order.isContractSigned
+                      }
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleStartOrder(order._id);
+                        handleStartOrder(order);
                       }}
                     >
                       Bắt đầu thuê
                     </Button>
-                  
-                  </>
+                  </div>
                 )}
 
                 {/* Progress */}
@@ -419,14 +449,14 @@ function RenterRequestsContent() {
         open={openDisputeModal}
         onOpenChange={setOpenDisputeModal}
         orderId={selectedDisputeOrderId}
-        onSubmit={async ({ reason, description, evidenceUrls }) => {
+        onSubmit={async ({ reason, description, evidence }) => {
           if (!selectedDisputeOrderId) return;
 
           const res = await createDispute({
             orderId: selectedDisputeOrderId,
             reason,
             description,
-            evidenceUrls,
+            evidence,
           });
 
           if (res.code === 201) {

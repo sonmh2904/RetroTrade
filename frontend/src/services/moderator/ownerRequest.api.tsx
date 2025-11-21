@@ -34,6 +34,9 @@ export interface OwnerRequest {
   notes?: string;
   CreatedAt: string;
   UpdatedAt: string;
+  serviceFeeAmount?: number;
+  serviceFeePaidAt?: string;
+  serviceFeeTransaction?: string;
 }
 
 export interface CreateOwnerRequestRequest {

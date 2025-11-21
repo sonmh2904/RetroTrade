@@ -52,7 +52,7 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   const [openConfirm, setOpenConfirm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // Hiển thị 10 đơn hàng mỗi trang
+  const itemsPerPage = 10; 
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
@@ -365,6 +365,13 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
 
                       {/* Order Details */}
                       <div className="flex-1 space-y-4">
+                        {/* Product Name */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            {order.itemSnapshot?.title || order.itemId?.Title || "Sản phẩm không xác định"}
+                          </h3>
+                        </div>
+
                         {/* Order Status & Payment Status */}
                         <div className="flex flex-wrap items-center gap-3">
                           <div className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>

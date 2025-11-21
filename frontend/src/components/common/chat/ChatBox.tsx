@@ -27,6 +27,7 @@ import ImageModal from "./ImageModal";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import ChatAI from "./chatAI"; // Import ChatAI component
 
 interface ChatBoxProps {
   isOpen: boolean;
@@ -69,6 +70,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
   const [showSupport, setShowSupport] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
+  // New state for AI chat
+  const [showAI, setShowAI] = useState(false);
 
   // Sort messages by createdAt (oldest first, newest last) to ensure correct order
   const sortedMessages = useMemo(() => {
@@ -81,18 +84,18 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
 
   // Use useLayoutEffect to scroll immediately after DOM update
   useLayoutEffect(() => {
-    if (sortedMessages.length > 0 && messagesContainerRef.current) {
+    if (sortedMessages.length > 0 && messagesContainerRef.current && !showAI) {
       // Force scroll immediately after DOM update
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
-  }, [sortedMessages]);
+  }, [sortedMessages, showAI]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     prevMessagesLengthRef.current = sortedMessages.length;
 
     // Always scroll to bottom on initial load or when new message arrives
-    if (sortedMessages.length > 0) {
+    if (sortedMessages.length > 0 && !showAI) {
       // Force scroll to bottom function
       const scrollToBottom = () => {
         if (messagesContainerRef.current) {
@@ -127,7 +130,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
         clearTimeout(timeout3);
       };
     }
-  }, [sortedMessages]);
+  }, [sortedMessages, showAI]);
 
   // Sync conversations from parent prefetch when provided
   useEffect(() => {
@@ -136,24 +139,24 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
     }
   }, [initialConversations]);
 
-  // Connect socket when opened
+  // Connect socket when opened (only if not in AI mode)
   useEffect(() => {
-    if (isOpen && user) {
+    if (isOpen && user && !showAI) {
       loadConversations();
       connectSocket(typeof accessToken === 'string' ? accessToken : undefined);
     }
 
     return () => {
       // Disconnect socket when closing chat or user changes
-      if (!isOpen || !user) {
+      if (!isOpen || !user || showAI) {
         disconnectSocket();
       }
     };
-  }, [isOpen, user, accessToken]);
+  }, [isOpen, user, accessToken, showAI]);
 
-  // Listen for new messages and real-time updates (update when selectedConversation changes)
+  // Listen for new messages and real-time updates (only if not in AI mode)
   useEffect(() => {
-    if (!isOpen || !user) return;
+    if (!isOpen || !user || showAI) return;
 
     // Listen for new messages
     socketHandlers.onNewMessage((message: Message) => {
@@ -194,7 +197,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
       socketHandlers.offPresence();
       socketHandlers.offTyping();
     };
-  }, [isOpen, user, selectedConversation, dispatch]);
+  }, [isOpen, user, selectedConversation, dispatch, showAI]);
 
   const loadConversations = async () => {
     try {
@@ -212,45 +215,43 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
     }
   };
 
-  
-
-      // Load messages when conversation changes
-      useEffect(() => {
-        if (selectedConversation) {
-          loadMessages(selectedConversation._id);
-          socketHandlers.joinConversation(selectedConversation._id);
+  // Load messages when conversation changes (only if not AI)
+  useEffect(() => {
+    if (selectedConversation && !showAI) {
+      loadMessages(selectedConversation._id);
+      socketHandlers.joinConversation(selectedConversation._id);
+      
+      // Mark conversation as read when opened
+      const markConversationAsRead = async () => {
+        try {
+          // Optimistic update: set unreadCount to 0 immediately
+          setConversations(prev => prev.map(conv => 
+            conv._id === selectedConversation._id 
+              ? { ...conv, unreadCount: 0 }
+              : conv
+          ));
           
-          // Mark conversation as read when opened
-          const markConversationAsRead = async () => {
-            try {
-              // Optimistic update: set unreadCount to 0 immediately
-              setConversations(prev => prev.map(conv => 
-                conv._id === selectedConversation._id 
-                  ? { ...conv, unreadCount: 0 }
-                  : conv
-              ));
-              
-              await markAsRead(selectedConversation._id);
-              // Also emit socket event for real-time
-              socketHandlers.markAsRead(selectedConversation._id);
-              
-              // Reload conversations to sync with server
-              loadConversations();
-            } catch (error) {
-              console.error("Error marking conversation as read:", error);
-              // Revert optimistic update on error
-              loadConversations();
-            }
-          };
-          markConversationAsRead();
+          await markAsRead(selectedConversation._id);
+          // Also emit socket event for real-time
+          socketHandlers.markAsRead(selectedConversation._id);
+          
+          // Reload conversations to sync with server
+          loadConversations();
+        } catch (error) {
+          console.error("Error marking conversation as read:", error);
+          // Revert optimistic update on error
+          loadConversations();
         }
+      };
+      markConversationAsRead();
+    }
 
-        return () => {
-          if (selectedConversation) {
-            socketHandlers.leaveConversation(selectedConversation._id);
-          }
-        };
-      }, [selectedConversation]);
+    return () => {
+      if (selectedConversation && !showAI) {
+        socketHandlers.leaveConversation(selectedConversation._id);
+      }
+    };
+  }, [selectedConversation, showAI]);
 
   const loadMessages = async (conversationId: string) => {
     try {
@@ -273,10 +274,17 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
   const handleSelectConversation = (conversation: Conversation) => {
     setSelectedConversation(conversation);
     setMessageInput("");
+    setShowAI(false);
+  };
+
+  //handler for AI button
+  const handleOpenAI = () => {
+    setShowAI(true);
+    setSelectedConversation(null);
   };
 
   const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedConversation) return;
+    if (!messageInput.trim() || !selectedConversation || showAI) return;
 
     const messageContent = messageInput.trim();
     setMessageInput(""); // Clear input immediately
@@ -307,7 +315,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
 
   const handleInputChange = (value: string) => {
     setMessageInput(value);
-    if (!selectedConversation) return;
+    if (!selectedConversation || showAI) return;
     // emit typing with debounce
     if (!isTypingSelfRef.current) {
       socketHandlers.setTyping(selectedConversation._id, true);
@@ -349,7 +357,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !selectedConversation) return;
+    if (!file || !selectedConversation || showAI) return;
 
     // Validate file type
     const isImage = file.type.startsWith('image/');
@@ -445,7 +453,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
   };
 
   const confirmEditMessage = async () => {
-    if (!editingMessageId || !editingContent.trim()) return;
+    if (!editingMessageId || !editingContent.trim() || showAI) return;
     try {
       const res = await updateMessageAPI(editingMessageId, editingContent.trim());
       if (res.ok) {
@@ -461,6 +469,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
   };
 
   const deleteMessage = async (messageId: string) => {
+    if (showAI) return;
     try {
       // optimistic update
       setMessages(prev => prev.map(m => m._id === messageId ? { ...m, content: '[Tin nhắn đã được thu hồi]', isDeleted: true, deletedAt: new Date().toISOString() } as Message : m));
@@ -494,10 +503,16 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
         {/* Header */}
         <div className="flex items-center justify-between p-3 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center gap-3">
-            {/* Back arrow - only show when in conversation */}
-            {selectedConversation && (
+            {/* Back arrow - show when in conversation or AI */}
+            {(selectedConversation || showAI) && (
               <button
-                onClick={() => setSelectedConversation(null)}
+                onClick={() => {
+                  if (showAI) {
+                    setShowAI(false);
+                  } else {
+                    setSelectedConversation(null);
+                  }
+                }}
                 className="text-gray-400 hover:text-white transition-colors"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -506,8 +521,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
               </button>
             )}
 
-            {/* Avatar with online status */}
-            {selectedConversation && otherUser && (
+            {/* Avatar with online status - only for conversations */}
+            {selectedConversation && otherUser && !showAI && (
               <div className="relative flex-shrink-0">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center overflow-hidden">
                   {otherUser.avatarUrl ? (
@@ -536,25 +551,40 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
               </div>
             )}
 
+            {/* AI Avatar*/}
+            {showAI && (
+              <div className="relative flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center overflow-hidden">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="9" r="2" />
+                    <circle cx="15" cy="9" r="2" />
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  </svg>
+                </div>
+                <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 bg-green-500" />
+              </div>
+            )}
+
             {/* Title */}
             <div className="text-white font-medium text-sm">
-              {selectedConversation ? otherUser?.fullName || "Chat" : "Messages"}
+              {showAI ? "RetroTrade AI" : selectedConversation ? otherUser?.fullName || "Chat" : "Messages"}
             </div>
           </div>
 
           {/* Right side buttons */}
           <div className="flex items-center gap-2">
-            {/* Expand to full page button */}
-            <button
-              onClick={() => router.push('/auth/messages')}
-              className="text-gray-400 hover:text-white transition-colors p-1"
-              title="Mở trang tin nhắn"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="14" height="14" rx="2"/>
-                <path d="M9 11l6 6M15 11l-6 6"/>
-              </svg>
-            </button>
+            {!showAI && (
+              <button
+                onClick={() => router.push('/auth/messages')}
+                className="text-gray-400 hover:text-white transition-colors p-1"
+                title="Mở trang tin nhắn"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="14" height="14" rx="2"/>
+                  <path d="M9 11l6 6M15 11l-6 6"/>
+                </svg>
+              </button>
+            )}
 
             {/* Close button */}
             <button
@@ -572,9 +602,31 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
 
         {/* Content */}
         <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-gray-900">
-          {!selectedConversation ? (
+          {showAI ? (
+            // Render embedded ChatAI
+            <ChatAI 
+              isOpen={true} 
+              onClose={() => setShowAI(false)} 
+              isEmbedded={true} 
+            />
+          ) : !selectedConversation ? (
             // Conversations List
             <div className="p-2">
+              {/* AI Button */}
+              <div className="mb-2 border-b border-gray-700 pb-2">
+                <button
+                  onClick={handleOpenAI}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:opacity-90 transition text-sm"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="9" cy="9" r="2" />
+                    <circle cx="15" cy="9" r="2" />
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  </svg>
+                  <span>Chat với RetroTrade AI</span>
+                </button>
+              </div>
+
               {/* Support toggle */}
               <div className="mb-2 border-b border-gray-700 pb-2">
                 {!showSupport ? (
@@ -894,7 +946,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
                 );
               })}
 
-              {typingUser && (
+              {typingUser && !showAI && (
                 <div className="flex items-center gap-2 text-xs text-gray-400">
                   <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                   <span>Đang soạn tin nhắn...</span>
@@ -904,8 +956,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
           )}
         </div>
 
-        {/* Input - only show when in conversation */}
-        {selectedConversation && (
+        {/* Input - only show when in conversation (not AI) */}
+        {selectedConversation && !showAI && (
           <div className="p-3 bg-gray-800 border-t border-gray-700 relative">
             {/* Emoji Picker */}
             {showEmojiPicker && (

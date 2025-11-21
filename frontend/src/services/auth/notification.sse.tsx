@@ -3,7 +3,6 @@
  * Kết nối với SSE endpoint để nhận notifications realtime
  */
 
-import api from '../customizeAPI';
 import { Notification } from './notification.api';
 
 export interface SSEMessage {
@@ -27,6 +26,7 @@ class NotificationSSEClient {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private callbacks: NotificationSSECallbacks = {};
   private isConnecting = false;
+  private currentToken: string | null = null;
 
   /**
    * Lấy URL SSE endpoint
@@ -52,13 +52,13 @@ class NotificationSSEClient {
   /**
    * Kết nối đến SSE endpoint
    */
-  connect(callbacks: NotificationSSECallbacks): void {
+  connect(callbacks: NotificationSSECallbacks, tokenOverride?: string): void {
     if (this.isConnecting || this.eventSource?.readyState === EventSource.OPEN) {
       console.log('[SSE] Already connected or connecting');
       return;
     }
 
-    const token = this.getAuthToken();
+    const token = tokenOverride || this.getAuthToken();
     if (!token) {
       console.error('[SSE] No auth token available');
       callbacks.onError?.(new Event('no_token'));
@@ -67,6 +67,7 @@ class NotificationSSEClient {
 
     this.callbacks = callbacks;
     this.isConnecting = true;
+    this.currentToken = token;
 
     try {
       // EventSource không hỗ trợ custom headers
@@ -138,7 +139,7 @@ class NotificationSSEClient {
 
     this.reconnectTimer = setTimeout(() => {
       this.disconnect(); // Close old connection
-      this.connect(this.callbacks); // Reconnect
+      this.connect(this.callbacks, this.currentToken || undefined); // Reconnect with same token
     }, delay);
   }
 
@@ -160,6 +161,7 @@ class NotificationSSEClient {
 
     this.isConnecting = false;
     this.reconnectAttempts = 0;
+    this.currentToken = null;
   }
 
   /**
