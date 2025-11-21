@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { getDisputeById } from "@/services/moderator/disputeOrder.api";
@@ -20,22 +22,42 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
 import { Card } from "@/components/ui/common/card";
-import { Badge } from "@/components/ui/common/badge";
 import { toast } from "sonner";
+
+interface OrderSnapshot {
+  _id: string;
+  orderGuid: string;
+  orderStatus: string;
+  totalAmount: number;
+  itemSnapshot?: {
+    title?: string;
+    images?: string[];
+    basePrice?: number;
+    priceUnit?: string;
+  };
+  rentalDuration?: number;
+  rentalUnit?: string;
+  unitCount?: number;
+  depositAmount?: number;
+  serviceFee?: number;
+  createdAt?: string;
+}
 
 interface Dispute {
   _id: string;
-  orderId: string | { _id: string; orderGuid: string; orderStatus: string };
+  orderId: string | OrderSnapshot;
   reporterId: { _id: string; fullName: string; email: string };
   reportedUserId: { _id: string; fullName: string; email: string };
   reason: string;
   description?: string;
-  evidence?: string[]; 
-  status: "Pending" | "Reviewed" | "Resolved" | "Rejected";
+  evidence?: string[];
+  status: "Pending" | "In Progress" | "Reviewed" | "Resolved" | "Rejected";
   resolution?: {
     decision: string;
     notes?: string;
     refundAmount: number;
+    refundPercentage?: number;
+    refundTarget?: "reporter" | "reported";
   };
   handledBy?: { _id: string; fullName: string };
   handledAt?: string;
@@ -46,6 +68,11 @@ const statusConfig = {
   Pending: {
     label: "Đang chờ",
     color: "bg-yellow-100 text-yellow-800",
+    icon: Clock,
+  },
+  "In Progress": {
+    label: "Đang xử lý",
+    color: "bg-blue-100 text-blue-800",
     icon: Clock,
   },
   Reviewed: {
@@ -63,6 +90,50 @@ const statusConfig = {
     color: "bg-red-100 text-red-800",
     icon: XCircle,
   },
+};
+
+const getRefundTargetLabel = (target?: string): string => {
+  if (target === "reporter") return "Người khiếu nại (người thuê)";
+  if (target === "reported") return "Người bị khiếu nại (người bán)";
+  return "Không áp dụng";
+};
+
+const getOrderStatusLabel = (status?: string) => {
+  if (!status) return "Không xác định";
+  const map: Record<string, string> = {
+    pending: "Chờ xác nhận",
+    confirmed: "Đã xác nhận",
+    delivering: "Đang giao",
+    delivered: "Đã giao",
+    completed: "Hoàn tất",
+    cancelled: "Đã hủy",
+    disputed: "Đang tranh chấp",
+    refunded: "Đã hoàn tiền",
+  };
+  return map[status.toLowerCase()] || status;
+};
+
+const getPaymentStatusLabel = (status?: string) => {
+  if (!status) return "Không xác định";
+  const map: Record<string, string> = {
+    pending: "Chờ thanh toán",
+    not_paid: "Chưa thanh toán",
+    paid: "Đã thanh toán",
+    refunded: "Đã hoàn tiền",
+    partial: "Thanh toán một phần",
+    failed: "Thanh toán thất bại",
+  };
+  return map[status.toLowerCase()] || status;
+};
+
+const getUnitName = (priceUnit?: string) => {
+  const map: Record<string, string> = {
+    "1": "giờ",
+    "2": "ngày",
+    "3": "tuần",
+    "4": "tháng",
+  };
+  return map[priceUnit || ""] || "đơn vị";
 };
 
 function ImagePreview({
@@ -214,7 +285,10 @@ export default function DisputeDetailPage() {
 
   const statusInfo = statusConfig[dispute.status];
   const StatusIcon = statusInfo.icon;
-  const order = typeof dispute.orderId === "object" ? dispute.orderId : null;
+  const order =
+    dispute.orderId && typeof dispute.orderId === "object"
+      ? (dispute.orderId as OrderSnapshot)
+      : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
@@ -251,29 +325,74 @@ export default function DisputeDetailPage() {
 
         {/* Order Info */}
         {order && (
-          <section>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+          <section className="space-y-4">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
               <Package className="w-7 h-7 text-emerald-600" />
               Thông tin đơn hàng
             </h2>
-            <Card className="p-6 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
+            <Card className="p-6 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <p className="text-lg font-semibold text-gray-800">
                     Mã đơn:{" "}
                     <span className="text-emerald-700">{order.orderGuid}</span>
                   </p>
-                  <p className="text-gray-600 px-4">
+                  <p className="text-gray-600">
                     Trạng thái:{" "}
-                    <span className="font-medium">{order.orderStatus}</span>
+                    <span className="font-medium">
+                      {getOrderStatusLabel(order.orderStatus)}
+                    </span>
                   </p>
                 </div>
-                <Link href={`/order/${order._id}`}>
-                  <Button className="bg-emerald-600 hover:bg-emerald-700">
-                    <Eye className="w-5 h-5 mr-2" />
-                    Xem chi tiết đơn
-                  </Button>
-                </Link>
+                {order._id && (
+                  <Link href={`/order/${order._id}`}>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700">
+                      <Eye className="w-5 h-5 mr-2" />
+                      Xem chi tiết đơn
+                    </Button>
+                  </Link>
+                )}
+              </div>
+              <div className="grid gap-6 md:grid-cols-[220px,1fr]">
+                <div className="relative h-52 rounded-2xl overflow-hidden bg-white shadow-inner border border-emerald-100">
+                  {order.itemSnapshot?.images &&
+                  order.itemSnapshot.images.length > 0 ? (
+                    <img
+                      src={order.itemSnapshot.images[0]}
+                      alt={order.itemSnapshot.title || "Ảnh sản phẩm"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-emerald-400">
+                      <Package className="w-16 h-16" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Sản phẩm</p>
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {order.itemSnapshot?.title || "Không rõ"}
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                      <p className="text-xs text-gray-500">Giá thuê</p>
+                      <p className="text-lg font-semibold text-emerald-700">
+                        {(order.itemSnapshot?.basePrice || 0).toLocaleString(
+                          "vi-VN"
+                        )}
+                        ₫ / {getUnitName(order.itemSnapshot?.priceUnit)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                      <p className="text-xs text-gray-500">Số lượng</p>
+                      <p className="text-lg font-semibold">
+                        {order.unitCount || 1} món
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </Card>
           </section>
@@ -378,7 +497,7 @@ export default function DisputeDetailPage() {
                 }`}
               >
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
                     <p className="text-xl font-bold text-gray-800">
                       Quyết định:{" "}
                       <span
@@ -401,13 +520,27 @@ export default function DisputeDetailPage() {
                       </div>
                     )}
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-white/70 rounded-xl p-4 border border-gray-200">
+                      <p className="text-sm text-gray-500">Phần trăm hoàn</p>
+                      <p className="text-2xl font-bold text-green-700">
+                        {dispute.resolution.refundPercentage ?? 0}%
+                      </p>
+                    </div>
+                    <div className="bg-white/70 rounded-xl p-4 border border-gray-200">
+                      <p className="text-sm text-gray-500">Hoàn cho</p>
+                      <p className="text-lg font-semibold text-gray-800">
+                        {getRefundTargetLabel(dispute.resolution.refundTarget)}
+                      </p>
+                    </div>
+                  </div>
                   {dispute.resolution.notes && (
                     <div>
                       <p className="font-semibold text-gray-700 mb-2">
                         Ghi chú từ admin
                       </p>
                       <p className="text-gray-700 italic bg-white p-4 rounded-lg border">
-                        "{dispute.resolution.notes}"
+                        &ldquo;{dispute.resolution.notes}&rdquo;
                       </p>
                     </div>
                   )}

@@ -16,7 +16,7 @@ export interface Dispute {
     notes?: string;
     refundAmount: number;
     refundPercentage?: number;
-    refundTo?: "reporter" | "reportedUser";
+    refundTarget?: "reporter" | "reported";
   };
   assignedBy?: { _id: string; fullName: string; email: string };
   assignedAt?: string;
@@ -115,15 +115,16 @@ export const getDisputeById = async (
   return await parseResponse(response);
 };
 
+export interface ResolveDisputePayload {
+  decision: string;
+  notes?: string;
+  refundTarget?: "reporter" | "reported";
+  refundPercentage?: number;
+}
+
 export const resolveDispute = async (
   id: string,
-  payload: { 
-    decision: string; 
-    notes?: string; 
-    refundAmount?: number;
-    refundPercentage?: number;
-    refundTo?: "reporter" | "reportedUser";
-  }
+  payload: ResolveDisputePayload
 ): Promise<ApiResponse<Dispute>> => {
   const response = await api.put(`/dispute/${id}/resolve`, payload);
   return await parseResponse(response);
