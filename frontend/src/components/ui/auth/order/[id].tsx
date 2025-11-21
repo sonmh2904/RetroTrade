@@ -207,8 +207,8 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   // Breadcrumb data
   const breadcrumbs = [
     { label: "Trang chủ", href: "/home", icon: Home },
-    { label: "Đơn hàng", href: "/order", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/order/${id}`, icon: Eye },
+    { label: "Đơn hàng", href: "/my-orders", icon: ShoppingBag },
+    { label: "Chi tiết đơn hàng", href: `/my-orders/${id}`, icon: Eye },
   ];
  
   // Breadcrumb removed in inline render

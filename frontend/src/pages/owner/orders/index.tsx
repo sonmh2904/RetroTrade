@@ -2,11 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { useSelector } from "react-redux";
-import { jwtDecode } from "jwt-decode";
-import { listOrders, renterReturn } from "@/services/auth/order.api";
+import { listOrdersByOwner } from "@/services/auth/order.api";
 import type { Order } from "@/services/auth/order.api";
-import { RootState } from "@/store/redux_store";
 import { Button } from "@/components/ui/common/button";
 import {
   createPaginationState,
@@ -14,13 +11,6 @@ import {
   generatePageNumbers,
   type PaginationState,
 } from "@/lib/pagination";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/common/dialog";
 import {
   Empty,
   EmptyContent,
@@ -33,7 +23,6 @@ import { format } from "date-fns";
 import {
   Package,
   Calendar,
-  CheckCircle,
   Loader2,
   ShoppingBag,
   Filter,
@@ -43,51 +32,30 @@ import {
   Home,
   ChevronRight,
   ChevronLeft,
-  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import DisputeModal from "@/components/ui/owner/add-dispute-form";
-import { createDispute } from "@/services/moderator/disputeOrder.api";
+import OwnerLayout from "../layout";
 
-interface DecodedToken {
-  id?: string;
-  _id?: string;
-  role?: string;
+export default function OwnerOrdersPage() {
+  return (
+    <OwnerLayout>
+      <OwnerOrdersContent />
+    </OwnerLayout>
+  );
 }
 
-export default function OrderListPage() {
+function OwnerOrdersContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<string | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [openConfirm, setOpenConfirm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
-  const [openDisputeModal, setOpenDisputeModal] = useState(false);
-  const [selectedDisputeOrder, setSelectedDisputeOrder] =
-    useState<Order | null>(null);
-  const accessToken = useSelector((state: RootState) => state.auth.accessToken);
-
-  // Decode token
-  let userRole: string | undefined;
-  let userId: string | undefined;
-  if (accessToken) {
-    try {
-      const decoded = jwtDecode<DecodedToken>(accessToken);
-      userRole = decoded.role?.toLowerCase();
-      userId = decoded.id || decoded._id;
-    } catch (err) {
-      console.error(" Decode error:", err);
-    }
-  }
 
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        const res = await listOrders();
+        const res = await listOrdersByOwner();
         if (res.code === 200 && Array.isArray(res.data)) {
           setOrders(res.data);
         }
@@ -100,34 +68,6 @@ export default function OrderListPage() {
     };
     fetchOrders();
   }, []);
-
-  const handleConfirmReturn = async () => {
-    if (!selectedOrder) return;
-    try {
-      setProcessing(selectedOrder._id);
-      const res = await renterReturn(
-        selectedOrder._id,
-        "Khách xác nhận đã trả hàng"
-      );
-      if (res.code === 200) {
-        setOrders((prev) =>
-          prev.map((o) =>
-            o._id === selectedOrder._id ? { ...o, orderStatus: "returned" } : o
-          )
-        );
-        toast.success("Đã xác nhận trả hàng thành công");
-      } else {
-        toast.error(res.message || "Không thể xác nhận trả hàng");
-      }
-    } catch (err) {
-      console.error("Return error:", err);
-      toast.error("Có lỗi xảy ra khi xác nhận trả hàng");
-    } finally {
-      setProcessing(null);
-      setSelectedOrder(null);
-      setOpenConfirm(false);
-    }
-  };
 
   const formatDate = (date: string) => format(new Date(date), "dd/MM/yyyy");
   const formatDateTime = (date: string) =>
@@ -268,7 +208,8 @@ export default function OrderListPage() {
   // Breadcrumb data
   const breadcrumbs = [
     { label: "Trang chủ", href: "/home", icon: Home },
-    { label: "Đơn hàng", href: "/order", icon: ShoppingBag },
+    { label: "Quản lý", href: "/owner", icon: ShoppingBag },
+    { label: "Đơn hàng", href: "/owner/orders", icon: ShoppingBag },
   ];
 
   return (
@@ -371,21 +312,13 @@ export default function OrderListPage() {
               </EmptyTitle>
               <EmptyDescription className="text-gray-600">
                 {selectedStatus === "all"
-                  ? "Bạn chưa có đơn hàng nào. Hãy khám phá các sản phẩm để thuê ngay!"
+                  ? "Bạn chưa có đơn hàng nào. Các đơn hàng sẽ hiển thị ở đây khi có khách đặt thuê sản phẩm của bạn."
                   : `Không có đơn hàng nào ở trạng thái "${
                       statusTabs.find((t) => t.key === selectedStatus)?.label ||
                       ""
                     }"`}
               </EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>
-              <Link href="/products">
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <Package className="w-4 h-4 mr-2" />
-                  Khám phá sản phẩm
-                </Button>
-              </Link>
-            </EmptyContent>
           </Empty>
         ) : (
           <div className="space-y-6">
@@ -396,21 +329,7 @@ export default function OrderListPage() {
                 const paymentInfo =
                   paymentStatusConfig[order.paymentStatus] ||
                   paymentStatusConfig.pending;
-                const isRenter =
-                  userRole === "renter" ||
-                  order.renterId?._id?.toString() === userId?.toString();
-                const canReturn =
-                  isRenter &&
-                  order.orderStatus === "progress" &&
-                  !["disputed", "returned", "completed"].includes(
-                    order.orderStatus
-                  ) &&
-                  order.renterId?._id?.toString() === userId?.toString();
-                const canDispute =
-                  isRenter &&
-                  ["progress"].includes(order.orderStatus) &&
-                  order.orderStatus !== "disputed" &&
-                  order.renterId?._id?.toString() === userId?.toString();
+
                 return (
                   <div
                     key={order._id}
@@ -522,17 +441,13 @@ export default function OrderListPage() {
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 mb-1">
-                                {isRenter ? "Người cho thuê" : "Người thuê"}
+                                Người thuê
                               </p>
                               <p className="text-sm font-medium text-gray-800">
-                                {isRenter
-                                  ? order.ownerId?.fullName || "N/A"
-                                  : order.renterId?.fullName || "N/A"}
+                                {order.renterId?.fullName || "N/A"}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {isRenter
-                                  ? order.ownerId?.email
-                                  : order.renterId?.email}
+                                {order.renterId?.email}
                               </p>
                             </div>
                           </div>
@@ -540,7 +455,7 @@ export default function OrderListPage() {
 
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
                           <div className="flex gap-3">
-                            <Link href={`/order/${order._id}`}>
+                            <Link href={`/owner/orders/${order._id}`}>
                               <Button
                                 variant="outline"
                                 className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
@@ -549,45 +464,6 @@ export default function OrderListPage() {
                                 Xem chi tiết
                               </Button>
                             </Link>
-                            {canReturn && (
-                              <Button
-                                className="bg-teal-600 hover:bg-teal-700 text-white"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrder(order);
-                                  setOpenConfirm(true);
-                                }}
-                                disabled={processing === order._id}
-                              >
-                                {processing === order._id ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Đang xử lý...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Trả hàng
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {canDispute && (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedDisputeOrder(order);
-                                  setOpenDisputeModal(true);
-                                }}
-                                disabled={processing === order._id}
-                              >
-                                <AlertCircle className="w-4 h-4 mr-2" />
-                                Tranh chấp
-                              </Button>
-                            )}
                           </div>
                           <div className="text-xs text-gray-500">
                             Cập nhật: {formatDateTime(order.updatedAt)}
@@ -676,95 +552,8 @@ export default function OrderListPage() {
             )}
           </div>
         )}
-
-        {/* Confirm Return Dialog */}
-        <Dialog open={openConfirm} onOpenChange={setOpenConfirm}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-teal-600" />
-                Xác nhận trả hàng
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-gray-700">
-                Bạn có chắc chắn muốn xác nhận đã trả hàng cho đơn hàng này
-                không?
-              </p>
-              {selectedOrder && (
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <p className="text-sm font-medium text-gray-800">
-                    {selectedOrder.itemSnapshot?.title ||
-                      selectedOrder.itemId?.Title}
-                  </p>
-                  <p className="text-xs text-gray-600">
-                    Mã đơn: {selectedOrder.orderGuid}
-                  </p>
-                </div>
-              )}
-            </div>
-            <DialogFooter className="mt-6 flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setOpenConfirm(false)}
-                disabled={!!processing}
-              >
-                Hủy
-              </Button>
-              <Button
-                className="bg-teal-600 hover:bg-teal-700 text-white"
-                onClick={handleConfirmReturn}
-                disabled={!!processing}
-              >
-                {processing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Đang xử lý...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Xác nhận
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <DisputeModal
-          open={openDisputeModal}
-          onOpenChange={setOpenDisputeModal}
-          orderId={selectedDisputeOrder?._id || null}
-          onSubmit={async ({ reason, description, evidence }) => {
-            if (!selectedDisputeOrder) return;
-
-            try {
-              const res = await createDispute({
-                orderId: selectedDisputeOrder._id,
-                reason,
-                description,
-                evidence,
-              });
-
-              if (res.code === 201) {
-                toast.success("Đã gửi yêu cầu tranh chấp thành công!");
-                setOrders((prev) =>
-                  prev.map((o) =>
-                    o._id === selectedDisputeOrder._id
-                      ? { ...o, orderStatus: "disputed" }
-                      : o
-                  )
-                );
-              } else {
-                toast.error(res.message || "Gửi tranh chấp thất bại.");
-              }
-            } catch (err) {
-              toast.error("Lỗi hệ thống khi gửi tranh chấp.");
-            }
-          }}
-        />
       </div>
     </div>
   );
 }
+

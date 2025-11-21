@@ -132,8 +132,10 @@ export function Header() {
     router.push("/auth/profile");
   };
 
-  const handleGoToOrders = () => {
-    router.push("/order");
+  const handleGoToMyOrders = () => {
+    if (router.pathname !== "/auth/my-orders" && router.asPath !== "/auth/my-orders") {
+      router.push("/auth/my-orders");
+    }
   };
 
   const handleGoToAdminPanel = () => {
@@ -395,6 +397,15 @@ export function Header() {
                     <span>Danh sách yêu thích</span>
                   </DropdownMenuItem>
 
+                  <DropdownMenuItem
+                    className="cursor-pointer group"
+                    onClick={handleGoToMyOrders}
+                  >
+                    <Package className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
+                    <span>Lịch sử đơn hàng</span>
+                  </DropdownMenuItem>
+
+                 
                   {(userInfo?.role === "renter" ||
                     userInfo?.role === "owner" ||
                     userInfo?.role === "moderator") && (
