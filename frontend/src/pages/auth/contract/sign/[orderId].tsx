@@ -24,6 +24,7 @@ import {
   Download,
   Filter as SelectIcon,
   MousePointer2,
+  FilePlus2,
 } from "lucide-react";
 import {
   getOrCreateContractForOrder,
@@ -43,6 +44,7 @@ import SignaturePad from "@/components/ui/auth/signature/signature-pad";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
 import { decodeToken } from "@/utils/jwtHelper";
+import { Textarea } from "@/components/ui/common/textarea";
 
 interface SignatureResponse {
   signatureUrl?: string;
@@ -56,6 +58,9 @@ interface ContractTemplate {
   _id: string;
   templateName: string;
   description?: string;
+  headerContent?: string;
+  bodyContent?: string;
+  footerContent?: string;
 }
 
 interface SignatureInfo {
@@ -111,6 +116,7 @@ export default function SignContractPage() {
   );
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [customClauses, setCustomClauses] = useState<string>("");
   const [previewContent, setPreviewContent] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingAction, setLoadingAction] = useState<boolean>(false);
@@ -137,6 +143,20 @@ export default function SignContractPage() {
   const contractRef = useRef<HTMLDivElement>(null);
   const proseRef = useRef<HTMLPreElement | null>(null);
   const draggingRef = useRef<string | null>(null);
+
+  // Unified style - Giống hệt ContractTemplateForm để khớp 100% định dạng (Times New Roman, spaces, độ dài dòng)
+  const unifiedStyle = {
+    fontFamily: "'Times New Roman', Times, serif",
+    lineHeight: "1.6",
+    fontSize: "14px",
+    wordBreak: "break-word" as const,
+    hyphens: "auto" as const,
+    whiteSpace: "pre-wrap" as const, // Giữ nguyên spaces/newline
+    maxWidth: "800px", // Độ dài cố định: ~85 chars/line ở 14px (khớp A4)
+    letterSpacing: "0.02em", // Align spaces đều hơn cho serif font
+    overflowWrap: "anywhere" as const, // Break line chính xác nếu vượt width
+    margin: "0 auto", // Center để giống trang giấy
+  } as React.CSSProperties;
 
   // Get current user from Redux token
   const token = useSelector((state: RootState) => state.auth.accessToken);
@@ -213,10 +233,12 @@ export default function SignContractPage() {
     }
     setLoadingAction(true);
     try {
-      const res = await previewTemplate({
+      const previewData: PreviewTemplateData = {
         orderId,
         templateId: selectedTemplateId,
-      } as PreviewTemplateData);
+        ...(isOwnerOfOrder && customClauses.trim() && { customClauses }),
+      };
+      const res = await previewTemplate(previewData);
       if (!res.ok) {
         throw new Error("Preview API failed");
       }
@@ -237,10 +259,12 @@ export default function SignContractPage() {
     }
     setLoadingAction(true);
     try {
-      const res = await confirmCreateContract({
+      const createData: ConfirmCreateData = {
         orderId,
         templateId: selectedTemplateId,
-      } as ConfirmCreateData);
+        ...(customClauses.trim() && { customClauses }),
+      };
+      const res = await confirmCreateContract(createData);
       if (!res.ok) {
         throw new Error("Create contract API failed");
       }
@@ -295,14 +319,10 @@ export default function SignContractPage() {
       }
       toast.success("Chữ ký mới đã được lưu!");
       await loadUserSignature();
-      const defaultX = 80;
-      const defaultY = 90;
       const signRes = await signContract(contractData.contractId, {
         contractId: contractData.contractId,
         signatureData: undefined,
         useExistingSignature: true,
-        positionX: defaultX,
-        positionY: defaultY,
       } as SignContractData);
       if (!signRes.ok) {
         throw new Error("Sign contract API failed");
@@ -332,14 +352,10 @@ export default function SignContractPage() {
     if (!contractData?.contractId) return;
     setLoadingAction(true);
     try {
-      const defaultX = 80;
-      const defaultY = 90;
       const res = await signContract(contractData.contractId, {
         contractId: contractData.contractId,
         signatureData: useExisting ? undefined : signatureUrl,
         useExistingSignature: useExisting,
-        positionX: defaultX,
-        positionY: defaultY,
       } as SignContractData);
       if (!res.ok) {
         throw new Error("Sign contract API failed");
@@ -656,6 +672,20 @@ export default function SignContractPage() {
                   </option>
                 ))}
               </select>
+              {isOwnerOfOrder && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <FilePlus2 className="w-4 h-4 text-indigo-600" />
+                    Điều khoản bổ sung (tùy chọn)
+                  </label>
+                  <Textarea
+                    value={customClauses}
+                    onChange={(e) => setCustomClauses(e.target.value)}
+                    placeholder="Thêm điều khoản bổ sung từ chủ sở hữu (nếu có)..."
+                    className="w-full border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl transition-all duration-200 min-h-[100px] text-base px-4 py-3 resize-none"
+                  />
+                </div>
+              )}
               <button
                 onClick={handlePreview}
                 disabled={!selectedTemplateId || loadingAction}
@@ -711,18 +741,13 @@ export default function SignContractPage() {
             <div
               ref={contractRef}
               className="relative border-2 border-dashed border-gray-200 rounded-xl p-6 mb-6 bg-gradient-to-br from-gray-50 to-white min-h-[500px] overflow-hidden select-none touch-action-none"
+              style={{ maxWidth: "800px", margin: "0 auto" }} // Khớp width và center với form
               lang="vi"
             >
               <pre
                 ref={proseRef}
                 className="prose prose-lg max-w-none h-full overflow-y-auto relative pointer-events-none whitespace-pre-wrap font-serif leading-relaxed text-base tracking-wide"
-                style={{
-                  fontFamily: "'Times New Roman', Times, serif",
-                  lineHeight: "1.6",
-                  fontSize: "14px",
-                  wordBreak: "break-word",
-                  hyphens: "auto",
-                }}
+                style={unifiedStyle} // Áp dụng full unifiedStyle để khớp 100% (bao gồm letterSpacing cho align cột)
               >
                 {contractData.content || ""}
               </pre>
@@ -869,16 +894,11 @@ export default function SignContractPage() {
               <div
                 className="border border-gray-200 rounded-xl p-4 mb-6 max-h-[50vh] overflow-y-auto bg-gray-50"
                 lang="vi"
+                style={{ maxWidth: "800px", margin: "0 auto" }} // Khớp width với form để align chính xác
               >
                 <pre
                   className="prose prose-lg max-w-none whitespace-pre-wrap font-serif leading-relaxed text-base tracking-wide"
-                  style={{
-                    fontFamily: "'Times New Roman', Times, serif",
-                    lineHeight: "1.6",
-                    fontSize: "14px",
-                    wordBreak: "break-word",
-                    hyphens: "auto",
-                  }}
+                  style={unifiedStyle} // Áp dụng full unifiedStyle để khớp 100% (bao gồm letterSpacing cho align cột)
                 >
                   {previewContent}
                 </pre>

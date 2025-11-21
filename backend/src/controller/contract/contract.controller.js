@@ -18,13 +18,21 @@ const { generatePDF } = require("../../utils/pdfExport");
 // Tạo mẫu hợp đồng
 exports.createTemplate = async (req, res) => {
   try {
-    const { templateName, description, templateContent } = req.body;
+    const {
+      templateName,
+      description,
+      headerContent,
+      bodyContent,
+      footerContent,
+    } = req.body;
     const createdBy = req.user._id;
 
     const template = new ContractTemplate({
       templateName,
       description,
-      templateContent,
+      headerContent,
+      bodyContent,
+      footerContent,
       createdBy,
     });
 
@@ -125,9 +133,43 @@ exports.deleteTemplate = async (req, res) => {
   }
 };
 
+const buildFilledContent = (template, dataMap, customClauses = null) => {
+  let filledHeader = template.headerContent || "";
+  let filledBody = template.bodyContent || "";
+  let filledFooter = template.footerContent || "";
+
+  // Replace placeholders in header
+  Object.keys(dataMap).forEach((key) => {
+    const re = new RegExp(`{{\\s*${key}\\s*}}`, "g");
+    filledHeader = filledHeader.replace(re, dataMap[key] || "");
+  });
+
+  // Replace placeholders in body
+  Object.keys(dataMap).forEach((key) => {
+    const re = new RegExp(`{{\\s*${key}\\s*}}`, "g");
+    filledBody = filledBody.replace(re, dataMap[key] || "");
+  });
+
+  // Append custom clauses to body if provided, formatted like other clauses
+  if (customClauses && customClauses.trim()) {
+    filledBody += `\n---\nĐIỀU KHOẢN BỔ SUNG\n${customClauses}\n---`;
+  } else {
+    filledBody += `\n---\nĐIỀU KHOẢN BỔ SUNG\nKhông có điều khoản bổ sung.\n---`;
+  }
+
+  // Replace placeholders in footer
+  Object.keys(dataMap).forEach((key) => {
+    const re = new RegExp(`{{\\s*${key}\\s*}}`, "g");
+    filledFooter = filledFooter.replace(re, dataMap[key] || "");
+  });
+
+  // Concatenate with preserved newlines (đảm bảo alignment bằng spaces được giữ)
+  return `${filledHeader}\n\n${filledBody}\n\n${filledFooter}`;
+};
+
 exports.previewTemplate = async (req, res) => {
   try {
-    const { orderId, templateId } = req.body;
+    const { orderId, templateId, customClauses } = req.body;
     const userId = req.user._id;
 
     if (
@@ -199,11 +241,7 @@ exports.previewTemplate = async (req, res) => {
       unitCount: order.unitCount || 1,
     };
 
-    let filledContent = template.templateContent || "";
-    Object.keys(dataMap).forEach((key) => {
-      const re = new RegExp(`{{\\s*${key}\\s*}}`, "g");
-      filledContent = filledContent.replace(re, dataMap[key]);
-    });
+    const filledContent = buildFilledContent(template, dataMap, customClauses);
 
     return res.status(200).json({
       message: "OK",
@@ -224,7 +262,7 @@ exports.confirmCreateContract = async (req, res) => {
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
-    const { orderId, templateId } = req.body;
+    const { orderId, templateId, customClauses } = req.body;
     const userId = req.user._id;
 
     if (
@@ -311,11 +349,7 @@ exports.confirmCreateContract = async (req, res) => {
       unitCount: order.unitCount || 1,
     };
 
-    let filledContent = template.templateContent || "";
-    Object.keys(dataMap).forEach((key) => {
-      const re = new RegExp(`{{\\s*${key}\\s*}}`, "g");
-      filledContent = filledContent.replace(re, dataMap[key]);
-    });
+    const filledContent = buildFilledContent(template, dataMap, customClauses);
 
     const newContract = new Contracts({
       rentalOrderId: orderId,
@@ -756,14 +790,24 @@ exports.signContract = async (req, res) => {
         { session }
       );
     }
+    let defaultPositionX = 50; // ở giữa default
+    let defaultPositionY = 95; // cách đáy hợp đồng
+    const isOwner = userId.toString() === order.ownerId._id.toString();
+    if (isOwner) {
+      // Trái for owner (BÊN A)
+      defaultPositionX = 15;
+    } else {
+      // Phải for renter (BÊN B)
+      defaultPositionX = 75;
+    }
 
     const contractSig = new ContractSignature({
       contractId: contract._id,
       signatureId: userSigId,
       signedAt: new Date(),
       isValid: true,
-      positionX: Number(positionX) || 0,
-      positionY: Number(positionY) || 0,
+      positionX: Number(positionX) || defaultPositionX,
+      positionY: Number(positionY) || defaultPositionY,
       verificationInfo: `Signed via ${signatureImagePath}`,
     });
     const savedContractSig = await contractSig.save({ session });
@@ -812,7 +856,10 @@ exports.signContract = async (req, res) => {
       signatureUrl: signatureImagePath,
       isFullySigned: signaturesCount >= 2,
       isContractSigned: signaturesCount >= 2,
-      position: { x: positionX, y: positionY },
+      position: {
+        x: savedContractSig.positionX,
+        y: savedContractSig.positionY,
+      },
     });
   } catch (error) {
     await session.abortTransaction();
