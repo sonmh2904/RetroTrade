@@ -77,7 +77,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { icon: Contact, label: "Quản lý hợp đồng", key: "contract", href: "/admin/contract" },
     { icon: Percent, label: "Quản lý Phí dịch vụ", key: "serviceFee", href: "/admin/serviceFee-management" },
     { icon: Tag, label: "Mã giảm giá", key: "discounts", href: "/admin/discount-management" },
-    { icon: AlertTriangle, label: "Khiếu nại khóa tài khoản", key: "complaints", href: "/admin/complaints" },
     { icon: BarChart3, label: "Lịch sử thay đổi", key: "audit", href: "/admin/audit-logs" },
     { icon: Settings, label: "Cài đặt", key: "settings", href: "/admin/settings" },
   ];
