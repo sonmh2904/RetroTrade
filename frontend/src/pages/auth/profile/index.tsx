@@ -543,13 +543,28 @@ export default function ProfilePage() {
 
               {activeMenu === 'ownership' && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Yêu cầu quyền Owner</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Yêu cầu đăng kí cho thuê </h2>
                   {userProfile?.role === 'owner' ? (
-                    <p className="text-green-700">Bạn đã là Owner. Bạn có thể đăng đồ cho thuê.</p>
+                    <p className="text-green-700">Bạn đã đăng kí cho thuê. Bạn có thể đăng đồ cho thuê.</p>
                   ) : (
                     <>
                       {showOwnerForm && (
                         <div className="space-y-3 max-w-xl">
+                          <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-gray-700">
+                            <p className="font-semibold text-gray-900">Phí dịch vụ 50.000&nbsp;VND</p>
+                            <p>
+                              Khi gửi yêu cầu, hệ thống sẽ tự động trừ{" "}
+                              <span className="font-semibold">50.000&nbsp;đ</span> từ ví RetroTrade của bạn.
+                              Vui lòng đảm bảo số dư đủ và nạp thêm nếu cần.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => router.push('/wallet')}
+                              className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                            >
+                              Nạp tiền vào ví →
+                            </button>
+                          </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Lý do <span className="text-red-500">*</span></label>
                             <input
@@ -575,7 +590,7 @@ export default function ProfilePage() {
                               disabled={ownerSubmitting}
                               className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-60"
                             >
-                              {ownerSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
+                              {ownerSubmitting ? 'Đang xử lý...' : 'Thanh toán 50.000đ & gửi yêu cầu'}
                             </button>
                           </div>
                         </div>

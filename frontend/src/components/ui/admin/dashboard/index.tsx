@@ -319,7 +319,7 @@ const AnalyticsDashboard = () => {
             </div>
             <div>
               <h1 className="text-4xl font-bold text-white drop-shadow-lg">
-                Analytics & Báo cáo
+                Dashboard Admin
               </h1>
               <p className="mt-2 text-indigo-100">
                 Tổng quan và phân tích dữ liệu hệ thống

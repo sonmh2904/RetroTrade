@@ -70,7 +70,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const menus = [
     { icon: Home, label: "Trang chủ", key: "home", href: "/home" },
-    { icon: LineChart, label: "Analytics & Báo cáo", key: "analytics", href: "/admin/dashboard" },
+    { icon: LineChart, label: "Dashboard Admin", key: "analytics", href: "/admin/dashboard" },
     { icon: Users, label: "Người dùng", key: "users", href: "/admin/user-management" },
     { icon: FileText, label: "Điều khoản", key: "terms", href: "/admin/terms" },
     { icon: Wallet, label: "Quản lý ví", key: "wallet", href: "/admin/wallet" },

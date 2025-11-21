@@ -1,8 +1,13 @@
+const mongoose = require("mongoose");
 const OwnerRequest = require("../../models/OwnerRequest.model");
 const User = require("../../models/User.model");
 const AuditLog = require("../../models/AuditLog.model");
+const Wallet = require("../../models/Wallet.model");
+const WalletTransaction = require("../../models/WalletTransaction.model");
 const { createNotification } = require("../../middleware/createNotification");
 const { sendEmail } = require("../../utils/sendEmail");
+
+const OWNER_REQUEST_SERVICE_FEE = 50000;
 
 
 module.exports.createOwnerRequest = async (req, res) => {
@@ -44,7 +49,7 @@ module.exports.createOwnerRequest = async (req, res) => {
     if (currentUser.role !== "renter") {
       return res.json({
         code: 400,
-        message: "Chỉ người dùng với vai trò renter mới có thể yêu cầu quyền Owner",
+        message: "Chỉ người dùng với vai trò renter mới có thể yêu cầu đăng kí cho thuê",
       });
     }
 
@@ -52,7 +57,7 @@ module.exports.createOwnerRequest = async (req, res) => {
     if (!currentUser.isIdVerified) {
       return res.json({
         code: 400,
-        message: "Vui lòng xác minh danh tính trước khi yêu cầu quyền Owner",
+        message: "Vui lòng xác minh danh tính trước khi yêu cầu đăng kí cho thuê",
       });
     }
 
@@ -60,51 +65,143 @@ module.exports.createOwnerRequest = async (req, res) => {
     if (!currentUser.isEmailConfirmed) {
       return res.json({
         code: 400,
-        message: "Vui lòng xác minh email trước khi yêu cầu quyền Owner",
+        message: "Vui lòng xác minh email trước khi yêu cầu đăng kí cho thuê",
       });
     }
 
-    const ownerRequest = await OwnerRequest.create({
-      user: userId,
-      status: "pending",
-      reason,
-      additionalInfo,
-    });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Create audit log for the request
-    await AuditLog.create({
-      TableName: "OwnerRequest",
-      PrimaryKeyValue: ownerRequest._id.toString(),
-      Operation: "INSERT",
-      ChangedByUserId: userId,
-      ChangeSummary: `User ${currentUser.email} created a new owner request. Status: pending.`,
-    });
-
-    // Notify user
-    await createNotification(
-      userId,
-      "Owner Request",
-      "Yêu cầu cấp quyền cho thuê đã được gửi",
-      `Yêu cầu cấp quyền cho thuê của bạn đã được gửi thành công. Vui lòng chờ người quản lý xét duyệt.`,
-      { requestId: ownerRequest._id }
-    );
-
-    // Notify moderators only
-    const moderators = await User.find({ role: "moderator" });
-    for (const moderator of moderators) {
-      await createNotification(
-        moderator._id,
-        "Owner Request",
-        "Yêu cầu cấp quyền Owner mới",
-        `Người dùng ${currentUser.fullName || currentUser.email} đã yêu cầu cấp quyền Owner.`,
-        { requestId: ownerRequest._id, userId: userId }
-      );
-    }
-
-    // Send email to user
     try {
-      const emailSubject = "Yêu cầu cấp quyền cho thuê đã được gửi thành công";
-      const emailHtml = `
+      let userWallet = await Wallet.findOne({ userId }).session(session);
+      if (!userWallet) {
+        userWallet = await Wallet.create(
+          [{ userId, currency: "VND", balance: 0 }],
+          { session }
+        );
+        userWallet = userWallet[0];
+      }
+
+      if ((userWallet.balance || 0) < OWNER_REQUEST_SERVICE_FEE) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.json({
+          code: 400,
+          message: `Số dư ví không đủ để thanh toán phí dịch vụ ${OWNER_REQUEST_SERVICE_FEE.toLocaleString(
+            "vi-VN"
+          )} VND. Vui lòng nạp thêm tiền vào ví.`,
+        });
+      }
+
+      const adminUser = await User.findOne({ role: "admin" }).session(session);
+      if (!adminUser) {
+        throw new Error("Không tìm thấy tài khoản admin hệ thống");
+      }
+
+      let adminWallet = await Wallet.findOne({
+        userId: adminUser._id,
+      }).session(session);
+      if (!adminWallet) {
+        adminWallet = await Wallet.create(
+          [{ userId: adminUser._id, currency: "VND", balance: 0 }],
+          { session }
+        );
+        adminWallet = adminWallet[0];
+      }
+
+      userWallet.balance -= OWNER_REQUEST_SERVICE_FEE;
+      await userWallet.save({ session });
+
+      adminWallet.balance += OWNER_REQUEST_SERVICE_FEE;
+      await adminWallet.save({ session });
+
+      const orderCode = `OWNER_REQ_${Date.now()}`;
+      const [userTx] = await WalletTransaction.create(
+        [
+          {
+            walletId: userWallet._id,
+            orderCode,
+            typeId: "OWNER_REQUEST_FEE",
+            amount: -OWNER_REQUEST_SERVICE_FEE,
+            balanceAfter: userWallet.balance,
+            note: "Phí dịch vụ nâng cấp Owner",
+            status: "completed",
+            createdAt: new Date(),
+          },
+        ],
+        { session }
+      );
+
+      await WalletTransaction.create(
+        [
+          {
+            walletId: adminWallet._id,
+            orderCode: `${orderCode}_SYS`,
+            typeId: "OWNER_REQUEST_FEE_RECEIVE",
+            amount: OWNER_REQUEST_SERVICE_FEE,
+            balanceAfter: adminWallet.balance,
+            note: `Nhận phí dịch vụ Owner từ ${currentUser.email || currentUser._id}`,
+            status: "completed",
+            createdAt: new Date(),
+          },
+        ],
+        { session }
+      );
+
+      const [ownerRequest] = await OwnerRequest.create(
+        [
+          {
+            user: userId,
+            status: "pending",
+            reason,
+            additionalInfo,
+            serviceFeeAmount: OWNER_REQUEST_SERVICE_FEE,
+            serviceFeeTransaction: userTx._id,
+            serviceFeePaidAt: new Date(),
+          },
+        ],
+        { session }
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Create audit log for the request
+      await AuditLog.create({
+        TableName: "OwnerRequest",
+        PrimaryKeyValue: ownerRequest._id.toString(),
+        Operation: "INSERT",
+        ChangedByUserId: userId,
+        ChangeSummary: `User ${currentUser.email} created a new owner request. Status: pending.`,
+      });
+
+      // Notify user
+      await createNotification(
+        userId,
+        "Owner Request",
+        "Yêu cầu cấp quyền cho thuê đã được gửi",
+        `Yêu cầu cấp quyền cho thuê của bạn đã được gửi thành công. Đã trừ ${OWNER_REQUEST_SERVICE_FEE.toLocaleString(
+          "vi-VN"
+        )} VND phí dịch vụ. Vui lòng chờ người quản lý xét duyệt.`,
+        { requestId: ownerRequest._id }
+      );
+
+      // Notify moderators only
+      const moderators = await User.find({ role: "moderator" });
+      for (const moderator of moderators) {
+        await createNotification(
+          moderator._id,
+          "Owner Request",
+          "Yêu cầu cấp quyền Owner mới",
+          `Người dùng ${currentUser.fullName || currentUser.email} đã yêu cầu cấp quyền Owner.`,
+          { requestId: ownerRequest._id, userId: userId }
+        );
+      }
+
+      // Send email to user
+      try {
+        const emailSubject = "Yêu cầu cấp quyền cho thuê đã được gửi thành công";
+        const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #4CAF50;">Yêu cầu cấp quyền cho thuê đã được gửi</h2>
           <p>Xin chào <strong>${currentUser.fullName || currentUser.email}</strong>,</p>
@@ -112,23 +209,36 @@ module.exports.createOwnerRequest = async (req, res) => {
           <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p><strong>Lý do yêu cầu:</strong></p>
             <p>${reason}</p>
-            ${additionalInfo ? `<p><strong>Thông tin thêm:</strong></p><p>${additionalInfo}</p>` : ''}
+            ${
+              additionalInfo
+                ? `<p><strong>Thông tin thêm:</strong></p><p>${additionalInfo}</p>`
+                : ""
+            }
+            <p><strong>Phí dịch vụ đã thanh toán:</strong> ${OWNER_REQUEST_SERVICE_FEE.toLocaleString(
+              "vi-VN"
+            )} VND</p>
           </div>
           <p>Chúng tôi sẽ thông báo cho bạn ngay khi có kết quả xét duyệt.</p>
           <p>Trân trọng,<br>Đội ngũ RetroTrade</p>
         </div>
       `;
-      await sendEmail(currentUser.email, emailSubject, emailHtml);
-    } catch (emailError) {
-      console.error("Error sending email:", emailError);
-      // Don't fail the request if email fails
+        await sendEmail(currentUser.email, emailSubject, emailHtml);
+      } catch (emailError) {
+        console.error("Error sending email:", emailError);
+        // Don't fail the request if email fails
+      }
+
+      return res.json({
+        code: 200,
+        message: "Yêu cầu đã được gửi thành công",
+        data: ownerRequest,
+      });
+    } catch (paymentError) {
+      await session.abortTransaction();
+      session.endSession();
+      throw paymentError;
     }
 
-    return res.json({
-      code: 200,
-      message: "Yêu cầu đã được gửi thành công",
-      data: ownerRequest,
-    });
   } catch (error) {
     console.error("Error creating owner request:", error);
     return res.json({
