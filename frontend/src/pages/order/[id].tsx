@@ -121,8 +121,9 @@ export default function OrderDetail() {
         
         if (rentalAmount > 0 && serviceFee > 0 && depositAmount >= 0) {
           // Calculate service fee rate from order data (chỉ để hiển thị)
+          // serviceFee được tính trên rentalAmount
           const calculatedServiceFeeRate = Math.round(
-            (serviceFee / (rentalAmount + depositAmount)) * 100
+            (serviceFee / rentalAmount) * 100
           );
           setServiceFeeRate(calculatedServiceFeeRate);
         } else {
@@ -712,8 +713,11 @@ export default function OrderDetail() {
                   const privateDiscountAmount = discount?.secondaryAmountApplied || 0;
                   const totalDiscountAmount = discount?.totalAmountApplied || (publicDiscountAmount + privateDiscountAmount);
                   
-                  // Sử dụng finalAmount từ backend (đã tính sẵn)
-                  const grandTotal = order.finalAmount || Math.max(0, rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount);
+                  // Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
+                  // finalAmount từ backend là tiền thuê sau discount, nên tổng = finalAmount + deposit + serviceFee
+                  const grandTotal = order.finalAmount 
+                    ? order.finalAmount + depositTotal + serviceFeeAmount
+                    : Math.max(0, rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount);
                   
                   return (
                     <>
@@ -725,16 +729,12 @@ export default function OrderDetail() {
                         </span>
                       </div>
 
-                      {/* 2. Phí dịch vụ */}
-                      <div className="flex justify-between items-center py-2 border-b border-white/20">
-                        <span className="text-yellow-200">
-                          Phí dịch vụ
-                          {serviceFeeRate !== null ? ` (${serviceFeeRate}%)` : ""}
-                        </span>
-                        <span className="font-semibold text-yellow-100">
-                          {serviceFeeAmount.toLocaleString("vi-VN")}₫
-                        </span>
-                      </div>
+                <div className="flex justify-between text-cyan-200">
+                  <span>Phí dịch vụ</span>
+                  <span>
+                    {(order.serviceFee || 0).toLocaleString("vi-VN")}₫
+                  </span>
+                </div>
 
                       {/* 3. Tiền cọc */}
                       <div className="flex justify-between items-center py-2 border-b border-white/20">
@@ -744,81 +744,70 @@ export default function OrderDetail() {
                         </span>
                       </div>
 
-                      {/* 4. Giảm giá (nếu có) */}
-                      {totalDiscountAmount > 0 && (
-                        <div className="space-y-1">
-                          {publicDiscountAmount > 0 && discount?.code && (
-                            <div className="flex justify-between items-center py-1 border-b border-white/10">
-                              <span className="text-emerald-50 text-sm">
-                                Giảm giá công khai ({discount.code})
-                              </span>
-                              <span className="font-semibold text-emerald-100 text-sm">
-                                -{publicDiscountAmount.toLocaleString("vi-VN")}₫
-                              </span>
-                            </div>
-                          )}
-                          {privateDiscountAmount > 0 && discount?.secondaryCode && (
-                            <div className="flex justify-between items-center py-1 border-b border-white/10">
-                              <span className="text-emerald-50 text-sm">
-                                Giảm giá riêng tư ({discount.secondaryCode})
-                              </span>
-                              <span className="font-semibold text-emerald-100 text-sm">
-                                -{privateDiscountAmount.toLocaleString("vi-VN")}₫
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center py-2 border-b border-white/20">
-                            <span className="text-emerald-50 font-semibold">Tổng giảm giá</span>
-                            <span className="font-semibold text-emerald-100">
-                              -{totalDiscountAmount.toLocaleString("vi-VN")}₫
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                {order.discount &&
+                  ((order.discount.amountApplied ?? 0) > 0 ||
+                    (order.discount.secondaryAmountApplied ?? 0) > 0 ||
+                    (order.discount.totalAmountApplied ?? 0) > 0) && (
+                    <div className="flex justify-between text-green-200 border-t border-emerald-400 pt-3">
+                      <span>Giảm giá</span>
+                      <span className="font-medium">
+                        -
+                        {(
+                          order.discount.totalAmountApplied ||
+                          order.discount.amountApplied ||
+                          0
+                        ).toLocaleString("vi-VN")}
+                        ₫
+                      </span>
+                    </div>
+                  )}
 
-                      {/* 5. Tổng cộng */}
-                      <div className="border-t border-emerald-400 pt-3">
-                        <div className="flex justify-between text-lg font-bold">
-                          <span>Tổng cộng</span>
-                          <span className="text-2xl">
-                            {grandTotal.toLocaleString("vi-VN")}₫
-                          </span>
-                        </div>
-                        <div className="mt-2 text-xs text-emerald-100 text-center italic">
-                          (Hoàn lại tiền cọc sau khi trả đồ)
-                        </div>
+                <div className="border-t border-emerald-400 pt-3">
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Tổng thanh toán</span>
+                    <span className="text-2xl">
+                      {(order.finalAmount || order.totalAmount).toLocaleString(
+                        "vi-VN"
+                      )}
+                      ₫
+                    </span>
+                  </div>
+                  {order.discount &&
+                    (order.discount.code || order.discount.secondaryCode) && (
+                      <div className="mt-2 text-xs text-emerald-200/80">
+                        {order.discount.code && (
+                          <div>
+                            Mã công khai: {order.discount.code}{" "}
+                            {order.discount.type === "percent"
+                              ? `(${order.discount.value}%)`
+                              : `(${(order.discount.value ?? 0).toLocaleString(
+                                  "vi-VN"
+                                )}₫)`}{" "}
+                            -{" "}
+                            {(order.discount.amountApplied || 0).toLocaleString(
+                              "vi-VN"
+                            )}
+                            ₫
+                          </div>
+                        )}
+                        {order.discount.secondaryCode && (
+                          <div>
+                            Mã riêng tư: {order.discount.secondaryCode}{" "}
+                            {order.discount.secondaryType === "percent"
+                              ? `(${order.discount.secondaryValue}%)`
+                              : `(${order.discount.secondaryValue?.toLocaleString(
+                                  "vi-VN"
+                                )}₫)`}{" "}
+                            -{" "}
+                            {(
+                              order.discount.secondaryAmountApplied || 0
+                            ).toLocaleString("vi-VN")}
+                            ₫
+                          </div>
+                        )}
                       </div>
-
-                      {/* Chi tiết mã giảm giá đã sử dụng */}
-                      {discount && (discount.code || discount.secondaryCode) && (
-                        <div className="mt-4 pt-4 border-t border-emerald-400">
-                          <div className="text-xs text-emerald-200/80 space-y-1">
-                            {discount.code && (
-                              <div>
-                                <span className="font-semibold">Mã công khai:</span> {discount.code}{" "}
-                                {discount.type === "percent"
-                                  ? `(${discount.value}%)`
-                                  : `(${(discount.value ?? 0).toLocaleString("vi-VN")}₫)`}{" "}
-                                -{" "}
-                                {(discount.amountApplied || 0).toLocaleString("vi-VN")}₫
-                              </div>
-                            )}
-                            {discount.secondaryCode && (
-                              <div>
-                                <span className="font-semibold">Mã riêng tư:</span> {discount.secondaryCode}{" "}
-                                {discount.secondaryType === "percent"
-                                  ? `(${discount.secondaryValue}%)`
-                                  : `(${(discount.secondaryValue ?? 0).toLocaleString("vi-VN")}₫)`}{" "}
-                                -{" "}
-                                {(discount.secondaryAmountApplied || 0).toLocaleString("vi-VN")}₫
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
+                    )}
+                </div>
               </div>
             </div>
 

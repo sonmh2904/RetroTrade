@@ -499,9 +499,10 @@ export default function OrderDetailPage() {
   // Hiển thị giá từ backend - không tính toán lại
   // Backend đã tính sẵn tất cả các giá trị:
   // - totalAmount = rentalAmount (tiền thuê)
-  // - serviceFee = phí dịch vụ (tính trên tiền thuê + tiền cọc)
+  // - serviceFee = phí dịch vụ (tính trên tiền thuê)
   // - depositAmount = tiền cọc
-  // - finalAmount = rentalAmount + depositAmount + serviceFee - totalDiscountAmount
+  // - finalAmount = rentalAmount - totalDiscountAmount (discount chỉ áp dụng trên tiền thuê)
+  // Tổng tiền = rentalAmount + serviceFee + depositAmount - totalDiscountAmount
   
   // Tiền thuê (rentalTotal) - lấy từ backend
   const rentalTotal = order.totalAmount || 0;

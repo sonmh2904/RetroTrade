@@ -64,7 +64,7 @@ const calculateRentalAmount = (order: Order): number => {
   return basePrice * duration * count;
 };
 
-// Helper functions to convert status to Vietnamese
+
 const getOrderStatusLabel = (status: string): string => {
   const statusMap: Record<string, string> = {
     pending: "Chờ xác nhận",
@@ -274,7 +274,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <Package className="w-6 h-6 text-blue-600" />
-                Sản phẩm thuê
+                Sản phẩm thuê Demo
               </h2>
               <div className="flex gap-6 items-start">
                 <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
@@ -679,9 +679,11 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   const privateDiscountAmount = discount?.secondaryAmountApplied || 0;
                   const totalDiscountAmount = discount?.totalAmountApplied || (publicDiscountAmount + privateDiscountAmount);
                   
-                  // Sử dụng finalAmount từ backend (đã tính sẵn)
-                  // Nếu không có finalAmount, tính lại: rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount
-                  const grandTotal = order.finalAmount || Math.max(0, rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount);
+                  // Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
+                  // finalAmount từ backend là tiền thuê sau discount, nên tổng = finalAmount + deposit + serviceFee
+                  const grandTotal = order.finalAmount 
+                    ? order.finalAmount + depositTotal + serviceFeeAmount
+                    : Math.max(0, rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount);
                   
                   return (
                     <>

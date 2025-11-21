@@ -125,10 +125,6 @@ const deleteCommentByUser = async (req, res) => {
 
 const addComment = async (req, res) => {
   try {
-    console.log("req.user:", req.user);
-    console.log("req.params.postId:", req.params.postId);
-    console.log("req.body.content:", req.body.content);
-
     const comment = await Comment.create({
       postId: req.params.postId,
       userId: req.user._id,

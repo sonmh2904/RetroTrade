@@ -180,7 +180,7 @@ export function Header() {
             onClick={handleGoToModeratorPanel}
           >
             <Shield className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
-            <span>Bảng điều khiển Điều hành viên</span>
+            <span>Trang quản lý Moderator</span>
           </DropdownMenuItem>
         );
         break;

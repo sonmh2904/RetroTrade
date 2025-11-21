@@ -3,10 +3,17 @@ const Discount = require("../../models/Discount/Discount.model");
 const { generateString } = require("../../utils/generateString");
 
 function clampDiscountAmount(type, value, baseAmount, maxDiscountAmount) {
+    // Tính số tiền được giảm
+    // Nếu là percent: số tiền = tiền thuê * tỉ lệ (%)
+    // Nếu là fixed: số tiền = giá trị cố định
     let amount = type === "percent" ? (baseAmount * value) / 100 : value;
+    
+    // Không được vượt quá giá tiền tối đa có thể giảm (nếu có)
     if (maxDiscountAmount && maxDiscountAmount > 0) {
         amount = Math.min(amount, maxDiscountAmount);
     }
+    
+    // Đảm bảo số tiền giảm không âm và không vượt quá baseAmount
     amount = Math.max(0, Math.min(baseAmount, Math.floor(amount)));
     return amount;
 }
@@ -469,12 +476,35 @@ module.exports = {
       if (!code || baseAmount == null) {
         return res.status(400).json({ status: "error", message: "Thiếu mã hoặc tổng tiền" });
       }
-      const result = await module.exports.validateAndCompute({ code, baseAmount: Number(baseAmount), ownerId, itemId, userId: req.user?._id });
+      
+      console.log("[DISCOUNT] publicValidate called:", {
+        code: code?.toUpperCase()?.trim(),
+        baseAmount,
+        ownerId,
+        itemId,
+        userId: req.user?._id
+      });
+      
+      const result = await module.exports.validateAndCompute({ 
+        code, 
+        baseAmount: Number(baseAmount), 
+        ownerId, 
+        itemId, 
+        userId: req.user?._id 
+      });
+      
+      console.log("[DISCOUNT] validateAndCompute result:", {
+        valid: result.valid,
+        reason: result.reason,
+        code: code?.toUpperCase()?.trim()
+      });
+      
       if (!result.valid) {
         return res.status(400).json({ status: "error", message: "Mã không hợp lệ hoặc không áp dụng", reason: result.reason });
       }
       return res.json({ status: "success", message: "Áp dụng mã thành công", data: { amount: result.amount, discount: result.discount } });
     } catch (err) {
+      console.error("[DISCOUNT] publicValidate error:", err);
       return res.status(500).json({ status: "error", message: "Lỗi xác thực mã", error: err.message });
     }
   },
@@ -556,28 +586,41 @@ module.exports = {
         if (!codeUpper) return { valid: false, reason: "INVALID_CODE" };
         
         // Tìm discount với code (case-insensitive search)
-        let discount = await Discount.findOne({ 
-          code: { $regex: new RegExp(`^${codeUpper}$`, 'i') }
-        }).lean();
+       let discount = await Discount.findOne({ code: codeUpper }).lean();
         
-        if (!discount) {
-          // Debug: Tìm tất cả discounts của user để xem có gì
-          const userDiscounts = await Discount.find({ 
-            allowedUsers: userId
-          }).select('code isPublic allowedUsers active').lean();
-          
-          console.error("Discount not found for code:", codeUpper, "userId:", userId);
-          console.error("User's available discounts:", userDiscounts.map(d => ({ code: d.code, isPublic: d.isPublic, active: d.active })));
-          
-          return { valid: false, reason: "INVALID_CODE" };
-        }
+     if (!discount) {
+       console.log("[DISCOUNT] Not found with code:", codeUpper);
+       // Thử tìm với case-insensitive
+       const caseInsensitive = await Discount.findOne({ 
+         code: { $regex: new RegExp(`^${codeUpper}$`, "i") } 
+       }).lean();
+       
+       if (caseInsensitive) {
+         console.log("[DISCOUNT] Found with case-insensitive search, but code mismatch:", {
+           searched: codeUpper,
+           found: caseInsensitive.code
+         });
+       }
+       
+       const similar = await Discount.find({
+         code: { $regex: codeUpper, $options: "i" },
+       })
+         .select("code active isPublic")
+         .limit(5);
+       console.log(
+         "[DISCOUNT] Similar codes in DB:",
+         similar.map((d) => ({ code: d.code, active: d.active, isPublic: d.isPublic }))
+       );
+       return { valid: false, reason: "INVALID_CODE" };
+     }
         
         // Kiểm tra active sau khi tìm thấy
         if (!discount.active) {
           console.error("Discount found but not active:", {
             code: discount.code,
             active: discount.active,
-            isPublic: discount.isPublic
+            isPublic: discount.isPublic,
+            _id: discount._id
           });
           return { valid: false, reason: "INVALID_CODE" };
         }
