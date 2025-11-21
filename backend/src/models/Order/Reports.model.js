@@ -46,6 +46,11 @@ const reportSchema = new Schema({
     decision: { type: String },
     notes: { type: String },
     refundAmount: { type: Number, default: 0 },
+    refundPercentage: { type: Number, default: 0 },
+    refundTarget: {
+      type: String,
+      enum: ["reporter", "reported"],
+    },
   },
   assignedBy: {
     type: Types.ObjectId,

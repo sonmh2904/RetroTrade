@@ -1,7 +1,8 @@
 // pages/order/[id].tsx
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getOrderDetails, Order } from "@/services/auth/order.api";
+import { getPublicItemById } from "@/services/products/product.api";
 import { format } from "date-fns";
 import {
   Package,
@@ -59,10 +60,7 @@ const calculateRentalDuration = (
   }
 };
 
-const getRentalDurationText = (
-  duration: number,
-  priceUnit?: string
-): string => {
+const getRentalDurationText = (duration: number, priceUnit?: string): string => {
   const unit = priceUnit?.toLowerCase();
   switch (unit) {
     case "giờ":
@@ -151,6 +149,78 @@ const getStatusBadgeColor = (status: string) => {
   }
 };
 
+// Interface cho địa chỉ sản phẩm
+interface ItemAddress {
+  Address?: string;
+  City?: string;
+  District?: string;
+}
+
+// Google Maps types
+interface GoogleMapsLatLng {
+  lat(): number;
+  lng(): number;
+}
+
+interface GoogleMapsGeocoderResult {
+  geometry: {
+    location: GoogleMapsLatLng;
+  };
+}
+
+interface GoogleMapsDirectionsResult {
+  routes: unknown[];
+}
+
+interface GoogleMapsMap {
+  fitBounds(bounds: GoogleMapsLatLngBounds): void;
+}
+
+interface GoogleMapsLatLngBounds {
+  extend(latLng: GoogleMapsLatLng): void;
+}
+
+interface GoogleMapsDirectionsService {
+  route(request: {
+    origin: GoogleMapsLatLng | string;
+    destination: GoogleMapsLatLng | string;
+    travelMode: string;
+  }, callback: (result: GoogleMapsDirectionsResult | null, status: string) => void): void;
+}
+
+interface GoogleMapsDirectionsRenderer {
+  setDirections(result: GoogleMapsDirectionsResult): void;
+  setMap(map: GoogleMapsMap | null): void;
+}
+
+interface GoogleMapsGeocoder {
+  geocode(request: { address: string }, callback: (results: GoogleMapsGeocoderResult[] | null, status: string) => void): void;
+}
+
+// Marker is created but not stored, so no interface needed
+
+// Extend Window interface for Google Maps
+declare global {
+  interface Window {
+    google?: {
+      maps: {
+        Map: new (element: HTMLElement, options?: Record<string, unknown>) => GoogleMapsMap;
+        DirectionsService: new () => GoogleMapsDirectionsService;
+        DirectionsRenderer: new (options?: Record<string, unknown>) => GoogleMapsDirectionsRenderer;
+        Geocoder: new () => GoogleMapsGeocoder;
+        LatLngBounds: new () => GoogleMapsLatLngBounds;
+        Marker: new (options?: Record<string, unknown>) => void;
+        TravelMode: {
+          DRIVING: string;
+          WALKING: string;
+          BICYCLING: string;
+          TRANSIT: string;
+        };
+      };
+    };
+  }
+}
+
 export default function OrderDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -158,7 +228,33 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemAddress, setItemAddress] = useState<ItemAddress | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<GoogleMapsMap | null>(null);
+  const directionsServiceRef = useRef<GoogleMapsDirectionsService | null>(null);
+  const directionsRendererRef = useRef<GoogleMapsDirectionsRenderer | null>(null);
 
+  // Load Google Maps script
+  useEffect(() => {
+    if (typeof window !== "undefined" && !window.google) {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}&libraries=places,directions`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => setMapLoaded(true);
+      script.onerror = () => console.error("Failed to load Google Maps");
+      document.head.appendChild(script);
+
+      return () => {
+        document.head.removeChild(script);
+      };
+    } else if (window.google) {
+      setMapLoaded(true);
+    }
+  }, []);
+
+  // Fetch order details
   useEffect(() => {
     if (!id) return;
 
@@ -167,13 +263,32 @@ export default function OrderDetailPage() {
         const res = await getOrderDetails(id as string);
         if (res.code === 200 && res.data) {
           setOrder(res.data);
+          
+          // Fetch item details to get product address
+          if (res.data.itemId?._id) {
+            try {
+              const itemRes = await getPublicItemById(res.data.itemId._id);
+              const itemData = itemRes?.data || itemRes;
+              if (itemData) {
+                setItemAddress({
+                  Address: itemData.Address,
+                  City: itemData.City,
+                  District: itemData.District,
+                });
+              }
+            } catch (itemErr) {
+              console.error("Error fetching item address:", itemErr);
+            }
+          }
         } else {
           setError(res.message || "Không tìm thấy đơn hàng");
           setOrder(null);
         }
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Lỗi khi tải dữ liệu đơn hàng"
+          err instanceof Error
+            ? err.message
+            : "Lỗi khi tải dữ liệu đơn hàng"
         );
         setOrder(null);
       } finally {
@@ -183,6 +298,118 @@ export default function OrderDetailPage() {
 
     fetchOrder();
   }, [id]);
+
+  // Initialize map and draw route
+  useEffect(() => {
+    if (!mapLoaded || !window.google || !mapRef.current || !order || !itemAddress) return;
+
+    // Initialize map
+    const map = new window.google.maps.Map(mapRef.current, {
+      zoom: 12,
+      center: { lat: 10.8231, lng: 106.6297 }, // Default to Ho Chi Minh City
+      mapTypeControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+    });
+
+    mapInstanceRef.current = map;
+    directionsServiceRef.current = new window.google.maps.DirectionsService();
+    directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+      map: map,
+      suppressMarkers: false,
+    });
+
+    // Geocode addresses and draw route
+    const geocoder = new window.google.maps.Geocoder();
+
+    // Build addresses
+    const originAddress = `${itemAddress.Address || ""}, ${itemAddress.District || ""}, ${itemAddress.City || ""}`.trim();
+    const destinationAddress = `${order.shippingAddress.street}, ${order.shippingAddress.ward}${order.shippingAddress.district ? `, ${order.shippingAddress.district}` : ""}, ${order.shippingAddress.province}`.trim();
+
+    if (!originAddress || !destinationAddress) {
+      console.warn("Missing address information");
+      return;
+    }
+
+    // Geocode both addresses
+    Promise.all([
+      new Promise<GoogleMapsLatLng>((resolve, reject) => {
+        geocoder.geocode({ address: originAddress }, (results: GoogleMapsGeocoderResult[] | null, status: string) => {
+          if (status === "OK" && results?.[0]) {
+            resolve(results[0].geometry.location);
+          } else {
+            reject(new Error(`Geocoding failed for origin: ${status}`));
+          }
+        });
+      }),
+      new Promise<GoogleMapsLatLng>((resolve, reject) => {
+        geocoder.geocode({ address: destinationAddress }, (results: GoogleMapsGeocoderResult[] | null, status: string) => {
+          if (status === "OK" && results?.[0]) {
+            resolve(results[0].geometry.location);
+          } else {
+            reject(new Error(`Geocoding failed for destination: ${status}`));
+          }
+        });
+      }),
+    ])
+      .then(([originLatLng, destLatLng]) => {
+        // Set map center to show both points
+        const bounds = new window.google!.maps.LatLngBounds();
+        bounds.extend(originLatLng);
+        bounds.extend(destLatLng);
+        map.fitBounds(bounds);
+
+        // Add markers
+        new window.google!.maps.Marker({
+          position: originLatLng,
+          map: map,
+          title: "Nơi cho thuê",
+          icon: {
+            url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+          },
+          label: {
+            text: "Nơi cho thuê",
+            color: "#1e40af",
+            fontWeight: "bold",
+          },
+        });
+
+        new window.google!.maps.Marker({
+          position: destLatLng,
+          map: map,
+          title: "Nơi nhận hàng",
+          icon: {
+            url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+          },
+          label: {
+            text: "Nơi nhận hàng",
+            color: "#dc2626",
+            fontWeight: "bold",
+          },
+        });
+
+        // Draw route
+        if (directionsServiceRef.current) {
+          directionsServiceRef.current.route(
+            {
+              origin: originLatLng,
+              destination: destLatLng,
+              travelMode: window.google!.maps.TravelMode.DRIVING,
+            },
+            (result: GoogleMapsDirectionsResult | null, status: string) => {
+              if (status === "OK" && result && directionsRendererRef.current) {
+                directionsRendererRef.current.setDirections(result);
+              } else {
+                console.error("Directions request failed:", status);
+              }
+            }
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("Error geocoding addresses:", err);
+      });
+  }, [mapLoaded, order, itemAddress]);
 
   if (loading) {
     return (
@@ -245,12 +472,8 @@ export default function OrderDetailPage() {
 
           <div className="text-center max-w-md mx-auto px-4">
             <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              Không tìm thấy đơn hàng
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {error || "Đơn hàng không tồn tại hoặc đã bị xóa"}
-            </p>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Không tìm thấy đơn hàng</h2>
+            <p className="text-gray-600 mb-6">{error || "Đơn hàng không tồn tại hoặc đã bị xóa"}</p>
             <Link href="/order">
               <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 <ShoppingBag className="w-4 h-4 mr-2" />
@@ -273,12 +496,32 @@ export default function OrderDetailPage() {
     order.itemSnapshot.priceUnit
   );
 
-  // Calculate pricing breakdown
-  const rentalTotal =
-    order.itemSnapshot.basePrice * order.unitCount * rentalDuration;
+  // Hiển thị giá từ backend - không tính toán lại
+  // Backend đã tính sẵn tất cả các giá trị:
+  // - totalAmount = rentalAmount (tiền thuê)
+  // - serviceFee = phí dịch vụ (tính trên tiền thuê)
+  // - depositAmount = tiền cọc
+  // - finalAmount = rentalAmount - totalDiscountAmount (discount chỉ áp dụng trên tiền thuê)
+  // Tổng tiền = rentalAmount + serviceFee + depositAmount - totalDiscountAmount
+  
+  // Tiền thuê (rentalTotal) - lấy từ backend
+  const rentalTotal = order.totalAmount || 0;
+  
+  // Tiền cọc (depositTotal) - lấy từ backend
+  const depositTotal = order.depositAmount || 0;
+  
+  // Phí dịch vụ (serviceFeeAmount) - lấy từ backend
   const serviceFeeAmount = order.serviceFee || 0;
-  const depositAmount = order.depositAmount || 0;
-  const grandTotal = order.totalAmount;
+  
+  // Lấy discount info từ order
+  const discount = order.discount;
+  const publicDiscountAmount = discount?.amountApplied || 0;
+  const privateDiscountAmount = discount?.secondaryAmountApplied || 0;
+  const totalDiscountAmount = discount?.totalAmountApplied || (publicDiscountAmount + privateDiscountAmount);
+  
+  // Sử dụng finalAmount từ backend (đã tính sẵn)
+  // Nếu không có finalAmount, tính lại: rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount
+  const grandTotal = order.finalAmount || Math.max(0, rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount);
 
   // Breadcrumb data
   const breadcrumbs = [
@@ -298,7 +541,7 @@ export default function OrderDetailPage() {
               const IconComponent = breadcrumb.icon;
               const isLast = index === breadcrumbs.length - 1;
 
-              return (
+  return (
                 <div
                   key={breadcrumb.href}
                   className="flex items-center space-x-2"
@@ -335,8 +578,7 @@ export default function OrderDetailPage() {
               Chi tiết đơn hàng
             </h1>
             <p className="text-lg text-gray-600 mt-3">
-              Mã đơn hàng:{" "}
-              <span className="font-mono font-semibold">{order.orderGuid}</span>
+              Mã đơn hàng: <span className="font-mono font-semibold">{order.orderGuid}</span>
             </p>
           </div>
         </div>
@@ -397,10 +639,8 @@ export default function OrderDetailPage() {
                     </div>
                     <div className="flex items-center gap-3 text-base text-gray-700">
                       <Calendar className="w-5 h-5 text-emerald-600" />
-                      {format(
-                        new Date(order.startAt),
-                        "dd/MM/yyyy HH:mm"
-                      )} → {format(new Date(order.endAt), "dd/MM/yyyy HH:mm")}
+                      {format(new Date(order.startAt), "dd/MM/yyyy HH:mm")} →{" "}
+                      {format(new Date(order.endAt), "dd/MM/yyyy HH:mm")}
                     </div>
                     <div className="pt-3 border-t border-gray-200">
                       <div className="flex justify-between items-center">
@@ -421,35 +661,86 @@ export default function OrderDetailPage() {
                 <MapPin className="w-6 h-6 text-red-600" />
                 Địa chỉ giao hàng
               </h2>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <User className="w-5 h-5 text-gray-400 mt-0.5" />
-                  <span className="text-gray-800 font-medium">
-                    {order.shippingAddress.fullName}
-                  </span>
+              
+              {/* Địa chỉ nơi cho thuê */}
+              {itemAddress && (
+                <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <h3 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                    <Store className="w-5 h-5" />
+                    Nơi cho thuê
+                  </h3>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    {itemAddress.Address && (
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <span>{itemAddress.Address}</span>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-2">
+                      <Building2 className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {itemAddress.District && `${itemAddress.District}, `}
+                        {itemAddress.City}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
-                  <span className="text-gray-700">
-                    {order.shippingAddress.street}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Building2 className="w-5 h-5 text-gray-400 mt-0.5" />
-                  <span className="text-gray-700">
-                    {order.shippingAddress.ward}
-                    {order.shippingAddress.district &&
-                      `, ${order.shippingAddress.district}`}
-                    {`, ${order.shippingAddress.province}`}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
-                  <span className="text-gray-700">
-                    {order.shippingAddress.phone}
-                  </span>
+              )}
+
+              {/* Địa chỉ nơi nhận hàng */}
+              <div className="mb-6 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                <h3 className="font-semibold text-emerald-800 mb-3 flex items-center gap-2">
+                  <Truck className="w-5 h-5" />
+                  Nơi nhận hàng
+                </h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <div className="flex items-start gap-2">
+                    <User className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span className="font-medium">{order.shippingAddress.fullName}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span>{order.shippingAddress.street}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span>
+                      {order.shippingAddress.ward}
+                      {order.shippingAddress.district && `, ${order.shippingAddress.district}`}
+                      {`, ${order.shippingAddress.province}`}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Phone className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span>{order.shippingAddress.phone}</span>
+                  </div>
                 </div>
               </div>
+
+              {/* Google Maps */}
+              {itemAddress && (
+                <div className="mt-6 relative">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-red-600" />
+                    Bản đồ đường đi
+                  </h3>
+                  <div className="relative">
+                    <div 
+                      ref={mapRef}
+                      className="w-full h-96 rounded-xl border-2 border-gray-200 overflow-hidden shadow-lg"
+                      style={{ minHeight: "400px" }}
+                    />
+                    {!mapLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl z-10">
+                        <div className="text-center">
+                          <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">Đang tải bản đồ...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* User Info */}
@@ -478,9 +769,7 @@ export default function OrderDetailPage() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg text-gray-800 mb-1">
-                        Người thuê
-                      </h3>
+                      <h3 className="font-bold text-lg text-gray-800 mb-1">Người thuê</h3>
                       <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full w-fit">
                         <User className="w-3 h-3" />
                         <span>Người mua</span>
@@ -494,9 +783,7 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500 mb-1">Họ và tên</p>
-                        <p className="text-base font-semibold text-gray-800">
-                          {order.renterId.fullName}
-                        </p>
+                        <p className="text-base font-semibold text-gray-800">{order.renterId.fullName}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -505,13 +792,11 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500 mb-1">Email</p>
-                        <p className="text-sm text-gray-700 break-all">
-                          {order.renterId.email}
-                        </p>
+                        <p className="text-sm text-gray-700 break-all">{order.renterId.email}</p>
                       </div>
                     </div>
                   </div>
-                </div>
+      </div>
 
                 {/* Người cho thuê */}
                 <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-6 border border-emerald-100">
@@ -531,10 +816,8 @@ export default function OrderDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-800 mb-1">
-                        Người cho thuê
-                      </h3>
+      <div>
+                      <h3 className="font-bold text-lg text-gray-800 mb-1">Người cho thuê</h3>
                       <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full w-fit">
                         <Store className="w-3 h-3" />
                         <span>Chủ cửa hàng</span>
@@ -548,9 +831,7 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500 mb-1">Họ và tên</p>
-                        <p className="text-base font-semibold text-gray-800">
-                          {order.ownerId.fullName}
-                        </p>
+                        <p className="text-base font-semibold text-gray-800">{order.ownerId.fullName}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -559,18 +840,12 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500 mb-1">Email</p>
-                        <p className="text-sm text-gray-700 break-all">
-                          {order.ownerId.email}
-                        </p>
+                        <p className="text-sm text-gray-700 break-all">{order.ownerId.email}</p>
                       </div>
                     </div>
                   </div>
                   <div className="pt-4 mt-4 border-t border-emerald-200">
-                    <Link
-                      href={`/store/${
-                        order.ownerId.userGuid || order.ownerId._id
-                      }`}
-                    >
+                    <Link href={`/store/${order.ownerId.userGuid || order.ownerId._id}`}>
                       <Button
                         variant="outline"
                         className="w-full text-emerald-600 border-emerald-300 hover:bg-emerald-100 font-medium"
@@ -592,22 +867,64 @@ export default function OrderDetailPage() {
                 <CreditCard className="w-8 h-8" />
                 Tóm tắt thanh toán
               </h2>
-              <div className="space-y-4 text-base">
-                <div className="flex justify-between">
-                  <span>Tiền thuê</span>
-                  <span>{formatPrice(rentalTotal, order.currency)}</span>
+              <div className="space-y-3 text-base">
+                {/* 1. Tiền thuê */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-emerald-50">Tiền thuê</span>
+                  <span className="font-semibold text-white">
+                    {formatPrice(rentalTotal, order.currency)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-yellow-200">
-                  <span>Phí dịch vụ</span>
-                  <span>{formatPrice(serviceFeeAmount, order.currency)}</span>
+
+                {/* 2. Phí dịch vụ */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-yellow-200">Phí dịch vụ</span>
+                  <span className="font-semibold text-yellow-100">
+                    {formatPrice(serviceFeeAmount, order.currency)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-amber-200">
-                  <span>Tiền cọc</span>
-                  <span>{formatPrice(depositAmount, order.currency)}</span>
+
+                {/* 3. Tiền cọc */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-amber-200">Tiền cọc</span>
+                  <span className="font-semibold text-amber-100">
+                    {formatPrice(depositTotal, order.currency)}
+                  </span>
                 </div>
-                <div className="flex justify-between text-yellow-200 text-xs">
-                  <span>(Hoàn lại tiền cọc sau khi trả đồ)</span>
-                </div>
+
+                {/* 4. Giảm giá (nếu có) */}
+                {totalDiscountAmount > 0 && (
+                  <div className="space-y-1">
+                    {publicDiscountAmount > 0 && discount?.code && (
+                      <div className="flex justify-between items-center py-1 border-b border-white/10">
+                        <span className="text-emerald-50 text-sm">
+                          Giảm giá công khai ({discount.code})
+                        </span>
+                        <span className="font-semibold text-emerald-100 text-sm">
+                          -{formatPrice(publicDiscountAmount, order.currency)}
+                        </span>
+                      </div>
+                    )}
+                    {privateDiscountAmount > 0 && discount?.secondaryCode && (
+                      <div className="flex justify-between items-center py-1 border-b border-white/10">
+                        <span className="text-emerald-50 text-sm">
+                          Giảm giá riêng tư ({discount.secondaryCode})
+                        </span>
+                        <span className="font-semibold text-emerald-100 text-sm">
+                          -{formatPrice(privateDiscountAmount, order.currency)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center py-2 border-b border-white/20">
+                      <span className="text-emerald-50 font-semibold">Tổng giảm giá</span>
+                      <span className="font-semibold text-emerald-100">
+                        -{formatPrice(totalDiscountAmount, order.currency)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Tổng cộng */}
                 <div className="border-t border-emerald-400 pt-3">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Tổng cộng</span>
@@ -615,7 +932,38 @@ export default function OrderDetailPage() {
                       {formatPrice(grandTotal, order.currency)}
                     </span>
                   </div>
+                  <div className="mt-2 text-xs text-emerald-100 text-center italic">
+                    (Hoàn lại tiền cọc sau khi trả đồ)
+                  </div>
                 </div>
+
+                {/* Chi tiết mã giảm giá đã sử dụng */}
+                {discount && (discount.code || discount.secondaryCode) && (
+                  <div className="mt-4 pt-4 border-t border-emerald-400">
+                    <div className="text-xs text-emerald-200/80 space-y-1">
+                      {discount.code && (
+                        <div>
+                          <span className="font-semibold">Mã công khai:</span> {discount.code}{" "}
+                          {discount.type === "percent"
+                            ? `(${discount.value}%)`
+                            : `(${formatPrice(discount.value ?? 0, order.currency)})`}{" "}
+                          -{" "}
+                          {formatPrice(discount.amountApplied || 0, order.currency)}
+                        </div>
+                      )}
+                      {discount.secondaryCode && (
+                        <div>
+                          <span className="font-semibold">Mã riêng tư:</span> {discount.secondaryCode}{" "}
+                          {discount.secondaryType === "percent"
+                            ? `(${discount.secondaryValue}%)`
+                            : `(${formatPrice(discount.secondaryValue ?? 0, order.currency)})`}{" "}
+                          -{" "}
+                          {formatPrice(discount.secondaryAmountApplied || 0, order.currency)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 pt-6 border-t border-emerald-400 space-y-3 text-sm">
@@ -625,10 +973,7 @@ export default function OrderDetailPage() {
                 </div>
                 <div className="flex items-center gap-2 text-emerald-100">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>
-                    Ngày tạo:{" "}
-                    {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm")}
-                  </span>
+                  <span>Ngày tạo: {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm")}</span>
                 </div>
               </div>
 

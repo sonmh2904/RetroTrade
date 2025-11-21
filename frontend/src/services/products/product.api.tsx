@@ -1,4 +1,5 @@
 import instance from "../customizeAPI";
+import api from "../customizeAPI";
 
 //owner
 export const getUserAddresses = async (): Promise<Response> => {
@@ -303,6 +304,7 @@ export interface OwnerRating {
 }
 
 export interface OwnerRatingsResult {
+  average: number;
   success: boolean;
   message?: string;
   ratings: OwnerRating[];
@@ -338,6 +340,7 @@ export const getRatingsByOwner = async (
       total: Number(payload.total) || 0,
       page: Number(payload.page) || params?.page || 1,
       limit: Number(payload.limit) || params?.limit || 20,
+      average: Number(payload.average) || 0,
     };
   } catch (error: any) {
     console.error("Error fetching owner ratings:", error);
@@ -348,6 +351,33 @@ export const getRatingsByOwner = async (
       total: 0,
       page: params?.page || 1,
       limit: params?.limit || 20,
+      average: 0,
     };
+  }
+};
+// Cập nhật đánh giá
+export const updateRating = async (id: string, payload: any) => {
+  try {
+    const res = await api.put(`/products/rating/${id}`, payload);
+    const data = await res.json();
+    return data;
+  } catch (error: any) {
+    console.error("Error updating rating:", error?.message || error);
+    throw error;
+  }
+};
+
+// Xóa đánh giá (soft delete)
+export const deleteRating = async (id: string, renterId: string) => {
+  try {
+    const res = await api.delete(`/products/rating/${id}`, {
+      body: JSON.stringify({ renterId }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    return data;
+  } catch (error: any) {
+    console.error("Error deleting rating:", error?.message || error);
+    throw error;
   }
 };

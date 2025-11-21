@@ -58,7 +58,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
@@ -93,6 +94,11 @@ fetchBanks()
   .catch(() => console.log("Không tải được danh sách ngân hàng từ VietQR"));
 
 setInterval(fetchBanks, 1000 * 60 * 60 * 12); // Update tự động mỗi 12h (hoặc 24h tùy lịch trình)
+
+require('./src/cronJobs/refundJob');
+console.log(' Cron jobs đã được nạp và chạy');
+
+
 
 
 // Routes

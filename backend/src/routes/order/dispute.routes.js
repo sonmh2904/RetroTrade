@@ -16,6 +16,7 @@ router.get(
   authorizeRoles("moderator"),
   DisputeController.getAllDisputes
 );
+router.get("/my", authenticateToken, DisputeController.getMyDisputes);
 router.get("/:id", authenticateToken, DisputeController.getDisputeById);
 router.post(
   "/:id/assign",

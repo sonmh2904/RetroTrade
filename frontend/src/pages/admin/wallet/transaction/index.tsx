@@ -14,6 +14,12 @@ const typeLabelsVi: { [key: string]: string } = {
   withdraw: "Rút tiền",
   payment: "Thanh toán",
   transfer: "Chuyển khoản",
+  payout_renter_refund : "Admin hoàn tiền cọc ",
+  payout_owner_payment : "Admin hoàn tiền người cho thuê ",
+  refund_deposit : "Nhận lại tiền cọc",
+  owner_payment : "Nhận tiền cho thuê",
+  USER_PAYMENT : "Thanh toán đơn hàng",
+  SYSTEM_RECEIVE : "Hệ thống nhận tiền đơn hàng",
 };
 
 const statusLabelsVi: { [key: string]: string } = {

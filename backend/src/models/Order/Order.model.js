@@ -121,6 +121,9 @@ const orderSchema = new mongoose.Schema(
     },
     cancelReason: String,
     isDeleted: { type: Boolean, default: false },
+    // Thêm trường liên quan hoàn tiền
+    isRefunded: { type: Boolean, default: false, index: true }, // Đơn đã hoàn tiền chưa
+    refundedAt: { type: Date, default: null }, // Thời điểm hoàn tiền
   },
   { timestamps: true }
 );
