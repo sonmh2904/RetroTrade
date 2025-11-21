@@ -120,3 +120,18 @@ export const resolveDispute = async (
   const response = await api.put(`/dispute/${id}/resolve`, payload);
   return await parseResponse(response);
 };
+
+export const assignDispute = async (
+  id: string
+): Promise<ApiResponse<Dispute>> => {
+  const response = await api.post(`/dispute/${id}/assign`);
+  return await parseResponse(response);
+};
+
+export const unassignDispute = async (
+  id: string,
+  reason?: string
+): Promise<ApiResponse<Dispute>> => {
+  const response = await api.post(`/dispute/${id}/unassign`, { reason });
+  return await parseResponse(response);
+};

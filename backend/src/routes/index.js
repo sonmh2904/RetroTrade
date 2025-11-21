@@ -27,6 +27,7 @@ const loyaltyRouter = require("./loyalty/loyalty.routes");
 const treeGameRouter = require("./games/tree.routes");
 const adminComplaintRouter = require("./admin/complaint.routes");
 const termsRouter = require("./terms/terms.routes");
+const aiRouter = require("./messages/aiChat.routes")
 module.exports = (app) => {
     const api = "/api/v1";
     app.use(api + "/auth", userAuthRouter);
@@ -43,6 +44,7 @@ module.exports = (app) => {
     app.use(api + "/post", blogRoutes);
     app.use(api + "/wallet", walletRoutes);
     app.use(api + "/messages", messagesRouter)
+    app.use(api + "/ai-chat", aiRouter)
     app.use(api + "/cart", cartItemRouter);
 
     app.use(api + "/notifications", notificationRouter);

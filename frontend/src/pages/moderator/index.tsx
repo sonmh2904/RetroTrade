@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { ModeratorSidebar } from "@/components/ui/moderator/moderator-sidebar";
 import { ModeratorHeader } from "@/components/ui/moderator/moderator-header";
 import { ModeratorStats } from "@/components/ui/moderator/moderator-stats";
-import { VerificationQueue } from "@/components/ui/moderator/verify/verification-queue";
 import { VerificationRequestManagement } from "@/components/ui/moderator/verification/verification-request-management";
 import { OwnerRequestManagement } from "@/components/ui/moderator/ownerRequest/owner-request-management";
 import { BlogManagementTable } from "@/components/ui/moderator/blog/blog-management-table";
@@ -33,7 +32,7 @@ import {
 import ProductCategoryManager from "@/components/ui/moderator/categories/category-management";
 import ProductManagement from "@/components/ui/moderator/product/product-management";
 import TopHighlightTable from "@/components/ui/moderator/product/top-highlight-table";
-import DisputeManagementPage from "./dispute";
+import { DisputeManagement } from "@/components/ui/moderator/dispute/dispute-management";
 
 export default function ModeratorDashboard() {
   console.log(
@@ -242,9 +241,9 @@ export default function ModeratorDashboard() {
       case "requests":
         return <OwnerRequestManagement />;
       case "verification":
-        return <VerificationQueue />;
+        return <VerificationRequestManagement />;
       case "dispute":
-        return <DisputeManagementPage />;
+        return <DisputeManagement />;
       default:
         return <DashboardOverview />;
     }

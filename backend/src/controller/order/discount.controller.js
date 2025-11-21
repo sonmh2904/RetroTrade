@@ -609,6 +609,10 @@ module.exports = {
         if (assignment.effectiveFrom && now < new Date(assignment.effectiveFrom)) return { valid: false, reason: "ASSIGN_NOT_STARTED" };
         if (assignment.effectiveTo && now > new Date(assignment.effectiveTo)) return { valid: false, reason: "ASSIGN_EXPIRED" };
         if (assignment.perUserLimit > 0 && (assignment.usedCount || 0) >= assignment.perUserLimit) return { valid: false, reason: "PER_USER_LIMIT" };
+        // Nếu có assignment, vẫn kiểm tra discount.usageLimit để đảm bảo tổng số lần sử dụng không vượt quá giới hạn
+        if (discount.usageLimit > 0 && (discount.usedCount || 0) >= discount.usageLimit) {
+          return { valid: false, reason: "USAGE_LIMIT" };
+        }
       } else if (isInAllowedUsers) {
         // Nếu chỉ có trong allowedUsers mà không có assignment, kiểm tra usageLimit của discount
         if (discount.usageLimit > 0 && (discount.usedCount || 0) >= discount.usageLimit) {

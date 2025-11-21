@@ -83,7 +83,9 @@ export function DisputeManagement() {
       }
       const response = await getDisputes(params);
       if (response.code === 200) {
-        setDisputes(response.data || []);
+        // Backend trả về { total, data } nên cần lấy response.data.data
+        const disputeData = response.data as any;
+        setDisputes(Array.isArray(disputeData?.data) ? disputeData.data : (Array.isArray(disputeData) ? disputeData : []));
       } else {
         setError(response.message || "Không thể tải danh sách tranh chấp");
         toast.error(response.message || "Có lỗi xảy ra");
