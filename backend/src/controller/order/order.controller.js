@@ -12,7 +12,7 @@ const {
   notifyOrderReturned,
   notifyOrderCompleted,
   notifyOrderCancelled,
-  notifyOrderDisputed
+  notifyOrderDisputed,
 } = require("../../middleware/orderNotification");
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
@@ -24,6 +24,12 @@ function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
 
 module.exports = {
   createOrder: async (req, res) => {
+    // === CHẶN ADMIN & MODERATOR TẠO ORDER ===
+    if (req.user.role === "admin" || req.user.role === "moderator") {
+      return res.status(403).json({
+        message: "Tài khoản quản trị không được phép tạo đơn hàng thuê",
+      });
+    }
     const session = await mongoose.startSession();
     try {
       session.startTransaction();
@@ -175,11 +181,7 @@ module.exports = {
       }
 
       // === TÍNH TOÁN CUỐI CÙNG ===
-      // finalAmount = tiền thuê sau khi trừ discount (discount chỉ áp dụng trên tiền thuê)
-      const finalOrderAmount = Math.max(0, rentalAmount - totalDiscountAmount);
-      
-      // Tổng tiền khách hàng phải trả = tiền thuê - discount + tiền cọc + phí dịch vụ
-      // = finalOrderAmount + depositAmount + serviceFee
+      const finalOrderAmount = Math.max(0, totalAmount - totalDiscountAmount);
 
       const cleanDiscountInfo = discountInfo
         ? {
@@ -212,7 +214,7 @@ module.exports = {
             unitCount: quantity,
             startAt: new Date(finalStartAt),
             endAt: new Date(finalEndAt),
-            totalAmount: rentalAmount, // Lưu rentalAmount vào totalAmount (tiền thuê)
+            totalAmount,
             discount: cleanDiscountInfo || undefined,
             finalAmount: finalOrderAmount,
             depositAmount,
@@ -237,7 +239,7 @@ module.exports = {
       const updateDiscountUsage = async (data) => {
         if (!data) return;
         const { discount, amount } = data;
-        
+
         await Discount.updateOne(
           { _id: discount._id },
           { $inc: { usedCount: 1 } },
@@ -284,9 +286,8 @@ module.exports = {
         data: {
           orderId: newOrder._id.toString(),
           orderGuid: newOrder.orderGuid,
-          rentalAmount: rentalAmount, // Tiền thuê
-          totalAmount: rentalAmount, // Giữ lại để tương thích (totalAmount = rentalAmount)
-          finalAmount: finalOrderAmount, // Tổng cuối cùng sau khi trừ discount
+          totalAmount,
+          finalAmount: finalOrderAmount,
           discount: cleanDiscountInfo,
           depositAmount,
           serviceFee,

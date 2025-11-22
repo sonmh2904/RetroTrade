@@ -1,15 +1,17 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useSelector } from "react-redux"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/common/table"
 import { Badge } from "@/components/ui/common/badge"
 import { Button } from "@/components/ui/common/button"
 import { Input } from "@/components/ui/common/input"
-import { Users, Eye, RefreshCw, ChevronLeft, ChevronRight, UserCog, Search, Filter } from "lucide-react"  
-import { getAllUsers, updateUserRole } from "@/services/auth/user.api"
+import { Label } from "@/components/ui/common/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/common/dialog"
+import { Textarea } from "@/components/ui/common/textarea"
+import { Users, Eye, RefreshCw, ChevronLeft, ChevronRight, Search, Filter, Ban, Unlock, AlertTriangle } from "lucide-react"  
+import { getAllUsers, banUser, unbanUser } from "@/services/auth/user.api"
 import { toast } from "sonner"
 import type { UserProfile } from "@/services/iService"
 import { 
@@ -18,29 +20,18 @@ import {
   formatPaginationInfo,
   type PaginationState 
 } from "@/lib/pagination"
-import { RoleChangeModal } from "@/components/ui/admin/role-change-modal"
-import { decodeToken } from "@/utils/jwtHelper"
-import { RootState } from "@/store/redux_store"
 
-export function UserManagementTable() {
+export function ModeratorUserManagementTable() {
   const router = useRouter()
-  const accessToken = useSelector((state: RootState) => state.auth.accessToken)
-  
-  // Get current admin role
-  const currentAdminRole = useMemo(() => {
-    if (!accessToken) return null
-    const decoded = decodeToken(accessToken)
-    return decoded?.role?.toLowerCase() || null
-  }, [accessToken])
-  
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
-  const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
-  const [roleChangeLoading, setRoleChangeLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [banDialogOpen, setBanDialogOpen] = useState(false)
+  const [unbanDialogOpen, setUnbanDialogOpen] = useState(false)
+  const [userToBan, setUserToBan] = useState<{ id: string; name: string } | null>(null)
+  const [banReason, setBanReason] = useState("")
   const [paginationState, setPaginationState] = useState<PaginationState>({
     currentPage: 1,
     totalPages: 1,
@@ -126,39 +117,62 @@ export function UserManagementTable() {
     router.push(`/admin/user-management/${userId}`)
   }
 
-  const handleRoleChangeClick = (user: UserProfile) => {
-    // Prevent admin from changing role of users with same role level
-    if (currentAdminRole && user.role?.toLowerCase() === currentAdminRole) {
-      toast.error("Bạn không thể chỉnh quyền cho tài khoản cùng cấp bậc")
+  const handleBanClick = (userId: string, userName: string) => {
+    setUserToBan({ id: userId, name: userName })
+    setBanReason("")
+    setBanDialogOpen(true)
+  }
+
+  const handleBanConfirm = async () => {
+    if (!userToBan) return
+
+    if (!banReason || banReason.trim().length === 0) {
+      toast.error("Vui lòng nhập lý do khóa tài khoản")
       return
     }
-    setSelectedUser(user)
-    setRoleChangeModalOpen(true)
-  }
 
-  const handleRoleUpdate = async (userId: string, newRole: string) => {
     try {
-      setRoleChangeLoading(true)
-      const response = await updateUserRole(userId, newRole)
+      const response = await banUser(userToBan.id, banReason.trim())
       if (response && response.code === 200) {
-        toast.success("Cập nhật vai trò thành công")
-        fetchUsers(paginationState.currentPage) // Refresh current page
-        setRoleChangeModalOpen(false)
-        setSelectedUser(null)
+        toast.success("Khóa tài khoản thành công")
+        fetchUsers(paginationState.currentPage)
+        setBanDialogOpen(false)
+        setUserToBan(null)
+        setBanReason("")
       } else {
-        const errorMessage = response?.message || "Lỗi khi cập nhật vai trò"
+        const errorMessage = response?.message || "Lỗi khi khóa tài khoản"
         toast.error(errorMessage)
-        console.error("API Error:", response)
       }
     } catch (error) {
-      console.error("Error updating role:", error)
-      toast.error("Lỗi khi cập nhật vai trò")
-    } finally {
-      setRoleChangeLoading(false)
+      console.error("Error banning user:", error)
+      toast.error("Lỗi khi khóa tài khoản")
     }
   }
 
+  const handleUnbanClick = (userId: string, userName: string) => {
+    setUserToBan({ id: userId, name: userName })
+    setUnbanDialogOpen(true)
+  }
 
+  const handleUnbanConfirm = async () => {
+    if (!userToBan) return
+
+    try {
+      const response = await unbanUser(userToBan.id)
+      if (response && response.code === 200) {
+        toast.success("Mở khóa tài khoản thành công")
+        fetchUsers(paginationState.currentPage)
+        setUnbanDialogOpen(false)
+        setUserToBan(null)
+      } else {
+        const errorMessage = response?.message || "Lỗi khi mở khóa tài khoản"
+        toast.error(errorMessage)
+      }
+    } catch (error) {
+      console.error("Error unbanning user:", error)
+      toast.error("Lỗi khi mở khóa tài khoản")
+    }
+  }
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= paginationState.totalPages) {
@@ -342,16 +356,28 @@ export function UserManagementTable() {
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          className="text-purple-600 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                          onClick={() => handleRoleChangeClick(user)}
-                          title={currentAdminRole && user.role?.toLowerCase() === currentAdminRole ? "Không thể chỉnh quyền cho tài khoản cùng cấp bậc" : "Đổi quyền"}
-                          disabled={!!(currentAdminRole && user.role?.toLowerCase() === currentAdminRole)}
-                        >
-                          <UserCog className="w-4 h-4" />
-                        </Button>
+                        {user.isDeleted ? (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-green-600 hover:bg-green-50"
+                            onClick={() => handleUnbanClick(user._id, user.fullName || user.email || "người dùng")}
+                            title="Mở khóa tài khoản"
+                          >
+                            <Unlock className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleBanClick(user._id, user.fullName || user.email || "người dùng")}
+                            title="Ban người dùng"
+                            disabled={user.role === 'admin' || user.role === 'moderator'}
+                          >
+                            <Ban className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -425,16 +451,115 @@ export function UserManagementTable() {
         )}
       </CardContent>
 
-      {/* Role Change Modal */}
-      <RoleChangeModal
-        open={roleChangeModalOpen}
-        onOpenChange={setRoleChangeModalOpen}
-        user={selectedUser}
-        onConfirm={handleRoleUpdate}
-        loading={roleChangeLoading}
-        currentAdminRole={currentAdminRole}
-      />
+      {/* Ban User Dialog */}
+      <Dialog open={banDialogOpen} onOpenChange={setBanDialogOpen}>
+        <DialogContent className="bg-white border-gray-200 text-gray-900 max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                Khóa tài khoản người dùng
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-gray-600 mt-2">
+              Bạn có chắc chắn muốn khóa tài khoản của <span className="font-semibold text-gray-900">&quot;{userToBan?.name}&quot;</span>?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="banReason" className="text-sm font-medium text-gray-700">
+                Lý do khóa tài khoản <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="banReason"
+                placeholder="Nhập lý do khóa tài khoản... Ví dụ: Vi phạm điều khoản sử dụng, spam, gian lận..."
+                value={banReason}
+                onChange={(e) => setBanReason(e.target.value)}
+                className="min-h-[120px] bg-white border-gray-300 focus:border-red-500 focus:ring-red-500 text-gray-900 resize-none"
+                required
+              />
+              <p className="text-xs text-gray-500">
+                Lý do này sẽ được gửi qua email cho người dùng
+              </p>
+            </div>
 
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800">
+                <strong>Lưu ý:</strong> Người dùng sẽ không thể đăng nhập sau khi bị khóa. Email thông báo sẽ được gửi tự động cho người dùng.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBanDialogOpen(false)
+                setUserToBan(null)
+                setBanReason("")
+              }}
+              className="text-gray-700 border-gray-300 hover:bg-gray-50"
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleBanConfirm}
+              disabled={!banReason || banReason.trim().length === 0}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Khóa tài khoản
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unban User Dialog */}
+      <Dialog open={unbanDialogOpen} onOpenChange={setUnbanDialogOpen}>
+        <DialogContent className="bg-white border-gray-200 text-gray-900 max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <Unlock className="w-6 h-6 text-green-600" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                Xác nhận mở khóa tài khoản
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-gray-600 mt-2">
+              Bạn có chắc chắn muốn mở khóa tài khoản của <span className="font-semibold text-gray-900">&quot;{userToBan?.name}&quot;</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+            <p className="text-sm text-green-800">
+              <strong>Lưu ý:</strong> Người dùng sẽ có thể đăng nhập lại sau khi được mở khóa. Email thông báo sẽ được gửi tự động cho người dùng.
+            </p>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setUnbanDialogOpen(false)
+                setUserToBan(null)
+              }}
+              className="text-gray-700 border-gray-300 hover:bg-gray-50"
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleUnbanConfirm}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Unlock className="w-4 h-4 mr-2" />
+              Mở khóa tài khoản
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
+

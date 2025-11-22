@@ -19,11 +19,6 @@ import { UserDetails } from '@/components/ui/auth/profile/user-details';
 import { ownerRequestApi } from '@/services/auth/ownerRequest.api';
 import dynamic from 'next/dynamic';
 
-// Render trang Ví & giao dịch inline
-const WalletPage = dynamic(() => import('@/pages/wallet'), { ssr: false });
-
-const OrdersPage = dynamic(() => import('@/components/ui/auth/order'), { ssr: false });
-const OrderDetailInline = dynamic(() => import('@/components/ui/auth/order/[id]'), { ssr: false });
 
 const DiscountsPage = dynamic(() => import('@/components/ui/auth/discounts'), { ssr: false });
 
@@ -125,12 +120,12 @@ export default function ProfilePage() {
       setOwnerSubmitting(false);
     }
   }, [ownerReason, ownerInfo]);
-  type MenuKey = 'orders' | 'wallet' | 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details';
+  type MenuKey = 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details';
   
   // Get initial menu from URL query or default to null (no default menu)
   const getInitialMenu = (): MenuKey | null => {
     const menuFromQuery = router.query.menu as MenuKey | undefined;
-    if (menuFromQuery && ['orders', 'wallet', 'discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+    if (menuFromQuery && ['discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
       return menuFromQuery;
     }
     return null;
@@ -141,7 +136,7 @@ export default function ProfilePage() {
   // Update menu when URL query changes
   useEffect(() => {
     const menuFromQuery = router.query.menu as MenuKey | undefined;
-    if (menuFromQuery && ['orders', 'wallet', 'discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+    if (menuFromQuery && ['discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
       setActiveMenu(menuFromQuery);
     }
   }, [router.query.menu]);
@@ -237,10 +232,7 @@ export default function ProfilePage() {
   // Normalize user profile - must be called before early returns
   const normalizedUserProfile = useMemo((): UserProfile | null => {
     if (!userProfile) return null;
-    return {
-      ...userProfile,
-      wallet: userProfile.wallet ?? { currency: 'VND', balance: 0 },
-    } as UserProfile;
+    return userProfile;
   }, [userProfile]);
 
   if (!accessToken) {
@@ -301,7 +293,7 @@ export default function ProfilePage() {
             {/* Sidebar */}
             <aside className="lg:col-span-3">
               <ProfileSidebar
-                active={activeMenu || 'settings'}
+                active={(activeMenu || 'settings') as MenuKey}
                 onChange={handleMenuChange}
                 user={{ 
                   fullName: normalizedUserProfile.fullName, 
@@ -359,26 +351,6 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {activeMenu === 'orders' && (
-                <div className="rounded-xl overflow-hidden">
-                  {router.query.orderId ? (
-                    <OrderDetailInline id={String(router.query.orderId)} />
-                  ) : (
-                    <OrdersPage
-                      onOpenDetail={(id: string) => {
-                        const { pathname, query } = router;
-                        router.replace({ pathname, query: { ...query, orderId: id } }, undefined, { shallow: true });
-                      }}
-                    />
-                  )}
-                </div>
-              )}
-
-              {activeMenu === 'wallet' && (
-                <div className="rounded-xl overflow-hidden">
-                  <WalletPage />
-                </div>
-              )}
 
               {activeMenu === 'discounts' && (
                 <div className="rounded-xl overflow-hidden">

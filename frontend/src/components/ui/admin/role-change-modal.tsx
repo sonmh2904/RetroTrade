@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/common/button"
 import { Badge } from "@/components/ui/common/badge"
 import { AlertTriangle, UserCheck, X } from "lucide-react"
+import { toast } from "sonner"
 import type { UserProfile } from "@/services/iService"
 
 interface RoleChangeModalProps {
@@ -12,6 +13,7 @@ interface RoleChangeModalProps {
   user: UserProfile | null
   onConfirm: (userId: string, newRole: string) => void
   loading?: boolean
+  currentAdminRole?: string | null
 }
 
 const ROLE_OPTIONS = [
@@ -41,12 +43,18 @@ export function RoleChangeModal({
   onOpenChange,
   user,
   onConfirm,
-  loading = false
+  loading = false,
+  currentAdminRole = null
 }: RoleChangeModalProps) {
   const [selectedRole, setSelectedRole] = useState<string>("")
 
   const handleConfirm = () => {
     if (user && selectedRole && selectedRole !== user.role) {
+      // Prevent admin from changing role to same level as themselves
+      if (currentAdminRole && selectedRole.toLowerCase() === currentAdminRole.toLowerCase()) {
+        toast.error("Bạn không thể chỉnh quyền cho tài khoản cùng cấp bậc")
+        return
+      }
       onConfirm(user._id, selectedRole)
     }
   }
@@ -137,16 +145,24 @@ export function RoleChangeModal({
                 className="w-full bg-slate-800 border border-slate-600 text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Chọn quyền mới...</option>
-                {ROLE_OPTIONS.map((option) => (
-                  <option
-                    key={option.value}
-                    value={option.value}
-                    disabled={option.value === user.role}
-                    className="bg-slate-800 text-white"
-                  >
-                    {option.label} - {option.description}
-                  </option>
-                ))}
+                {ROLE_OPTIONS.map((option) => {
+                  // Disable if it's the user's current role or if it's the same level as current admin
+                  const isCurrentRole = option.value === user.role
+                  const isSameLevelAsAdmin = currentAdminRole && option.value.toLowerCase() === currentAdminRole.toLowerCase()
+                  const isDisabled = isCurrentRole || isSameLevelAsAdmin
+                  
+                  return (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={isDisabled}
+                      className="bg-slate-800 text-white"
+                    >
+                      {option.label} - {option.description}
+                      {isSameLevelAsAdmin && " (Không thể chỉnh quyền cùng cấp bậc)"}
+                    </option>
+                  )
+                })}
               </select>
               {selectedRoleOption && (
                 <p className="text-xs text-slate-400">{selectedRoleOption.description}</p>

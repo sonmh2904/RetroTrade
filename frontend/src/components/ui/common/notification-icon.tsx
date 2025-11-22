@@ -56,7 +56,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
 
         // Order related notifications
         if (meta.orderId) {
-          return `/auth/order/${meta.orderId}`;
+          return `/auth/my-orders/${meta.orderId}`;
         }
 
         // Dispute related notifications
@@ -93,7 +93,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         case "Order Cancelled":
         case "Order Disputed":
         case "Payment Received":
-          return "/auth/order/my-order";
+          return "/auth/my-orders";
         case "Product Approved":
         case "Product Rejected":
           return "/owner/myproducts";

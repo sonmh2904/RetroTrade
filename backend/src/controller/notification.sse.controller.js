@@ -1,5 +1,6 @@
 const { addConnection } = require("../utils/sseManager");
 const Notification = require("../models/Notification.model");
+const jwt = require('jsonwebtoken');
 
 /**
  * SSE endpoint cho notifications stream
@@ -12,7 +13,6 @@ module.exports.notificationStream = async (req, res, next) => {
     const tokenFromQuery = req.query.token;
     if (tokenFromQuery && !req.user) {
       // Verify token từ query param
-      const jwt = require('jsonwebtoken');
       try {
         const decoded = jwt.verify(tokenFromQuery, process.env.TOKEN_SECRET || process.env.JWT_SECRET);
         req.user = decoded;
