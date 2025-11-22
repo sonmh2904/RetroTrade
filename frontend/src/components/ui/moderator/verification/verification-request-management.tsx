@@ -258,11 +258,7 @@ export function VerificationRequestManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Quản lý yêu cầu xác minh</h2>
-          <p className="text-gray-600 mt-1">Xem và xử lý các yêu cầu xác minh từ người dùng</p>
-        </div>
+      <div className="flex items-center justify-between">      
         <Button onClick={fetchRequests} variant="outline" size="sm">
           <RefreshCw className="w-4 h-4 mr-2" />
           Làm mới

@@ -626,10 +626,10 @@ const handleCheckout = () => {
     return sum;
   }, 0);
 
-  // Tính serviceFee trên (tiền thuê + tiền cọc) theo công thức mới
-  const serviceFee = ((subtotal + totalDeposit) * serviceFeeRate) / 100;
-  // Tính tổng: tiền thuê + tiền cọc + phí dịch vụ
-  const total = subtotal + totalDeposit + serviceFee;
+  // Tính serviceFee trên tiền thuê
+  const serviceFee = (subtotal * serviceFeeRate) / 100;
+  // Tính tổng: tiền thuê + phí dịch vụ + cọc
+  const total = subtotal + serviceFee + totalDeposit;
 
   // Format price helper
   const formatPrice = (price: number, currency: string) => {

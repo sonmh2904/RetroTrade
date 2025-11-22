@@ -1,12 +1,11 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/common/button";
 import { Card } from "@/components/ui/common/card";
-import { Input } from "@/components/ui/common/input";
 import { Label } from "@/components/ui/common/label";
 import { Textarea } from "@/components/ui/common/textarea";
 import {
@@ -18,7 +17,6 @@ import {
 } from "@/components/ui/common/select";
 import { Loader2, Gavel, AlertCircle } from "lucide-react";
 import { resolveDispute } from "@/services/moderator/disputeOrder.api";
-import axios from "axios";
 
 const DECISIONS = [
   {
@@ -47,6 +45,21 @@ const DECISIONS = [
   },
 ];
 
+const REFUND_TARGETS = [
+  {
+    value: "reporter",
+    label: "Hoàn cho người khiếu nại",
+  },
+  {
+    value: "reported",
+    label: "Hoàn cho người bị khiếu nại",
+  },
+];
+
+const REFUND_PERCENTAGES = [10, 25, 50, 100];
+
+type RefundTargetOption = "reporter" | "reported";
+
 interface DisputeResolutionFormProps {
   disputeId: string;
   totalAmount: number;
@@ -61,13 +74,47 @@ export default function DisputeResolutionForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [decision, setDecision] = useState<string>("");
-  const [refundAmount, setRefundAmount] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [refundTarget, setRefundTarget] = useState<RefundTargetOption | "">("");
+  const [refundPercentage, setRefundPercentage] = useState<string>("");
+
+  const requiresRefund = ["refund_full", "refund_partial"].includes(decision);
+  const calculatedRefund =
+    refundPercentage && requiresRefund
+      ? Math.round((totalAmount * Number(refundPercentage)) / 100)
+      : 0;
+
+  const handleRefundTargetChange = (value: string) => {
+    setRefundTarget(value as RefundTargetOption);
+  };
+
+  useEffect(() => {
+    if (!requiresRefund) {
+      setRefundTarget("");
+      setRefundPercentage("");
+      return;
+    }
+
+    if (!refundTarget) {
+      setRefundTarget("reporter");
+    }
+  }, [requiresRefund, refundTarget]);
+
+  useEffect(() => {
+    if (decision === "refund_full" && refundPercentage !== "100") {
+      setRefundPercentage("100");
+    } else if (decision !== "refund_full" && refundPercentage === "100") {
+      setRefundPercentage("");
+    }
+  }, [decision, refundPercentage]);
 
 const handleSubmit = async () => {
   if (!decision) return toast.error("Vui lòng chọn quyết định xử lý");
-  if (["refund_full", "refund_partial"].includes(decision) && !refundAmount) {
-    return toast.error("Vui lòng nhập số tiền hoàn");
+  if (
+    requiresRefund &&
+    (!refundTarget || !refundPercentage)
+  ) {
+    return toast.error("Vui lòng chọn người nhận và phần trăm hoàn tiền");
   }
 
   setLoading(true);
@@ -75,23 +122,27 @@ const handleSubmit = async () => {
     await resolveDispute(disputeId, {
       decision,
       notes: notes.trim() || undefined,
-      refundAmount:
-        decision === "refund_full" ? totalAmount : Number(refundAmount),
+      refundTarget: requiresRefund ? (refundTarget as RefundTargetOption) : undefined,
+      refundPercentage: requiresRefund
+        ? Number(refundPercentage)
+        : undefined,
     });
 
     toast.success("Xử lý tranh chấp thành công!");
     onSuccess?.();
     router.push("/moderator/dispute");
-  } catch (error: any) {
+  } catch (error) {
+    const apiMessage =
+      (error as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
     toast.error(
-      error.response?.data?.message || error.message || "Xử lý thất bại"
+      apiMessage ||
+        (error instanceof Error ? error.message : "Xử lý thất bại")
     );
   } finally {
     setLoading(false);
   }
 };
-
-  const selectedDecision = DECISIONS.find((d) => d.value === decision);
 
   return (
     <Card className="border-2 border-orange-200 shadow-2xl bg-gradient-to-br from-orange-50 to-amber-50">
@@ -133,33 +184,74 @@ const handleSubmit = async () => {
             </Select>
           </div>
 
-          {["refund_full", "refund_partial"].includes(decision) && (
-            <div className="bg-white rounded-2xl p-6 border-2 border-dashed border-orange-300">
-              <Label className="text-lg font-semibold flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-orange-600" />
-                Số tiền hoàn trả
-              </Label>
-              <Input
-                type="number"
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                placeholder={
-                  decision === "refund_full"
-                    ? totalAmount.toString()
-                    : "Nhập số tiền..."
-                }
-                className="mt-2 text-2xl font-bold"
-                disabled={decision === "refund_full" || loading}
-                min="0"
-                max={totalAmount}
-              />
-              <p className="text-sm text-gray-600 mt-2">
-                Tối đa:{" "}
-                <span className="font-bold text-orange-600">
-                  {totalAmount.toLocaleString()}₫
-                </span>
-                {decision === "refund_full" && " → Tự động hoàn toàn bộ"}
-              </p>
+          {requiresRefund && (
+            <div className="bg-white rounded-2xl p-6 border-2 border-dashed border-orange-300 space-y-4">
+              <div>
+                <Label className="text-lg font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                  Hoàn tiền cho
+                </Label>
+                <Select
+                  value={refundTarget || undefined}
+                  onValueChange={handleRefundTargetChange}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="mt-2 h-14 text-lg">
+                    <SelectValue placeholder="Chọn người nhận..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REFUND_TARGETS.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        className="text-lg py-3"
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-lg font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                  Phần trăm hoàn
+                </Label>
+                <Select
+                  value={refundPercentage || undefined}
+                  onValueChange={setRefundPercentage}
+                  disabled={decision === "refund_full" || loading}
+                >
+                  <SelectTrigger className="mt-2 h-14 text-lg">
+                    <SelectValue placeholder="Chọn phần trăm..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REFUND_PERCENTAGES.map((percent) => (
+                      <SelectItem
+                        key={percent}
+                        value={percent.toString()}
+                        className="text-lg py-3"
+                      >
+                        {percent}%
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-gray-600 mt-2">
+                  Các mức hỗ trợ: 10%, 25%, 50%, 100%
+                  {decision === "refund_full" && " → Tự động hoàn 100%"}
+                </p>
+              </div>
+
+              <div className="mt-4 bg-orange-50 rounded-2xl p-4 border border-orange-200">
+                <p className="text-sm text-gray-600">Số tiền dự kiến</p>
+                <p className="text-3xl font-bold text-orange-600">
+                  {calculatedRefund
+                    ? `${calculatedRefund.toLocaleString()}₫`
+                    : "0₫"}
+                </p>
+              </div>
             </div>
           )}
 
@@ -190,7 +282,11 @@ const handleSubmit = async () => {
               size="lg"
               className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-lg shadow-lg"
               onClick={handleSubmit}
-              disabled={loading || !decision}
+              disabled={
+                loading ||
+                !decision ||
+                (requiresRefund && (!refundTarget || !refundPercentage))
+              }
             >
               {loading ? (
                 <>

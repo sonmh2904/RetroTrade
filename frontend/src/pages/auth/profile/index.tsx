@@ -19,11 +19,6 @@ import { UserDetails } from '@/components/ui/auth/profile/user-details';
 import { ownerRequestApi } from '@/services/auth/ownerRequest.api';
 import dynamic from 'next/dynamic';
 
-// Render trang Ví & giao dịch inline
-const WalletPage = dynamic(() => import('@/pages/wallet'), { ssr: false });
-
-const OrdersPage = dynamic(() => import('@/components/ui/auth/order'), { ssr: false });
-const OrderDetailInline = dynamic(() => import('@/components/ui/auth/order/[id]'), { ssr: false });
 
 const DiscountsPage = dynamic(() => import('@/components/ui/auth/discounts'), { ssr: false });
 
@@ -125,12 +120,12 @@ export default function ProfilePage() {
       setOwnerSubmitting(false);
     }
   }, [ownerReason, ownerInfo]);
-  type MenuKey = 'orders' | 'wallet' | 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details';
+  type MenuKey = 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details';
   
   // Get initial menu from URL query or default to null (no default menu)
   const getInitialMenu = (): MenuKey | null => {
     const menuFromQuery = router.query.menu as MenuKey | undefined;
-    if (menuFromQuery && ['orders', 'wallet', 'discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+    if (menuFromQuery && ['discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
       return menuFromQuery;
     }
     return null;
@@ -141,7 +136,7 @@ export default function ProfilePage() {
   // Update menu when URL query changes
   useEffect(() => {
     const menuFromQuery = router.query.menu as MenuKey | undefined;
-    if (menuFromQuery && ['orders', 'wallet', 'discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+    if (menuFromQuery && ['discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
       setActiveMenu(menuFromQuery);
     }
   }, [router.query.menu]);
@@ -237,10 +232,7 @@ export default function ProfilePage() {
   // Normalize user profile - must be called before early returns
   const normalizedUserProfile = useMemo((): UserProfile | null => {
     if (!userProfile) return null;
-    return {
-      ...userProfile,
-      wallet: userProfile.wallet ?? { currency: 'VND', balance: 0 },
-    } as UserProfile;
+    return userProfile;
   }, [userProfile]);
 
   if (!accessToken) {
@@ -301,7 +293,7 @@ export default function ProfilePage() {
             {/* Sidebar */}
             <aside className="lg:col-span-3">
               <ProfileSidebar
-                active={activeMenu || 'settings'}
+                active={(activeMenu || 'settings') as MenuKey}
                 onChange={handleMenuChange}
                 user={{ 
                   fullName: normalizedUserProfile.fullName, 
@@ -359,26 +351,6 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {activeMenu === 'orders' && (
-                <div className="rounded-xl overflow-hidden">
-                  {router.query.orderId ? (
-                    <OrderDetailInline id={String(router.query.orderId)} />
-                  ) : (
-                    <OrdersPage
-                      onOpenDetail={(id: string) => {
-                        const { pathname, query } = router;
-                        router.replace({ pathname, query: { ...query, orderId: id } }, undefined, { shallow: true });
-                      }}
-                    />
-                  )}
-                </div>
-              )}
-
-              {activeMenu === 'wallet' && (
-                <div className="rounded-xl overflow-hidden">
-                  <WalletPage />
-                </div>
-              )}
 
               {activeMenu === 'discounts' && (
                 <div className="rounded-xl overflow-hidden">
@@ -543,13 +515,28 @@ export default function ProfilePage() {
 
               {activeMenu === 'ownership' && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Yêu cầu quyền Owner</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Yêu cầu đăng kí cho thuê </h2>
                   {userProfile?.role === 'owner' ? (
-                    <p className="text-green-700">Bạn đã là Owner. Bạn có thể đăng đồ cho thuê.</p>
+                    <p className="text-green-700">Bạn đã đăng kí cho thuê. Bạn có thể đăng đồ cho thuê.</p>
                   ) : (
                     <>
                       {showOwnerForm && (
                         <div className="space-y-3 max-w-xl">
+                          <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-gray-700">
+                            <p className="font-semibold text-gray-900">Phí dịch vụ 50.000&nbsp;VND</p>
+                            <p>
+                              Khi gửi yêu cầu, hệ thống sẽ tự động trừ{" "}
+                              <span className="font-semibold">50.000&nbsp;đ</span> từ ví RetroTrade của bạn.
+                              Vui lòng đảm bảo số dư đủ và nạp thêm nếu cần.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => router.push('/wallet')}
+                              className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                            >
+                              Nạp tiền vào ví →
+                            </button>
+                          </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Lý do <span className="text-red-500">*</span></label>
                             <input
@@ -575,7 +562,7 @@ export default function ProfilePage() {
                               disabled={ownerSubmitting}
                               className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-60"
                             >
-                              {ownerSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
+                              {ownerSubmitting ? 'Đang xử lý...' : 'Thanh toán 50.000đ & gửi yêu cầu'}
                             </button>
                           </div>
                         </div>

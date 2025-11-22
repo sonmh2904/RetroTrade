@@ -339,54 +339,50 @@ export default function Checkout() {
     const days = calculateRentalDays(item);
     return sum + item.basePrice * item.quantity * days;
   }, 0);
-
-  console.log("Render - rentalTotal:", rentalTotal, "cartItems:", cartItems.length);
-
   // Tính depositTotal
   const depositTotal = selectedCartItems.reduce(
     (sum, item) => sum + item.depositAmount * item.quantity,
     0
   );
-
-  // Tính serviceFee trên (tiền thuê + tiền cọc) theo công thức mới
-  const serviceFeeAmount = ((rentalTotal + depositTotal) * serviceFeeRate) / 100;
+  // Tính serviceFee trên tiền thuê
+  const serviceFeeAmount = (rentalTotal * serviceFeeRate) / 100;
 
   // Tính totalDiscountAmount từ public và private discount (chỉ áp dụng khi có sản phẩm được chọn)
   const effectivePublicDiscountAmount = selectedCartItems.length > 0 ? publicDiscountAmount : 0;
   const effectivePrivateDiscountAmount = selectedCartItems.length > 0 ? privateDiscountAmount : 0;
   const totalDiscountAmount = effectivePublicDiscountAmount + effectivePrivateDiscountAmount;
 
-  // Tính grandTotal theo công thức mới: 
-  // Tổng = tiền thuê + tiền cọc + (tiền thuê + tiền cọc) * thuế - giảm giá
-  const grandTotal = Math.max(0, rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount);
+  // Tính grandTotal: Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
+  const grandTotal = Math.max(0, rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount);
 
-  // Kiểm tra minOrderAmount cho public discount
+
+  // Kiểm tra minOrderAmount cho public discount (chỉ kiểm tra trên tiền thuê)
   useEffect(() => {
     if (
       publicDiscount &&
       publicDiscount.minOrderAmount &&
-      (rentalTotal + depositTotal) < publicDiscount.minOrderAmount
+      rentalTotal < publicDiscount.minOrderAmount
     ) {
       setPublicDiscount(null);
       setPublicDiscountAmount(0);
       toast.info("Đơn hàng không còn đáp ứng điều kiện tối thiểu của mã giảm giá công khai đã chọn.");
     }
-  }, [publicDiscount, rentalTotal, depositTotal]);
+  }, [publicDiscount, rentalTotal]);
 
-  // Kiểm tra minOrderAmount cho private discount
+  // Kiểm tra minOrderAmount cho private discount (chỉ kiểm tra trên tiền thuê còn lại)
   useEffect(() => {
     if (
       privateDiscount &&
       privateDiscount.minOrderAmount
     ) {
-      const baseAmountAfterPublic = Math.max(0, (rentalTotal + depositTotal) - publicDiscountAmount);
+      const baseAmountAfterPublic = Math.max(0, rentalTotal - publicDiscountAmount);
       if (baseAmountAfterPublic < privateDiscount.minOrderAmount) {
         setPrivateDiscount(null);
         setPrivateDiscountAmount(0);
         toast.info("Đơn hàng không còn đáp ứng điều kiện tối thiểu của mã giảm giá riêng tư đã chọn.");
       }
     }
-  }, [privateDiscount, rentalTotal, depositTotal, publicDiscountAmount]);
+  }, [privateDiscount, rentalTotal, publicDiscountAmount]);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -443,17 +439,21 @@ export default function Checkout() {
     setDiscountError(null);
 
     try {
-      // Tính discount dựa trên tổng tiền (tiền thuê + tiền cọc)
-      const baseAmountForDiscount = rentalTotal + depositTotal;
+      // Tính discount chỉ dựa trên tiền thuê (không bao gồm tiền cọc)
+      // Nếu đang áp dụng mã riêng tư và đã có mã công khai, validate trực tiếp với tiền thuê còn lại
+      let baseAmountForDiscount = rentalTotal;
+      let isPrivateDiscountWithPublic = false;
       
       console.log("Validating discount:", {
         code: codeToApply.toUpperCase(),
         baseAmount: baseAmountForDiscount,
         rentalTotal,
         depositTotal,
+        publicDiscountAmount,
         selectedItemsCount: selectedCartItems.length
       });
       
+      // Validate lần đầu để kiểm tra mã có hợp lệ không
       const response = await validateDiscount({
         code: codeToApply.toUpperCase(),
         baseAmount: baseAmountForDiscount,
@@ -464,6 +464,17 @@ export default function Checkout() {
       if (response.status === "success" && response.data) {
         const discount = response.data.discount;
         let amount = response.data.amount || 0;
+        
+        // Nếu là mã riêng tư và đã có mã công khai, cần validate lại với tiền thuê còn lại
+        if (!discount.isPublic && publicDiscountAmount > 0) {
+          isPrivateDiscountWithPublic = true;
+          baseAmountForDiscount = Math.max(0, rentalTotal - publicDiscountAmount);
+          console.log("Private discount with public discount exists, revalidating with remaining rental:", {
+            originalRental: rentalTotal,
+            publicDiscountAmount,
+            remainingRental: baseAmountForDiscount
+          });
+        }
 
         // Tính lại discount amount để đảm bảo chính xác
         const calculatedAmount = calculateDiscountAmount(
@@ -495,9 +506,9 @@ export default function Checkout() {
           amount: amount,
           rentalTotal: rentalTotal,
           depositTotal: depositTotal,
-          totalAmountForDiscount: rentalTotal + depositTotal,
+          baseAmountForDiscount: rentalTotal, // Chỉ tính trên tiền thuê
           expectedAmount: discount.type === "percent"
-            ? ((rentalTotal + depositTotal) * discount.value) / 100
+            ? (rentalTotal * discount.value) / 100
             : discount.value,
           discount: discount
         });
@@ -520,9 +531,9 @@ export default function Checkout() {
           setPublicDiscountAmount(amount);
           console.log("Set public discount amount:", amount);
 
-          // Nếu đã có mã private, tính lại mã private với baseAmount mới
+          // Nếu đã có mã private, tính lại mã private với baseAmount mới (chỉ trên tiền thuê còn lại)
           if (privateDiscount) {
-            const baseAmountAfterPublic = Math.max(0, baseAmountForDiscount - amount);
+            const baseAmountAfterPublic = Math.max(0, rentalTotal - amount);
             try {
               const revalidatePrivateResponse = await validateDiscount({
                 code: privateDiscount.code.toUpperCase(),
@@ -550,20 +561,60 @@ export default function Checkout() {
             setDiscountLoading(false);
             return;
           }
-          // Tính lại discount amount dựa trên baseAmount sau khi đã trừ mã công khai
-          const baseAmountAfterPublic = Math.max(0, baseAmountForDiscount - publicDiscountAmount);
-          // Validate lại với baseAmount mới
-          try {
-            const revalidateResponse = await validateDiscount({
-              code: discount.code.toUpperCase(),
-              baseAmount: baseAmountAfterPublic,
-            });
-            if (revalidateResponse.status === "success" && revalidateResponse.data) {
-              amount = revalidateResponse.data.amount;
+          
+          // Nếu đã có mã công khai, validate lại với tiền thuê còn lại
+          if (isPrivateDiscountWithPublic) {
+            try {
+              const revalidateResponse = await validateDiscount({
+                code: discount.code.toUpperCase(),
+                baseAmount: baseAmountForDiscount, // Đã được tính = rentalTotal - publicDiscountAmount
+              });
+              if (revalidateResponse.status === "success" && revalidateResponse.data) {
+                // Sử dụng amount từ revalidate (tính trên tiền thuê còn lại)
+                amount = revalidateResponse.data.amount;
+                console.log("Private discount revalidated with remaining rental:", {
+                  code: discount.code,
+                  baseAmountForDiscount,
+                  amount,
+                  publicDiscountAmount,
+                  originalRental: rentalTotal
+                });
+              } else {
+                // Nếu revalidate thất bại, hiển thị lý do cụ thể
+                const errorMsg = revalidateResponse.message || "Mã giảm giá riêng tư không thể áp dụng sau khi trừ mã công khai";
+                const reason = (revalidateResponse as { reason?: string }).reason;
+                let detailedMessage = errorMsg;
+                
+                if (reason === "BELOW_MIN_ORDER") {
+                  const discountInfo = availableDiscounts.find(d => d.code === discount.code.toUpperCase());
+                  if (discountInfo?.minOrderAmount) {
+                    const needed = discountInfo.minOrderAmount - baseAmountForDiscount;
+                    detailedMessage = `Đơn hàng cần thêm ${needed.toLocaleString("vi-VN")}₫ tiền thuê để áp dụng mã này sau khi trừ mã công khai (Tối thiểu: ${discountInfo.minOrderAmount.toLocaleString("vi-VN")}₫, Tiền thuê còn lại: ${baseAmountForDiscount.toLocaleString("vi-VN")}₫)`;
+                  } else {
+                    detailedMessage = `Đơn hàng chưa đạt mức tối thiểu để áp dụng mã này sau khi trừ mã công khai (Tiền thuê còn lại: ${baseAmountForDiscount.toLocaleString("vi-VN")}₫)`;
+                  }
+                }
+                
+                setDiscountError(detailedMessage);
+                setDiscountLoading(false);
+                return;
+              }
+            } catch (e) {
+              console.error("Error revalidating private discount:", e);
+              setDiscountError("Có lỗi xảy ra khi xác thực mã giảm giá riêng tư");
+              setDiscountLoading(false);
+              return;
             }
-          } catch (e) {
-            console.error("Error revalidating discount:", e);
+          } else {
+            // Không có mã công khai, tính lại amount với baseAmount chính xác
+            amount = calculateDiscountAmount(
+              discount.type,
+              discount.value,
+              baseAmountForDiscount,
+              discount.maxDiscountAmount
+            );
           }
+          
           setPrivateDiscount(discount);
           setPrivateDiscountAmount(amount);
           toast.success("Áp dụng mã giảm giá riêng tư thành công!");
@@ -592,14 +643,15 @@ export default function Checkout() {
               detailedMessage = "Mã giảm giá đã hết lượt sử dụng";
               break;
             case "BELOW_MIN_ORDER":
-              const baseAmount = rentalTotal + depositTotal;
+              // minOrderAmount được kiểm tra trên tiền thuê (rentalTotal)
+              const baseAmount = rentalTotal;
               // Try to get minOrderAmount from available discounts
               const discountInfo = availableDiscounts.find(d => d.code === codeToApply.toUpperCase());
               if (discountInfo?.minOrderAmount) {
                 const needed = discountInfo.minOrderAmount - baseAmount;
-                detailedMessage = `Đơn hàng cần thêm ${needed.toLocaleString("vi-VN")}₫ để áp dụng mã này (Tối thiểu: ${discountInfo.minOrderAmount.toLocaleString("vi-VN")}₫, Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫)`;
+                detailedMessage = `Đơn hàng cần thêm ${needed.toLocaleString("vi-VN")}₫ tiền thuê để áp dụng mã này (Tối thiểu: ${discountInfo.minOrderAmount.toLocaleString("vi-VN")}₫, Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫)`;
               } else {
-                detailedMessage = `Đơn hàng chưa đạt mức tối thiểu để áp dụng mã này (Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫)`;
+                detailedMessage = `Đơn hàng chưa đạt mức tối thiểu để áp dụng mã này (Hiện tại: ${baseAmount.toLocaleString("vi-VN")}₫ tiền thuê)`;
               }
               break;
             case "NOT_ALLOWED_USER":
@@ -1089,7 +1141,9 @@ export default function Checkout() {
         } else {
           sessionStorage.removeItem("checkoutItems");
         }
-        router.push("/auth/order/my-order");
+        if (router.pathname !== "/my-orders" && router.asPath !== "/my-orders") {
+          router.push("/auth/my-orders");
+        }
       } else if (successCount > 0) {
         toast.warning(
           `Đã xử lý thành công ${successCount} đơn hàng. ${failedItemMessages.length} đơn thất bại: ${failedItemMessages.join(", ")}`
@@ -2013,7 +2067,12 @@ export default function Checkout() {
                                                 </p>
                                               )}
                                               {canUse && (() => {
-                                                const baseAmount = rentalTotal + depositTotal;
+                                                // Preview discount chỉ tính trên tiền thuê (rentalTotal)
+                                                // Nếu là mã riêng tư và đã có mã công khai, tính trên tiền thuê còn lại
+                                                let baseAmount = rentalTotal;
+                                                if (!discount.isPublic && publicDiscountAmount > 0) {
+                                                  baseAmount = Math.max(0, rentalTotal - publicDiscountAmount);
+                                                }
                                                 const previewAmount = calculateDiscountAmount(
                                                   discount.type,
                                                   discount.value,
@@ -2306,8 +2365,7 @@ export default function Checkout() {
           message={errorModalMessage || "Số dư ví của bạn không đủ để thanh toán đơn hàng này. Vui lòng nạp thêm tiền vào ví."}
           buttonText="Đã hiểu"
           secondaryButtonText="Đến ví"
-          onSecondaryButtonClick={() => {
-            console.log("Chuyển đến trang ví");
+          onSecondaryButtonClick={() => {        
             setIsErrorModalOpen(false);
             router.push("/wallet");
           }}

@@ -89,6 +89,12 @@ export function UserDisputes() {
     }
   };
 
+  const getRefundTargetLabel = (target?: string) => {
+    if (target === "reporter") return "Người khiếu nại (người thuê)";
+    if (target === "reported") return "Người bị khiếu nại (người bán)";
+    return "Không áp dụng";
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -283,23 +289,37 @@ export function UserDisputes() {
                       </div>
                     )}
                     {dispute.resolution && (
-                      <div className="border-t pt-4">
-                        <label className="text-sm font-medium text-gray-700">Quyết định</label>
-                        <p className="text-gray-900">{dispute.resolution.decision}</p>
+                      <div className="border-t pt-4 space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Quyết định</label>
+                          <p className="text-gray-900">{dispute.resolution.decision}</p>
+                        </div>
                         {dispute.resolution.notes && (
-                          <>
+                          <div>
                             <label className="text-sm font-medium text-gray-700 mt-2 block">Ghi chú</label>
                             <p className="text-gray-900">{dispute.resolution.notes}</p>
-                          </>
+                          </div>
                         )}
-                        {dispute.resolution.refundAmount > 0 && (
-                          <>
-                            <label className="text-sm font-medium text-gray-700 mt-2 block">Số tiền hoàn</label>
-                            <p className="text-gray-900">
-                              {dispute.resolution.refundAmount.toLocaleString("vi-VN")} VNĐ
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs uppercase text-gray-500">Số tiền hoàn</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {(dispute.resolution.refundAmount || 0).toLocaleString("vi-VN")} VNĐ
                             </p>
-                          </>
-                        )}
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs uppercase text-gray-500">Phần trăm</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {dispute.resolution.refundPercentage ?? 0}%
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs uppercase text-gray-500">Hoàn cho</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {getRefundTargetLabel(dispute.resolution.refundTarget)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </>

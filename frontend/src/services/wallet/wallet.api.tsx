@@ -128,7 +128,7 @@ export const deleteBankAccount = async (id: string) => {
     throw err;
   }
 };
-
+// API thanh toán đơn hàng sử dụng ví của người dùng
 export const payOrderWithWallet = async (orderId: string, userId?: string) => {
   try {
     const payload = {
@@ -153,7 +153,7 @@ export const withdrawFromWallet = async (amount: number, note: string, bankAccou
     throw error;
   }
 };
-// API thanh toán đơn hàng sử dụng ví của người dùng 
+
 
 // API lấy 3 giao dịch gần nhất của ví người dùng
 export const getRecentWalletTransactions = async () => {
@@ -253,6 +253,16 @@ export const getAdminWallet = async () => {
   } catch (err) {
     console.error("[wallet.api] getAdminWallet error:", err);
     throw err;
+  }
+};
+// API admin lấy danh sách đơn hàng hoàn tiền trạng thái completed
+export const getAdminRefundOrders = async () => {
+  try {
+    const res = await instance.get("/wallet/admin/refunds"); // giống router backend bạn tạo
+    return await parseFetchResponse(res);
+  } catch (error) {
+    console.error("[wallet.api] getAdminRefundOrders error:", error);
+    throw error;
   }
 };
 

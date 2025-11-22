@@ -1,3 +1,4 @@
+const ServiceFee = require("../../models/ServiceFee.model");
 
 function getTimeUnitInDays(unitId) {
   const units = { 1: 1 / 24, 2: 1, 3: 7, 4: 30 };
@@ -43,7 +44,6 @@ module.exports.calculateTotals = async function (
     }
 
     // Lấy serviceFee rate từ database
-    const ServiceFee = require("../../models/ServiceFee.model");
     const serviceFeeRate = await ServiceFee.getCurrentServiceFeeRate();
 
     const duration = calculateDurationInUnit(startAt, endAt, priceUnitId);
@@ -51,8 +51,8 @@ module.exports.calculateTotals = async function (
 
     const rentalAmount = basePrice * duration * quantity;
     const depositAmount = depositPerUnit * quantity;
-    // Tính serviceFee trên (tiền thuê + tiền cọc) theo yêu cầu mới
-    const serviceFee = (rentalAmount + depositAmount) * (serviceFeeRate / 100);
+    // Tính serviceFee trên tiền thuê
+    const serviceFee = rentalAmount * (serviceFeeRate / 100);
 
     const unitName = getUnitName(priceUnitId);
 

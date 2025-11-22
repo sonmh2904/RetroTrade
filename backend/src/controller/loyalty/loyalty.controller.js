@@ -4,6 +4,7 @@ const User = require("../../models/User.model");
 const LoyaltyPointTransaction = require("../../models/LoyaltyPointTransaction.model");
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
+const { generateString } = require("../../utils/generateString");
 
 /**
  * Thêm RT Points cho user
@@ -280,7 +281,6 @@ async function convertPointsToDiscount(userId, points) {
     oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
     // Generate unique code (uppercase để đảm bảo consistency)
-    const { generateString } = require("../../utils/generateString");
     let code;
     let attempts = 0;
     while (!code && attempts < 10) {

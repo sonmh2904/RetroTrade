@@ -30,6 +30,49 @@ import { getDisputes, getDisputeById, assignDispute, unassignDispute, resolveDis
 import { getOrderDetails, type Order } from "@/services/auth/order.api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar";
 
+const REFUND_TARGET_OPTIONS = [
+  { value: "reporter", label: "Người khiếu nại (người thuê)" },
+  { value: "reported", label: "Người bị khiếu nại (người bán)" },
+];
+
+const REFUND_PERCENTAGE_OPTIONS = [10, 25, 50, 100];
+
+const getRefundTargetLabel = (target?: string) => {
+  if (target === "reporter") return "Người khiếu nại (người thuê)";
+  if (target === "reported") return "Người bị khiếu nại (người bán)";
+  return "Không áp dụng";
+};
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: "Chờ xác nhận",
+  confirmed: "Đã xác nhận",
+  delivering: "Đang giao",
+  delivered: "Đã giao",
+  completed: "Hoàn tất",
+  cancelled: "Đã hủy",
+  disputed: "Đang tranh chấp",
+  refunded: "Đã hoàn tiền",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "Chờ thanh toán",
+  not_paid: "Chưa thanh toán",
+  paid: "Đã thanh toán",
+  refunded: "Đã hoàn tiền",
+  partial: "Thanh toán một phần",
+  failed: "Thanh toán thất bại",
+};
+
+const getOrderStatusLabel = (status?: string) => {
+  if (!status) return "Không xác định";
+  return ORDER_STATUS_LABELS[status.toLowerCase()] || status;
+};
+
+const getPaymentStatusLabel = (status?: string) => {
+  if (!status) return "Không xác định";
+  return PAYMENT_STATUS_LABELS[status.toLowerCase()] || status;
+};
+
 export function DisputeManagement() {
   const { accessToken } = useSelector((state: RootState) => state.auth);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -50,7 +93,8 @@ export function DisputeManagement() {
   // Resolve form state
   const [decision, setDecision] = useState("");
   const [notes, setNotes] = useState("");
-  const [refundAmount, setRefundAmount] = useState("");
+  const [refundTarget, setRefundTarget] = useState<"reporter" | "reported" | "">("");
+  const [refundPercentage, setRefundPercentage] = useState<string>("");
   const [unassignReason, setUnassignReason] = useState("");
 
   // Order and dispute details for resolve dialog
@@ -61,6 +105,17 @@ export function DisputeManagement() {
   // Dispute details for detail dialog
   const [detailDisputeData, setDetailDisputeData] = useState<Dispute | null>(null);
   const [loadingDetailData, setLoadingDetailData] = useState(false);
+
+  const orderTotalForRefund =
+    orderDetails?.totalAmount ??
+    (typeof disputeDetails?.orderId === "object"
+      ? disputeDetails?.orderId?.totalAmount
+      : 0) ??
+    0;
+  const computedRefundPreview =
+    refundPercentage && orderTotalForRefund
+      ? Math.round((orderTotalForRefund * Number(refundPercentage)) / 100)
+      : 0;
 
   useEffect(() => {
     const decoded = decodeToken(accessToken);
@@ -169,6 +224,10 @@ export function DisputeManagement() {
     setResolveDialog(true);
     setOrderDetails(null);
     setDisputeDetails(null);
+     setDecision("");
+     setNotes("");
+     setRefundTarget("");
+     setRefundPercentage("");
     await fetchOrderAndDisputeDetails(dispute);
   };
 
@@ -177,11 +236,33 @@ export function DisputeManagement() {
       toast.error("Vui lòng nhập quyết định");
       return;
     }
+    if (refundTarget && !refundPercentage) {
+      toast.error("Vui lòng chọn phần trăm hoàn tiền tương ứng");
+      return;
+    }
+    if (
+      refundPercentage &&
+      !REFUND_PERCENTAGE_OPTIONS.map((value) => value.toString()).includes(
+        refundPercentage
+      )
+    ) {
+      toast.error("Chỉ hỗ trợ hoàn 10%, 25%, 50% hoặc 100%");
+      return;
+    }
+    if (refundPercentage && !refundTarget) {
+      toast.error("Vui lòng chọn người nhận hoàn tiền");
+      return;
+    }
     try {
       const payload = {
         decision: decision.trim(),
         notes: notes.trim() || undefined,
-        refundAmount: refundAmount ? parseFloat(refundAmount) : 0,
+        refundTarget: refundPercentage
+          ? (refundTarget as "reporter" | "reported")
+          : undefined,
+        refundPercentage: refundPercentage
+          ? Number(refundPercentage)
+          : undefined,
       };
       const response = await resolveDispute(selectedDispute._id, payload);
       if (response.code === 200) {
@@ -189,7 +270,8 @@ export function DisputeManagement() {
         setResolveDialog(false);
         setDecision("");
         setNotes("");
-        setRefundAmount("");
+        setRefundTarget("");
+        setRefundPercentage("");
         setSelectedDispute(null);
         setOrderDetails(null);
         setDisputeDetails(null);
@@ -465,8 +547,8 @@ export function DisputeManagement() {
 
       {/* Pagination */}
       {total > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 sm:px-6 rounded-b-lg">
-          <div className="flex justify-between flex-1 sm:hidden">
+        <div className="flex items-center justify-center px-4 py-3 bg-gray-50 border-t border-gray-200 sm:px-6 rounded-b-lg">
+          <div className="flex justify-center items-center gap-2 flex-1 sm:hidden">
             <button
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={pagination.currentPage === 1}
@@ -482,25 +564,23 @@ export function DisputeManagement() {
               Sau
             </button>
           </div>
-          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-600">
-                Hiển thị{" "}
-                <span className="font-medium text-gray-900">
-                  {total === 0
-                    ? 0
-                    : (pagination.currentPage - 1) * pagination.itemsPerPage + 1}
-                </span>{" "}
-                đến{" "}
-                <span className="font-medium text-gray-900">
-                  {Math.min(
-                    pagination.currentPage * pagination.itemsPerPage,
-                    total
-                  )}
-                </span>{" "}
-                của <span className="font-medium text-gray-900">{total}</span> kết
-                quả
-              </p>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-center sm:gap-4">
+            <div className="text-sm text-gray-600">
+              Hiển thị{" "}
+              <span className="font-medium text-gray-900">
+                {total === 0
+                  ? 0
+                  : (pagination.currentPage - 1) * pagination.itemsPerPage + 1}
+              </span>{" "}
+              đến{" "}
+              <span className="font-medium text-gray-900">
+                {Math.min(
+                  pagination.currentPage * pagination.itemsPerPage,
+                  total
+                )}
+              </span>{" "}
+              của <span className="font-medium text-gray-900">{total}</span> kết
+              quả
             </div>
             <div className="flex items-center gap-2">
               <select
@@ -673,23 +753,37 @@ export function DisputeManagement() {
                       </div>
                     )}
                     {dispute.resolution && (
-                      <div className="border-t pt-4">
-                        <label className="text-sm font-medium text-gray-700">Quyết định</label>
-                        <p className="text-gray-900">{dispute.resolution.decision}</p>
+                      <div className="border-t pt-4 space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Quyết định</label>
+                          <p className="text-gray-900">{dispute.resolution.decision}</p>
+                        </div>
                         {dispute.resolution.notes && (
-                          <>
-                            <label className="text-sm font-medium text-gray-700 mt-2 block">Ghi chú</label>
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 block">Ghi chú</label>
                             <p className="text-gray-900">{dispute.resolution.notes}</p>
-                          </>
+                          </div>
                         )}
-                        {dispute.resolution.refundAmount > 0 && (
-                          <>
-                            <label className="text-sm font-medium text-gray-700 mt-2 block">Số tiền hoàn</label>
-                            <p className="text-gray-900">
-                              {dispute.resolution.refundAmount.toLocaleString("vi-VN")} VNĐ
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Số tiền hoàn</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {(dispute.resolution.refundAmount || 0).toLocaleString("vi-VN")} VNĐ
                             </p>
-                          </>
-                        )}
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Phần trăm</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {dispute.resolution.refundPercentage ?? 0}%
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Hoàn cho</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {getRefundTargetLabel(dispute.resolution.refundTarget)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </>
@@ -743,7 +837,9 @@ export function DisputeManagement() {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-700">Trạng thái</label>
-                        <p className="text-gray-900">{orderDetails.orderStatus}</p>
+                        <p className="text-gray-900">
+                          {getOrderStatusLabel(orderDetails.orderStatus)}
+                        </p>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-700">Người thuê</label>
@@ -779,7 +875,9 @@ export function DisputeManagement() {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-700">Trạng thái thanh toán</label>
-                        <p className="text-gray-900">{orderDetails.paymentStatus || "N/A"}</p>
+                        <p className="text-gray-900">
+                          {getPaymentStatusLabel(orderDetails.paymentStatus)}
+                        </p>
                       </div>
                       {orderDetails.startAt && (
                         <div>
@@ -930,16 +1028,58 @@ export function DisputeManagement() {
                       className="min-h-[80px]"
                     />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Số tiền hoàn (VNĐ)</label>
-                    <Input
-                      type="number"
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
-                      placeholder="0"
-                      min="0"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">
+                        Hoàn tiền cho
+                      </label>
+                      <select
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
+                        value={refundTarget}
+                        onChange={(e) =>
+                          setRefundTarget(
+                            e.target.value as "reporter" | "reported" | ""
+                          )
+                        }
+                      >
+                        <option value="">Không hoàn / Không áp dụng</option>
+                        {REFUND_TARGET_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">
+                        Phần trăm hoàn
+                      </label>
+                      <select
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
+                        value={refundPercentage}
+                        onChange={(e) => setRefundPercentage(e.target.value)}
+                      >
+                        <option value="">Không hoàn</option>
+                        {REFUND_PERCENTAGE_OPTIONS.map((percent) => (
+                          <option key={percent} value={percent.toString()}>
+                            {percent}%
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
+                  {refundPercentage && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                      <p className="text-sm text-emerald-700">
+                        Số tiền dự kiến hoàn trả
+                      </p>
+                      <p className="text-2xl font-bold text-emerald-900">
+                        {computedRefundPreview
+                          ? `${computedRefundPreview.toLocaleString("vi-VN")} VNĐ`
+                          : "0 VNĐ"}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -956,10 +1096,14 @@ export function DisputeManagement() {
             >
               Hủy
             </Button>
-            <Button 
-              onClick={handleResolve} 
+            <Button
+              onClick={handleResolve}
               className="bg-indigo-600 hover:bg-indigo-700"
-              disabled={loadingDetails || !decision.trim()}
+              disabled={
+                loadingDetails ||
+                !decision.trim() ||
+                (refundPercentage && !refundTarget)
+              }
             >
               Xác nhận
             </Button>

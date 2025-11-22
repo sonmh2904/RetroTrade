@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  getOrderDetails,
-  confirmOrder,
-  startOrder,
-  renterReturn,
-  ownerComplete,
-  cancelOrder,
-} from "@/services/auth/order.api";
+import { getOrderDetails } from "@/services/auth/order.api";
 import { format } from "date-fns";
 import {
   Package,
@@ -35,8 +28,7 @@ import {
 import type { Order } from "@/services/auth/order.api";
 import Image from "next/image";
 import Link from "next/link";
-// import { getCurrentTax } from "@/services/tax/tax.api";
-import { getCurrentServiceFee } from "@/services/serviceFee/serviceFee.api";
+import OwnerLayout from "../layout";
 
 interface TimelineStep {
   status: string;
@@ -56,13 +48,6 @@ const getUnitName = (priceUnit: string | undefined): string => {
     "4": "tháng",
   };
   return map[priceUnit] || "đơn vị";
-};
-
-const calculateRentalAmount = (order: Order): number => {
-  const basePrice = order.itemSnapshot.basePrice ?? 0;
-  const duration = order.rentalDuration ?? 0;
-  const count = order.unitCount ?? 1;
-  return basePrice * duration * count;
 };
 
 // Helper functions to convert status to Vietnamese
@@ -90,17 +75,19 @@ const getPaymentStatusLabel = (status: string): string => {
   return statusMap[status.toLowerCase()] || status;
 };
 
-export default function OrderDetail() {
+export default function OwnerOrderDetail() {
+  return (
+    <OwnerLayout>
+      <OwnerOrderDetailContent />
+    </OwnerLayout>
+  );
+}
+
+function OwnerOrderDetailContent() {
   const router = useRouter();
   const { id } = router.query;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<() => Promise<void>>(
-    () => async () => {}
-  );
-  const [serviceFeeRate, setServiceFeeRate] = useState<number | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -114,53 +101,11 @@ export default function OrderDetail() {
       const res = await getOrderDetails(id as string);
       if (res.data) {
         setOrder(res.data);
-        // Lấy giá trị từ backend (không tính toán lại)
-        const rentalAmount = res.data.totalAmount || 0; // totalAmount là tiền thuê
-        const serviceFee = res.data.serviceFee || 0;
-        const depositAmount = res.data.depositAmount || 0;
-        
-        if (rentalAmount > 0 && serviceFee > 0 && depositAmount >= 0) {
-          // Calculate service fee rate from order data (chỉ để hiển thị)
-          const calculatedServiceFeeRate = Math.round(
-            (serviceFee / (rentalAmount + depositAmount)) * 100
-          );
-          setServiceFeeRate(calculatedServiceFeeRate);
-        } else {
-          // Fallback: get current service fee rate from API
-          try {
-            const serviceFeeResponse = await getCurrentServiceFee();
-            if (serviceFeeResponse.success && serviceFeeResponse.data) {
-              setServiceFeeRate(serviceFeeResponse.data.serviceFeeRate);
-            } else {
-              setServiceFeeRate(3); // Default fallback
-            }
-          } catch {
-            setServiceFeeRate(3); // Default fallback
-          }
-        }
       }
     } catch (error) {
       console.error("Lỗi tải đơn hàng:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAction = async (action: () => Promise<void>) => {
-    setPendingAction(() => action);
-    setShowConfirm(true);
-  };
-
-  const executeAction = async () => {
-    setActionLoading(true);
-    try {
-      await pendingAction();
-      await loadOrder();
-    } catch (error) {
-      alert("Thao tác thất bại");
-    } finally {
-      setShowConfirm(false);
-      setActionLoading(false);
     }
   };
 
@@ -223,17 +168,12 @@ export default function OrderDetail() {
     },
   ];
 
-  const canConfirm = order.orderStatus === "pending";
-  const canStart = order.orderStatus === "confirmed";
-  const canReturn = order.orderStatus === "progress";
-  const canComplete = order.orderStatus === "returned";
-  const canCancel = ["pending", "confirmed"].includes(order.orderStatus);
-
   // Breadcrumb data
   const breadcrumbs = [
     { label: "Trang chủ", href: "/home", icon: Home },
-    { label: "Đơn hàng", href: "/order", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/order/${id}`, icon: Eye },
+    { label: "Quản lý", href: "/owner", icon: ShoppingBag },
+    { label: "Đơn hàng", href: "/owner/orders", icon: ShoppingBag },
+    { label: "Chi tiết đơn hàng", href: `/owner/orders/${id}`, icon: Eye },
   ];
 
   return (
@@ -477,18 +417,6 @@ export default function OrderDetail() {
                       </div>
                     </div>
                   </div>
-                  <div className="pt-4 mt-4 border-t border-emerald-200">
-                    <Link
-                      href={`/store/${
-                        order.ownerId.userGuid || order.ownerId._id
-                      }`}
-                    >
-                      <button className="w-full px-4 py-2 text-sm font-medium text-emerald-600 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2">
-                        <Store className="w-4 h-4" />
-                        Xem cửa hàng
-                      </button>
-                    </Link>
-                  </div>
                 </div>
               </div>
             </div>
@@ -700,125 +628,105 @@ export default function OrderDetail() {
               </h2>
               <div className="space-y-3 text-sm">
                 {/* Hiển thị giá từ backend - không tính toán lại */}
-                {(() => {
-                  // Lấy tất cả giá trị từ backend (đã được tính sẵn)
-                  const rentalTotal = order.totalAmount || 0; // totalAmount là tiền thuê
-                  const depositTotal = order.depositAmount || 0;
-                  const serviceFeeAmount = order.serviceFee || 0;
-                  
-                  // Lấy discount info từ order
-                  const discount = order.discount;
-                  const publicDiscountAmount = discount?.amountApplied || 0;
-                  const privateDiscountAmount = discount?.secondaryAmountApplied || 0;
-                  const totalDiscountAmount = discount?.totalAmountApplied || (publicDiscountAmount + privateDiscountAmount);
-                  
-                  // Sử dụng finalAmount từ backend (đã tính sẵn)
-                  const grandTotal = order.finalAmount || Math.max(0, rentalTotal + depositTotal + serviceFeeAmount - totalDiscountAmount);
-                  
-                  return (
-                    <>
-                      {/* 1. Tiền thuê */}
-                      <div className="flex justify-between items-center py-2 border-b border-white/20">
-                        <span className="text-emerald-50">Tiền thuê</span>
-                        <span className="font-semibold text-white">
-                          {rentalTotal.toLocaleString("vi-VN")}₫
-                        </span>
-                      </div>
+                {/* 1. Tiền thuê */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-emerald-50">Tiền thuê</span>
+                  <span className="font-semibold text-white">
+                    {(order.totalAmount || 0).toLocaleString("vi-VN")}{" "}
+                    {order.currency || "₫"}
+                  </span>
+                </div>
 
-                      {/* 2. Phí dịch vụ */}
-                      <div className="flex justify-between items-center py-2 border-b border-white/20">
-                        <span className="text-yellow-200">
-                          Phí dịch vụ
-                          {serviceFeeRate !== null ? ` (${serviceFeeRate}%)` : ""}
-                        </span>
-                        <span className="font-semibold text-yellow-100">
-                          {serviceFeeAmount.toLocaleString("vi-VN")}₫
-                        </span>
-                      </div>
+                {/* 2. Phí dịch vụ */}
+                <div className="flex justify-between text-cyan-200">
+                  <span>Phí dịch vụ</span>
+                  <span>
+                    {(order.serviceFee || 0).toLocaleString("vi-VN")}{" "}
+                    {order.currency || "₫"}
+                  </span>
+                </div>
 
-                      {/* 3. Tiền cọc */}
-                      <div className="flex justify-between items-center py-2 border-b border-white/20">
-                        <span className="text-amber-200">Tiền cọc</span>
-                        <span className="font-semibold text-amber-100">
-                          {depositTotal.toLocaleString("vi-VN")}₫
-                        </span>
-                      </div>
+                {/* 3. Tiền cọc */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-amber-200">Tiền cọc</span>
+                  <span className="font-semibold text-amber-100">
+                    {(order.depositAmount || 0).toLocaleString("vi-VN")}{" "}
+                    {order.currency || "₫"}
+                  </span>
+                </div>
 
-                      {/* 4. Giảm giá (nếu có) */}
-                      {totalDiscountAmount > 0 && (
-                        <div className="space-y-1">
-                          {publicDiscountAmount > 0 && discount?.code && (
-                            <div className="flex justify-between items-center py-1 border-b border-white/10">
-                              <span className="text-emerald-50 text-sm">
-                                Giảm giá công khai ({discount.code})
-                              </span>
-                              <span className="font-semibold text-emerald-100 text-sm">
-                                -{publicDiscountAmount.toLocaleString("vi-VN")}₫
-                              </span>
-                            </div>
-                          )}
-                          {privateDiscountAmount > 0 && discount?.secondaryCode && (
-                            <div className="flex justify-between items-center py-1 border-b border-white/10">
-                              <span className="text-emerald-50 text-sm">
-                                Giảm giá riêng tư ({discount.secondaryCode})
-                              </span>
-                              <span className="font-semibold text-emerald-100 text-sm">
-                                -{privateDiscountAmount.toLocaleString("vi-VN")}₫
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center py-2 border-b border-white/20">
-                            <span className="text-emerald-50 font-semibold">Tổng giảm giá</span>
-                            <span className="font-semibold text-emerald-100">
-                              -{totalDiscountAmount.toLocaleString("vi-VN")}₫
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                {/* 4. Giảm giá (nếu có) */}
+                {order.discount &&
+                  ((order.discount.amountApplied ?? 0) > 0 ||
+                    (order.discount.secondaryAmountApplied ?? 0) > 0 ||
+                    (order.discount.totalAmountApplied ?? 0) > 0) && (
+                    <div className="flex justify-between text-green-200 border-t border-emerald-400 pt-3">
+                      <span>Giảm giá</span>
+                      <span className="font-medium">
+                        -
+                        {(
+                          order.discount.totalAmountApplied ||
+                          order.discount.amountApplied ||
+                          0
+                        ).toLocaleString("vi-VN")}{" "}
+                        {order.currency || "₫"}
+                      </span>
+                    </div>
+                  )}
 
-                      {/* 5. Tổng cộng */}
-                      <div className="border-t border-emerald-400 pt-3">
-                        <div className="flex justify-between text-lg font-bold">
-                          <span>Tổng cộng</span>
-                          <span className="text-2xl">
-                            {grandTotal.toLocaleString("vi-VN")}₫
-                          </span>
-                        </div>
-                        <div className="mt-2 text-xs text-emerald-100 text-center italic">
-                          (Hoàn lại tiền cọc sau khi trả đồ)
-                        </div>
-                      </div>
-
-                      {/* Chi tiết mã giảm giá đã sử dụng */}
-                      {discount && (discount.code || discount.secondaryCode) && (
-                        <div className="mt-4 pt-4 border-t border-emerald-400">
-                          <div className="text-xs text-emerald-200/80 space-y-1">
-                            {discount.code && (
-                              <div>
-                                <span className="font-semibold">Mã công khai:</span> {discount.code}{" "}
-                                {discount.type === "percent"
-                                  ? `(${discount.value}%)`
-                                  : `(${(discount.value ?? 0).toLocaleString("vi-VN")}₫)`}{" "}
-                                -{" "}
-                                {(discount.amountApplied || 0).toLocaleString("vi-VN")}₫
-                              </div>
+                {/* 5. Tổng thanh toán */}
+                <div className="border-t border-emerald-400 pt-3">
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Tổng thanh toán</span>
+                    <span className="text-2xl">
+                      {/* Tổng = finalAmount (tiền thuê sau discount) + deposit + serviceFee */}
+                      {order.finalAmount !== undefined
+                        ? (
+                            order.finalAmount +
+                            (order.depositAmount || 0) +
+                            (order.serviceFee || 0)
+                          ).toLocaleString("vi-VN")
+                        : (order.totalAmount || 0).toLocaleString("vi-VN")}{" "}
+                      {order.currency || "₫"}
+                    </span>
+                  </div>
+                  {/* Chi tiết mã giảm giá */}
+                  {order.discount &&
+                    (order.discount.code || order.discount.secondaryCode) && (
+                      <div className="mt-2 text-xs text-emerald-200/80">
+                        {order.discount.code && (
+                          <div>
+                            Mã công khai: {order.discount.code}{" "}
+                            {order.discount.type === "percent"
+                              ? `(${order.discount.value}%)`
+                              : `(${(order.discount.value ?? 0).toLocaleString(
+                                  "vi-VN"
+                                )}₫)`}{" "}
+                            -{" "}
+                            {(order.discount.amountApplied || 0).toLocaleString(
+                              "vi-VN"
                             )}
-                            {discount.secondaryCode && (
-                              <div>
-                                <span className="font-semibold">Mã riêng tư:</span> {discount.secondaryCode}{" "}
-                                {discount.secondaryType === "percent"
-                                  ? `(${discount.secondaryValue}%)`
-                                  : `(${(discount.secondaryValue ?? 0).toLocaleString("vi-VN")}₫)`}{" "}
-                                -{" "}
-                                {(discount.secondaryAmountApplied || 0).toLocaleString("vi-VN")}₫
-                              </div>
-                            )}
+                            ₫
                           </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
+                        )}
+                        {order.discount.secondaryCode && (
+                          <div>
+                            Mã riêng tư: {order.discount.secondaryCode}{" "}
+                            {order.discount.secondaryType === "percent"
+                              ? `(${order.discount.secondaryValue}%)`
+                              : `(${order.discount.secondaryValue?.toLocaleString(
+                                  "vi-VN"
+                                )}₫)`}{" "}
+                            -{" "}
+                            {(
+                              order.discount.secondaryAmountApplied || 0
+                            ).toLocaleString("vi-VN")}
+                            ₫
+                          </div>
+                        )}
+                      </div>
+                    )}
+                </div>
               </div>
             </div>
 
@@ -881,13 +789,6 @@ export default function OrderDetail() {
                   )}
                 </span>
               </div>
-              {!order.isContractSigned && (
-                <Link href={`/auth/contract/sign/${id}`}>
-                  <button className="mt-3 w-full bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 transition">
-                    Ký hợp đồng ngay
-                  </button>
-                </Link>
-              )}
             </div>
 
             {/* Tiện ích */}
@@ -902,40 +803,7 @@ export default function OrderDetail() {
           </div>
         </div>
       </div>
-
-      {/* Confirm Modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="w-8 h-8 text-yellow-600" />
-              <h3 className="font-bold text-lg">Xác nhận hành động</h3>
-            </div>
-            <p className="text-gray-600 mb-6">
-              Bạn có chắc chắn muốn thực hiện hành động này?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="flex-1 py-2 border border-gray-300 rounded-xl font-medium"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={executeAction}
-                disabled={actionLoading}
-                className="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-70 flex items-center justify-center gap-2"
-              >
-                {actionLoading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  "Xác nhận"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+

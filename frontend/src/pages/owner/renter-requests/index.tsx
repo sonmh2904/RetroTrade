@@ -257,7 +257,7 @@ function RenterRequestsContent() {
             <Card
               key={order._id}
               className="transition hover:shadow-lg cursor-pointer"
-              onClick={() => router.push(`/order/${order._id}`)}
+              onClick={() => router.push(`/owner/orders/${order._id}`)}
             >
               {/* Header mã đơn */}
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 border-b border-blue-200">
@@ -302,7 +302,10 @@ function RenterRequestsContent() {
                   </div>
                 </div>
                 <div className="text-right font-semibold text-blue-600">
-                  {order.totalAmount.toLocaleString()} {order.currency}
+                  {order.finalAmount !== undefined
+                    ? order.finalAmount.toLocaleString()
+                    : "-"}{" "}
+                  {order.currency}
                 </div>
               </CardHeader>
 

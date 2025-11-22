@@ -13,6 +13,7 @@ import { notificationSSE } from "@/services/auth/notification.sse";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
+import { RootState } from "@/store/redux_store";
 
 interface NotificationIconProps {
   className?: string;
@@ -23,33 +24,101 @@ const NOTIFICATIONS_LIMIT = 20;
 
 export function NotificationIcon({ className }: NotificationIconProps) {
   const router = useRouter();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { accessToken, user } = useSelector((state: any) => state.auth);
+  const { accessToken, user } = useSelector((state: RootState) => state.auth);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sseConnected, setSseConnected] = useState(false);
 
+  const parseMetaData = useCallback((metaData?: string) => {
+    if (!metaData) return null;
+    try {
+      const parsed = JSON.parse(metaData);
+      if (typeof parsed === "object" && parsed !== null) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch (error) {
+      console.warn("[Notifications] Failed to parse metadata:", error);
+    }
+    return null;
+  }, []);
+
+  const getNotificationRedirectPath = useCallback(
+    (notification: Notification) => {
+      const meta = parseMetaData(notification.metaData);
+
+      if (meta && typeof meta === "object") {
+        // Direct redirect URL if backend provided one
+        if (typeof meta.redirectUrl === "string") {
+          return meta.redirectUrl;
+        }
+
+        // Order related notifications
+        if (meta.orderId) {
+          return `/my-orders/${meta.orderId}`;
+        }
+
+        // Dispute related notifications
+        if (meta.disputeId) {
+          if (user?.role === "moderator") {
+            return `/moderator/dispute/${meta.disputeId}`;
+          }
+          return `/dispute/${meta.disputeId}`;
+        }
+
+        // Blog post or community notifications
+        if (meta.postId) {
+          return `/blog/${meta.postId}`;
+        }
+
+        // Product or item notifications
+        if (meta.productId || meta.itemId) {
+          const productId = (meta.productId || meta.itemId) as string;
+          return `/products/details?id=${productId}`;
+        }
+      }
+
+      // Type-based fallback when no metadata route
+      switch (notification.notificationType) {
+        case "Identity Verified":
+        case "Profile Updated":
+        case "Avatar Updated":
+          return "/auth/profile";
+        case "Order Created":
+        case "Order Confirmed":
+        case "Order Completed":
+        case "Order Started":
+        case "Order Returned":
+        case "Order Cancelled":
+        case "Order Disputed":
+        case "Payment Received":
+          return "/my-orders";
+        case "Product Approved":
+        case "Product Rejected":
+          return "/owner/myproducts";
+        case "Loyalty":
+          return "/auth/profile";
+        default:
+          return `/auth/notifications/${notification._id}`;
+      }
+    },
+    [parseMetaData, user?.role]
+  );
+
 
   const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await notificationApi.getNotifications({ 
-        limit: NOTIFICATIONS_LIMIT, 
-        skip: 0 
+      const data = await notificationApi.getNotifications({
+        limit: NOTIFICATIONS_LIMIT,
+        skip: 0
       });
-      
+
       if (data?.items) {
         setNotifications(data.items);
-        // Tính unread count từ danh sách notifications ban đầu như fallback
-        // SSE sẽ override giá trị này sau khi kết nối và nhận được unread count chính xác từ database
         const calculatedUnreadCount = data.items.filter((n: Notification) => !n.isRead).length;
-        console.log('[Notifications] Calculated unread count from notifications list:', calculatedUnreadCount);
-        // Luôn cập nhật unread count từ danh sách notifications ban đầu
-        // SSE sẽ override giá trị này sau khi kết nối và nhận được unread count chính xác từ database
         setUnreadCount(calculatedUnreadCount);
-        console.log('[Notifications] Updated unread count from notifications list:', calculatedUnreadCount);
       }
     } catch (error) {
       console.error("Error fetching notifications:", error);
@@ -59,15 +128,26 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     }
   }, []);
 
-  // SSE setup - kết nối với SSE stream để nhận notifications realtime
+  // Fetch once on mount so header always has latest data
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Refetch whenever auth info becomes available/changes
+  useEffect(() => {
+    if (!user || !accessToken) return;
+    fetchNotifications();
+  }, [user, accessToken, fetchNotifications]);
+
+  // SSE setup
   useEffect(() => {
     // Chỉ kết nối khi có user và token
     if (!user || !accessToken) {
       return;
     }
 
-    // Fetch initial notifications list ngay khi component mount
-    fetchNotifications();
+    // Disconnect previous SSE (nếu có) để đảm bảo dùng token mới nhất
+    notificationSSE.disconnect();
 
     // Kết nối SSE để nhận notifications và unread count realtime
     notificationSSE.connect({
@@ -83,21 +163,22 @@ export function NotificationIcon({ className }: NotificationIconProps) {
       },
       onNotification: (notification: Notification) => {
         console.log('[Notifications] New notification received:', notification);
-        
+
         // Thêm notification mới vào đầu danh sách
         setNotifications(prev => {
           // Kiểm tra xem notification đã tồn tại chưa (tránh duplicate)
           const exists = prev.some(n => n._id === notification._id);
           if (exists) return prev;
-          
+
           // Thêm vào đầu danh sách và giới hạn số lượng
           return [notification, ...prev].slice(0, NOTIFICATIONS_LIMIT);
         });
-        
-        // Không tăng unread count thủ công ở đây
-        // Backend sẽ gửi unread count update qua SSE callback (onUnreadCount)
-        // Nếu notification chưa đọc, backend sẽ tự động gửi unread count update
-        
+
+
+        if (!notification.isRead) {
+          setUnreadCount((prev) => prev + 1);
+        }
+
         // Hiển thị toast notification
         toast.info(notification.title, {
           description: notification.body,
@@ -115,13 +196,12 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         console.error('[Notifications] SSE error:', error);
         setSseConnected(false);
       }
-    });
+    }, accessToken);
 
     // Cleanup: disconnect SSE khi component unmount hoặc user logout
     return () => {
       notificationSSE.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, accessToken]); // Reconnect khi user hoặc token thay đổi
 
   // Refresh notifications when dropdown opens (SSE đã tự động cập nhật unread count)
@@ -129,8 +209,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     if (isOpen) {
       fetchNotifications();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, fetchNotifications]);
 
   const handleMarkAsRead = useCallback(async (id: string, event?: React.MouseEvent) => {
     if (event) {
@@ -138,7 +217,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     }
     try {
       await notificationApi.markAsRead(id);
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.map(n => n._id === id ? { ...n, isRead: true } : n)
       );
       // Không cập nhật unread count thủ công ở đây
@@ -203,7 +282,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
 
   // Unread count được cập nhật realtime từ SSE
   const displayUnreadCount = unreadCount;
-  
+
   // Debug: Log unread count changes
   useEffect(() => {
     console.log('[Notifications] Unread count changed to:', unreadCount, 'Display count:', displayUnreadCount);
@@ -213,16 +292,16 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     if (event) {
       event.stopPropagation();
     }
-    
+
     // Mark as read if unread
     if (!notification.isRead) {
       handleMarkAsRead(notification._id, event);
     }
-    
-    // Navigate to detail page
-    router.push(`/auth/notifications/${notification._id}`);
+
+    const targetUrl = getNotificationRedirectPath(notification);
+    router.push(targetUrl);
     setIsOpen(false);
-  }, [router, handleMarkAsRead]);
+  }, [router, handleMarkAsRead, getNotificationRedirectPath]);
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -240,8 +319,8 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent 
-        className="w-96 max-h-[600px] overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-xl rounded-xl z-[200]" 
+      <DropdownMenuContent
+        className="w-96 max-h-[600px] overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-xl rounded-xl z-[200]"
         align="end"
         sideOffset={12}
         alignOffset={0}
@@ -278,7 +357,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
               Xem tất cả
             </Button>
           </div>
-          
+
           {displayUnreadCount > 0 && (
             <div className="flex justify-end">
               <Button
@@ -318,42 +397,39 @@ export function NotificationIcon({ className }: NotificationIconProps) {
               {notifications.map((notification) => (
                 <div
                   key={notification._id}
-                  className={`group relative p-4 cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-                    !notification.isRead 
-                      ? 'bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 border-l-4 border-blue-500' 
-                      : 'hover:border-l-4 hover:border-gray-300 dark:hover:border-gray-700'
-                  }`}
+                  className={`group relative p-4 cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-800/50 ${!notification.isRead
+                    ? 'bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 border-l-4 border-blue-500'
+                    : 'hover:border-l-4 hover:border-gray-300 dark:hover:border-gray-700'
+                    }`}
                   onClick={(e) => handleNotificationClick(notification, e)}
                 >
                   <div className="flex items-start gap-3">
                     {/* Icon */}
-                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                      !notification.isRead
-                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md'
-                        : 'bg-gray-100 dark:bg-gray-800'
-                    }`}>
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg ${!notification.isRead
+                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md'
+                      : 'bg-gray-100 dark:bg-gray-800'
+                      }`}>
                       {getNotificationIcon(notification.notificationType)}
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <p className={`text-sm font-semibold line-clamp-1 ${
-                          !notification.isRead 
-                            ? 'text-gray-900 dark:text-white' 
-                            : 'text-gray-700 dark:text-gray-300'
-                        }`}>
+                        <p className={`text-sm font-semibold line-clamp-1 ${!notification.isRead
+                          ? 'text-gray-900 dark:text-white'
+                          : 'text-gray-700 dark:text-gray-300'
+                          }`}>
                           {notification.title}
                         </p>
                         {!notification.isRead && (
                           <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-1.5 animate-pulse"></span>
                         )}
                       </div>
-                      
+
                       <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2 leading-relaxed">
                         {notification.body}
                       </p>
-                      
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500 dark:text-gray-500">
@@ -363,7 +439,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
                             {notification.notificationType}
                           </span>
                         </div>
-                        
+
                         {!notification.isRead && (
                           <Button
                             variant="ghost"
@@ -380,7 +456,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Hover indicator */}
                   <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </div>
