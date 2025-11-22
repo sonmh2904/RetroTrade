@@ -92,6 +92,12 @@ export const verificationRequestAPI = {
     return await parseResponse<VerificationRequest[]>(response);
   },
 
+  // User: Lấy chi tiết yêu cầu của mình
+  getMyVerificationRequestById: async (id: string): Promise<ApiResponse<VerificationRequest>> => {
+    const response = await api.get(`/auth/verification-request/${id}`);
+    return await parseResponse<VerificationRequest>(response);
+  },
+
   // Moderator: Lấy tất cả yêu cầu
   getAllVerificationRequests: async (params?: { status?: string; assignedTo?: string }): Promise<ApiResponse<VerificationRequest[]>> => {
     const query = new URLSearchParams(
