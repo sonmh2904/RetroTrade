@@ -365,6 +365,13 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
 
                       {/* Order Details */}
                       <div className="flex-1 space-y-4">
+                        {/* Product Name */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            {order.itemSnapshot?.title || order.itemId?.Title || "Sản phẩm không xác định"}
+                          </h3>
+                        </div>
+
                         {/* Order Status & Payment Status */}
                         <div className="flex flex-wrap items-center gap-3">
                           <div className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
@@ -452,7 +459,7 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                                 Xem chi tiết
                               </Button>
                             ) : (
-                              <Link href={`/auth/order/${order._id}`}>
+                              <Link href={`/my-orders/${order._id}`}>
                                 <Button
                                   variant="outline"
                                   className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"

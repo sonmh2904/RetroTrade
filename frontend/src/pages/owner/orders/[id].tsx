@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  getOrderDetails,
-  confirmOrder,
-  startOrder,
-  renterReturn,
-  ownerComplete,
-  cancelOrder,
-} from "@/services/auth/order.api";
+import { getOrderDetails } from "@/services/auth/order.api";
 import { format } from "date-fns";
 import {
   Package,
@@ -35,7 +28,8 @@ import {
 import type { Order } from "@/services/auth/order.api";
 import Image from "next/image";
 import Link from "next/link";
-// import { getCurrentTax } from "@/services/tax/tax.api";
+import OwnerLayout from "../layout";
+
 interface TimelineStep {
   status: string;
   label: string;
@@ -54,13 +48,6 @@ const getUnitName = (priceUnit: string | undefined): string => {
     "4": "tháng",
   };
   return map[priceUnit] || "đơn vị";
-};
-
-const calculateRentalAmount = (order: Order): number => {
-  const basePrice = order.itemSnapshot.basePrice ?? 0;
-  const duration = order.rentalDuration ?? 0;
-  const count = order.unitCount ?? 1;
-  return basePrice * duration * count;
 };
 
 // Helper functions to convert status to Vietnamese
@@ -88,17 +75,19 @@ const getPaymentStatusLabel = (status: string): string => {
   return statusMap[status.toLowerCase()] || status;
 };
 
-export default function OrderDetail() {
+export default function OwnerOrderDetail() {
+  return (
+    <OwnerLayout>
+      <OwnerOrderDetailContent />
+    </OwnerLayout>
+  );
+}
+
+function OwnerOrderDetailContent() {
   const router = useRouter();
   const { id } = router.query;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<() => Promise<void>>(
-    () => async () => {}
-  );
-  const [taxRate, setTaxRate] = useState<number | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -112,48 +101,11 @@ export default function OrderDetail() {
       const res = await getOrderDetails(id as string);
       if (res.data) {
         setOrder(res.data);
-        const rentalAmount = calculateRentalAmount(res.data);
-        const serviceFee = res.data.serviceFee || 0;
-        if (rentalAmount > 0 && serviceFee > 0) {
-          const calculatedTaxRate = Math.round(
-            (serviceFee / rentalAmount) * 100
-          );
-          setTaxRate(calculatedTaxRate);
-        } else {
-          try {
-            const taxResponse = await getCurrentTax();
-            if (taxResponse.success && taxResponse.data) {
-              setTaxRate(taxResponse.data.taxRate);
-            } else {
-              setTaxRate(3);
-            }
-          } catch {
-            setTaxRate(3);
-          }
-        }
       }
     } catch (error) {
       console.error("Lỗi tải đơn hàng:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAction = async (action: () => Promise<void>) => {
-    setPendingAction(() => action);
-    setShowConfirm(true);
-  };
-
-  const executeAction = async () => {
-    setActionLoading(true);
-    try {
-      await pendingAction();
-      await loadOrder();
-    } catch (error) {
-      alert("Thao tác thất bại");
-    } finally {
-      setShowConfirm(false);
-      setActionLoading(false);
     }
   };
 
@@ -216,17 +168,12 @@ export default function OrderDetail() {
     },
   ];
 
-  const canConfirm = order.orderStatus === "pending";
-  const canStart = order.orderStatus === "confirmed";
-  const canReturn = order.orderStatus === "progress";
-  const canComplete = order.orderStatus === "returned";
-  const canCancel = ["pending", "confirmed"].includes(order.orderStatus);
-
   // Breadcrumb data
   const breadcrumbs = [
     { label: "Trang chủ", href: "/home", icon: Home },
-    { label: "Đơn hàng", href: "/order", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/order/${id}`, icon: Eye },
+    { label: "Quản lý", href: "/owner", icon: ShoppingBag },
+    { label: "Đơn hàng", href: "/owner/orders", icon: ShoppingBag },
+    { label: "Chi tiết đơn hàng", href: `/owner/orders/${id}`, icon: Eye },
   ];
 
   return (
@@ -470,145 +417,187 @@ export default function OrderDetail() {
                       </div>
                     </div>
                   </div>
-                  <div className="pt-4 mt-4 border-t border-emerald-200">
-                    <Link
-                      href={`/store/${
-                        order.ownerId.userGuid || order.ownerId._id
-                      }`}
-                    >
-                      <button className="w-full px-4 py-2 text-sm font-medium text-emerald-600 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2">
-                        <Store className="w-4 h-4" />
-                        Xem cửa hàng
-                      </button>
-                    </Link>
-                  </div>
                 </div>
               </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h2 className="font-bold text-lg mb-4">Hành trình đơn hàng</h2>
+              <h2 className="font-bold text-lg mb-6 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-emerald-600" />
+                Hành trình đơn hàng
+              </h2>
 
-              <div className="space-y-4">
-                {order.orderStatus === "cancelled" ? (
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 text-red-700">
-                      <XCircle className="w-5 h-5" />
-                    </div>
-
-                    <div className="flex-1">
-                      <p className="font-medium text-red-700">Đã hủy</p>
-
-                      {order.updatedAt && (
-                        <p className="text-xs text-gray-500">
-                          {format(
-                            new Date(order.updatedAt),
-                            "dd/MM/yyyy HH:mm"
-                          )}
-                        </p>
-                      )}
-
-                      {order.cancelReason && (
-                        <div
-                          className="mt-2 flex items-start gap-2 animate-fadeIn"
-                          title={String(order.cancelReason)}
-                        >
-                          <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5" />
-                          <p className="text-xs text-amber-600 italic max-w-[250px] truncate">
-                            Lý do: {order.cancelReason}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+              {order.orderStatus === "cancelled" ? (
+                <div className="flex items-center gap-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center bg-red-100 border-4 border-white shadow-lg flex-shrink-0">
+                    <XCircle className="w-6 h-6 text-red-600" />
                   </div>
-                ) : order.orderStatus === "disputed" ? (
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 text-red-700">
-                      <AlertCircle className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium text-red-700">
-                        Đang Tranh chấp
-                      </p>
-                      <p className="text-xs text-gray-500">
+                  <div className="flex-1">
+                    <p className="font-semibold text-red-700 mb-1">Đã hủy đơn hàng</p>
+                    {order.updatedAt && (
+                      <p className="text-xs text-red-600 mb-2">
                         {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
                       </p>
-
-                      {/* NÚT CHỈ HIỆN KHI CÓ disputeId */}
-                      {order.disputeId ? (
-                        <button
-                          onClick={() => {
-                            const disputeId =
-                              typeof order.disputeId === "string"
-                                ? order.disputeId
-                                : order.disputeId?._id;
-
-                            if (disputeId) {
-                              router.push(`/dispute/${disputeId}`);
-                            } else {
-                              console.error(
-                                "Không tìm thấy disputeId hợp lệ:",
-                                order.disputeId
-                              );
-                            }
-                          }}
-                          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 underline underline-offset-2 transition-colors group"
-                        >
-                          <Eye className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                          Chi tiết tranh chấp
-                        </button>
-                      ) : (
-                        <p className="text-xs text-gray-400 mt-3">
-                          Đang tải thông tin tranh chấp...
+                    )}
+                    {order.cancelReason && (
+                      <div className="mt-2 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-amber-700">
+                          <span className="font-medium">Lý do:</span> {order.cancelReason}
                         </p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  timelineSteps
-                    .filter((s) => s.status !== "cancelled")
-                    .map((step, idx) => (
-                      <div key={idx} className="flex items-center gap-4">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            step.current
-                              ? "bg-emerald-600 text-white"
-                              : step.active
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-gray-200 text-gray-400"
-                          }`}
-                        >
-                          {step.active || step.current ? (
-                            <CheckCircle2 className="w-5 h-5" />
-                          ) : (
-                            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p
-                            className={`font-medium ${
-                              step.current
-                                ? "text-emerald-700"
-                                : step.active
-                                ? "text-gray-700"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            {step.label}
-                          </p>
-                          {step.current && (
-                            <p className="text-xs text-gray-500">
-                              Đang xử lý...
-                            </p>
-                          )}
-                        </div>
-                        {idx < timelineSteps.length - 2 && (
-                          <ChevronRight className="w-5 h-5 text-gray-300" />
-                        )}
                       </div>
-                    ))
-                )}
-              </div>
+                    )}
+                  </div>
+                </div>
+              ) : order.orderStatus === "disputed" ? (
+                <div className="flex items-center gap-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center bg-orange-100 border-4 border-white shadow-lg animate-pulse flex-shrink-0">
+                    <AlertCircle className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-orange-700 mb-1">Đang tranh chấp</p>
+                    <p className="text-xs text-orange-600 mb-3">
+                      {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
+                    </p>
+                    {order.disputeId ? (
+                      <button
+                        onClick={() => {
+                          const disputeId =
+                            typeof order.disputeId === "string"
+                              ? order.disputeId
+                              : order.disputeId?._id;
+                          if (disputeId) {
+                            router.push(`/dispute/${disputeId}`);
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+                      >
+                        <Eye className="w-4 h-4" />
+                        Xem chi tiết tranh chấp
+                      </button>
+                    ) : (
+                      <p className="text-xs text-orange-500">Đang tải thông tin tranh chấp...</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  {/* Horizontal timeline line */}
+                  <div className="absolute top-6 left-0 right-0 h-0.5 bg-gray-200"></div>
+
+                  <div className="relative flex items-start justify-between gap-2 overflow-x-auto pb-4">
+                    {timelineSteps
+                      .filter((s) => s.status !== "cancelled" && s.status !== "disputed")
+                      .map((step, idx, arr) => {
+                        const isLast = idx === arr.length - 1;
+                        const getStepIcon = () => {
+                          switch (step.status) {
+                            case "pending":
+                              return <Clock className="w-5 h-5" />;
+                            case "confirmed":
+                              return <CheckCircle2 className="w-5 h-5" />;
+                            case "progress":
+                              return <Truck className="w-5 h-5" />;
+                            case "returned":
+                              return <RefreshCw className="w-5 h-5" />;
+                            case "completed":
+                              return <CheckCircle2 className="w-5 h-5" />;
+                            default:
+                              return <Package className="w-5 h-5" />;
+                          }
+                        };
+
+                        const getStepDate = () => {
+                          switch (step.status) {
+                            case "pending":
+                              return order.createdAt;
+                            case "confirmed":
+                            case "progress":
+                            case "returned":
+                            case "completed":
+                              return order.updatedAt;
+                            default:
+                              return null;
+                          }
+                        };
+
+                        const stepDate = getStepDate();
+
+                        return (
+                          <div key={idx} className="relative flex flex-col items-center flex-1 min-w-[120px]">
+                            {/* Icon */}
+                            <div className="relative z-10 mb-3">
+                              <div
+                                className={`w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-all duration-300 ${
+                                  step.current
+                                    ? "bg-emerald-600 text-white scale-110 ring-4 ring-emerald-200"
+                                    : step.active
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-gray-200 text-gray-400"
+                                }`}
+                              >
+                                {getStepIcon()}
+                              </div>
+                            </div>
+                            
+                            {/* Connecting line - horizontal */}
+                            {!isLast && (
+                              <div 
+                                className={`absolute top-6 left-1/2 w-full h-0.5 ${
+                                  arr[idx + 1]?.active 
+                                    ? "bg-emerald-300" 
+                                    : "bg-gray-200"
+                                }`}
+                                style={{ width: 'calc(100% - 48px)', left: 'calc(50% + 24px)' }}
+                              ></div>
+                            )}
+                            
+                            {/* Content */}
+                            <div className="text-center w-full">
+                              <div
+                                className={`rounded-lg p-3 transition-all duration-300 ${
+                                  step.current
+                                    ? "bg-emerald-50 border-2 border-emerald-200 shadow-sm"
+                                    : step.active
+                                    ? "bg-gray-50 border border-gray-200"
+                                    : "bg-transparent"
+                                }`}
+                              >
+                                <p
+                                  className={`font-semibold text-sm mb-1 ${
+                                    step.current
+                                      ? "text-emerald-700"
+                                      : step.active
+                                      ? "text-gray-800"
+                                      : "text-gray-400"
+                                  }`}
+                                >
+                                  {step.label}
+                                </p>
+                                {step.current && (
+                                  <span className="inline-block px-2 py-0.5 bg-emerald-600 text-white text-xs font-medium rounded-full animate-pulse mb-1">
+                                    Hiện tại
+                                  </span>
+                                )}
+                                {stepDate && (
+                                  <p className="text-xs text-gray-500 mt-1 flex items-center justify-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {format(new Date(stepDate), "dd/MM HH:mm")}
+                                  </p>
+                                )}
+                                {step.current && !stepDate && (
+                                  <p className="text-xs text-emerald-600 mt-1 italic">
+                                    Đang xử lý...
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Địa chỉ */}
@@ -638,27 +627,35 @@ export default function OrderDetail() {
                 Chi tiết thanh toán
               </h2>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span>Tiền thuê</span>
-                  <span className="font-medium">
-                    {calculateRentalAmount(order).toLocaleString("vi-VN")}₫
+                {/* Hiển thị giá từ backend - không tính toán lại */}
+                {/* 1. Tiền thuê */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-emerald-50">Tiền thuê</span>
+                  <span className="font-semibold text-white">
+                    {(order.totalAmount || 0).toLocaleString("vi-VN")}{" "}
+                    {order.currency || "₫"}
                   </span>
                 </div>
 
+                {/* 2. Phí dịch vụ */}
                 <div className="flex justify-between text-cyan-200">
                   <span>Phí dịch vụ</span>
                   <span>
-                    {(order.serviceFee || 0).toLocaleString("vi-VN")}₫
+                    {(order.serviceFee || 0).toLocaleString("vi-VN")}{" "}
+                    {order.currency || "₫"}
                   </span>
                 </div>
 
-                <div className="flex justify-between text-amber-200">
-                  <span>Tiền cọc (hoàn lại)</span>
-                  <span>
-                    {(order.depositAmount || 0).toLocaleString("vi-VN")}₫
+                {/* 3. Tiền cọc */}
+                <div className="flex justify-between items-center py-2 border-b border-white/20">
+                  <span className="text-amber-200">Tiền cọc</span>
+                  <span className="font-semibold text-amber-100">
+                    {(order.depositAmount || 0).toLocaleString("vi-VN")}{" "}
+                    {order.currency || "₫"}
                   </span>
                 </div>
 
+                {/* 4. Giảm giá (nếu có) */}
                 {order.discount &&
                   ((order.discount.amountApplied ?? 0) > 0 ||
                     (order.discount.secondaryAmountApplied ?? 0) > 0 ||
@@ -671,22 +668,29 @@ export default function OrderDetail() {
                           order.discount.totalAmountApplied ||
                           order.discount.amountApplied ||
                           0
-                        ).toLocaleString("vi-VN")}
-                        ₫
+                        ).toLocaleString("vi-VN")}{" "}
+                        {order.currency || "₫"}
                       </span>
                     </div>
                   )}
 
+                {/* 5. Tổng thanh toán */}
                 <div className="border-t border-emerald-400 pt-3">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Tổng thanh toán</span>
                     <span className="text-2xl">
-                      {(order.finalAmount || order.totalAmount).toLocaleString(
-                        "vi-VN"
-                      )}
-                      ₫
+                      {/* Tổng = finalAmount (tiền thuê sau discount) + deposit + serviceFee */}
+                      {order.finalAmount !== undefined
+                        ? (
+                            order.finalAmount +
+                            (order.depositAmount || 0) +
+                            (order.serviceFee || 0)
+                          ).toLocaleString("vi-VN")
+                        : (order.totalAmount || 0).toLocaleString("vi-VN")}{" "}
+                      {order.currency || "₫"}
                     </span>
                   </div>
+                  {/* Chi tiết mã giảm giá */}
                   {order.discount &&
                     (order.discount.code || order.discount.secondaryCode) && (
                       <div className="mt-2 text-xs text-emerald-200/80">
@@ -785,13 +789,6 @@ export default function OrderDetail() {
                   )}
                 </span>
               </div>
-              {!order.isContractSigned && (
-                <Link href={`/auth/contract/sign/${id}`}>
-                  <button className="mt-3 w-full bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 transition">
-                    Ký hợp đồng ngay
-                  </button>
-                </Link>
-              )}
             </div>
 
             {/* Tiện ích */}
@@ -806,40 +803,7 @@ export default function OrderDetail() {
           </div>
         </div>
       </div>
-
-      {/* Confirm Modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="w-8 h-8 text-yellow-600" />
-              <h3 className="font-bold text-lg">Xác nhận hành động</h3>
-            </div>
-            <p className="text-gray-600 mb-6">
-              Bạn có chắc chắn muốn thực hiện hành động này?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="flex-1 py-2 border border-gray-300 rounded-xl font-medium"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={executeAction}
-                disabled={actionLoading}
-                className="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-70 flex items-center justify-center gap-2"
-              >
-                {actionLoading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  "Xác nhận"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+

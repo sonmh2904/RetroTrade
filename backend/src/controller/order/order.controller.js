@@ -17,6 +17,8 @@ const {
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
+const DiscountController = require("./discount.controller");
+const loyaltyController = require("../loyalty/loyalty.controller");
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
@@ -103,8 +105,6 @@ module.exports = {
       const publicCode = publicDiscountCode || discountCode;
       const privateCode = privateDiscountCode;
 
-      const DiscountController = require("./discount.controller");
-
       // --- Public Discount ---
       if (publicCode) {
         const result = await DiscountController.validateAndCompute({
@@ -175,7 +175,11 @@ module.exports = {
       }
 
       // === TÍNH TOÁN CUỐI CÙNG ===
-      const finalOrderAmount = Math.max(0, totalAmount - totalDiscountAmount);
+      // finalAmount = tiền thuê sau khi trừ discount (discount chỉ áp dụng trên tiền thuê)
+      const finalOrderAmount = Math.max(0, rentalAmount - totalDiscountAmount);
+      
+      // Tổng tiền khách hàng phải trả = tiền thuê - discount + tiền cọc + phí dịch vụ
+      // = finalOrderAmount + depositAmount + serviceFee
 
       const cleanDiscountInfo = discountInfo
         ? {
@@ -208,7 +212,7 @@ module.exports = {
             unitCount: quantity,
             startAt: new Date(finalStartAt),
             endAt: new Date(finalEndAt),
-            totalAmount,
+            totalAmount: rentalAmount, // Lưu rentalAmount vào totalAmount (tiền thuê)
             discount: cleanDiscountInfo || undefined,
             finalAmount: finalOrderAmount,
             depositAmount,
@@ -280,8 +284,9 @@ module.exports = {
         data: {
           orderId: newOrder._id.toString(),
           orderGuid: newOrder.orderGuid,
-          totalAmount,
-          finalAmount: finalOrderAmount,
+          rentalAmount: rentalAmount, // Tiền thuê
+          totalAmount: rentalAmount, // Giữ lại để tương thích (totalAmount = rentalAmount)
+          finalAmount: finalOrderAmount, // Tổng cuối cùng sau khi trừ discount
           discount: cleanDiscountInfo,
           depositAmount,
           serviceFee,
@@ -350,7 +355,6 @@ module.exports = {
 
       // Cộng RT Points cho renter khi order được xác nhận (không block nếu lỗi)
       try {
-        const loyaltyController = require("../loyalty/loyalty.controller");
         const {
           createNotification,
         } = require("../../middleware/createNotification");

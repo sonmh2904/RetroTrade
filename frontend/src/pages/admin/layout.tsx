@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSelector, useDispatch } from "react-redux";
 import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
 import { toast } from "sonner";
-import { Crown, Users, BarChart3, Settings, Home, Wallet, Percent,Contact, Tag, AlertTriangle, FileText } from "lucide-react";
+import { Crown, Users, BarChart3, Settings, Home, Wallet, Percent,Contact, Tag, AlertTriangle, FileText, LineChart } from "lucide-react";
 import { AdminHeader } from "@/components/ui/admin/admin-header";
 import { RootState } from "@/store/redux_store";
 import { logout } from "@/store/auth/authReducer";
@@ -70,13 +70,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const menus = [
     { icon: Home, label: "Trang chủ", key: "home", href: "/home" },
+    { icon: LineChart, label: "Dashboard Admin", key: "analytics", href: "/admin/dashboard" },
     { icon: Users, label: "Người dùng", key: "users", href: "/admin/user-management" },
     { icon: FileText, label: "Điều khoản", key: "terms", href: "/admin/terms" },
     { icon: Wallet, label: "Quản lý ví", key: "wallet", href: "/admin/wallet" },
     { icon: Contact, label: "Quản lý hợp đồng", key: "contract", href: "/admin/contract" },
     { icon: Percent, label: "Quản lý Phí dịch vụ", key: "serviceFee", href: "/admin/serviceFee-management" },
     { icon: Tag, label: "Mã giảm giá", key: "discounts", href: "/admin/discount-management" },
-    { icon: AlertTriangle, label: "Khiếu nại ban tài khoản", key: "complaints", href: "/admin/complaints" },
     { icon: BarChart3, label: "Lịch sử thay đổi", key: "audit", href: "/admin/audit-logs" },
     { icon: Settings, label: "Cài đặt", key: "settings", href: "/admin/settings" },
   ];

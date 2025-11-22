@@ -4,11 +4,10 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/router";
-import dynamic from 'next/dynamic';
-
+import dynamic from "next/dynamic";
 
 const ProductComparisonModal = dynamic(
-  () => import('@/components/ui/products/ProductComparisonModal'),
+  () => import("@/components/ui/products/ProductComparisonModal"),
   { ssr: false }
 );
 import AddToCartButton from "@/components/ui/common/AddToCartButton";
@@ -19,9 +18,13 @@ import {
   addToFavorites,
   removeFromFavorites,
   getFavorites,
-  getComparableProducts
+  getComparableProducts,
 } from "@/services/products/product.api";
-import { createConversation, getConversations, Conversation } from "@/services/messages/messages.api";
+import {
+  createConversation,
+  getConversations,
+  Conversation,
+} from "@/services/messages/messages.api";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
 import {
@@ -44,7 +47,7 @@ import RatingSection from "@/components/ui/products/rating";
 import { useDispatch } from "react-redux";
 import { fetchOrderList } from "@/store/order/orderActions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 interface ProductDetailDto {
   _id: string;
   Title: string;
@@ -109,6 +112,7 @@ export default function ProductDetailPage() {
   const [ownerTopItems, setOwnerTopItems] = useState<any[]>([]);
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [ratings, setRatings] = useState<Array<{ rating: number }>>([]);
   const isAuthenticated = useSelector(
     (state: RootState) => !!state.auth.accessToken
   );
@@ -134,6 +138,25 @@ export default function ProductDetailPage() {
       dispatch(fetchOrderList());
     }
   }, [isAuthenticated]);
+
+  // Fetch product ratings
+  useEffect(() => {
+    const fetchRatings = async () => {
+      if (!id) return;
+      try {
+        const res = await fetch(`/api/v1/products/rating/item/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setRatings(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error("Error fetching ratings:", error);
+        setRatings([]);
+      }
+    };
+
+    fetchRatings();
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -536,6 +559,13 @@ export default function ProductDetailPage() {
   const handleRentNow = () => {
     if (!product) return;
 
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      toast.error("Vui lòng đăng nhập để thuê sản phẩm");
+      router.push("/auth/login");
+      return;
+    }
+
     if (!dateFrom || !dateTo) {
       toast.error("Vui lòng chọn thời gian thuê");
       return;
@@ -736,13 +766,22 @@ export default function ProductDetailPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center text-yellow-500">
-                    <Star className="w-4 h-4 fill-yellow-500" />
-                    <Star className="w-4 h-4 fill-yellow-500" />
-                    <Star className="w-4 h-4 fill-yellow-500" />
-                    <Star className="w-4 h-4 fill-yellow-500" />
-                    <Star className="w-4 h-4" />
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= Math.round(
+                            ratings.reduce((sum, r) => sum + r.rating, 0) / Math.max(1, ratings.length)
+                          )
+                            ? 'fill-yellow-500'
+                            : 'text-gray-300'
+                        }`}
+                      />
+                    ))}
                   </div>
-                  <span className="text-sm text-gray-500">(12 đánh giá)</span>
+                  <span className="text-sm text-gray-500">
+                    ({ratings.length} {ratings.length === 1 ? 'đánh giá' : 'đánh giá'})
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-4 text-sm text-gray-500">

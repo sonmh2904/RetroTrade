@@ -26,7 +26,10 @@ const auditRouter = require("./audit/audit.routes");
 const loyaltyRouter = require("./loyalty/loyalty.routes");
 const treeGameRouter = require("./games/tree.routes");
 const adminComplaintRouter = require("./admin/complaint.routes");
+const adminDashboardRouter = require("./admin/dashboard.routes");
+const moderatorDashboardRouter = require("./moderator/dashboard.routes");
 const termsRouter = require("./terms/terms.routes");
+const aiRouter = require("./messages/aiChat.routes")
 module.exports = (app) => {
     const api = "/api/v1";
     app.use(api + "/auth", userAuthRouter);
@@ -43,6 +46,7 @@ module.exports = (app) => {
     app.use(api + "/post", blogRoutes);
     app.use(api + "/wallet", walletRoutes);
     app.use(api + "/messages", messagesRouter)
+    app.use(api + "/ai-chat", aiRouter)
     app.use(api + "/cart", cartItemRouter);
 
     app.use(api + "/notifications", notificationRouter);
@@ -57,4 +61,6 @@ module.exports = (app) => {
     app.use(api + "/loyalty", loyaltyRouter);
     app.use(api + "/tree", treeGameRouter);
     app.use(api + "/admin/complaints", adminComplaintRouter);
+    app.use(api + "/admin/dashboard", adminDashboardRouter);
+    app.use(api + "/moderator/dashboard", moderatorDashboardRouter);
 }

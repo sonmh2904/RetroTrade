@@ -1,12 +1,20 @@
 const mongoose = require("mongoose");
 const Discount = require("../../models/Discount/Discount.model");
+const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const { generateString } = require("../../utils/generateString");
 
 function clampDiscountAmount(type, value, baseAmount, maxDiscountAmount) {
+    // Tính số tiền được giảm
+    // Nếu là percent: số tiền = tiền thuê * tỉ lệ (%)
+    // Nếu là fixed: số tiền = giá trị cố định
     let amount = type === "percent" ? (baseAmount * value) / 100 : value;
+    
+    // Không được vượt quá giá tiền tối đa có thể giảm (nếu có)
     if (maxDiscountAmount && maxDiscountAmount > 0) {
         amount = Math.min(amount, maxDiscountAmount);
     }
+    
+    // Đảm bảo số tiền giảm không âm và không vượt quá baseAmount
     amount = Math.max(0, Math.min(baseAmount, Math.floor(amount)));
     return amount;
 }
@@ -162,11 +170,9 @@ module.exports = {
       if (!Array.isArray(userIds)) {
         return res.status(400).json({ status: "error", message: "Danh sách người dùng không hợp lệ" });
       }
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-      const DiscountModel = require("../../models/Discount/Discount.model");
       
       // Kiểm tra discount trước khi gán
-      const discount = await DiscountModel.findById(id).lean();
+      const discount = await Discount.findById(id).lean();
       if (!discount) {
         return res.status(404).json({ status: "error", message: "Không tìm thấy mã giảm giá" });
       }
@@ -179,7 +185,7 @@ module.exports = {
         });
       }
       
-      const updated = await DiscountModel.findByIdAndUpdate(id, { isPublic: false }, { new: true });
+      const updated = await Discount.findByIdAndUpdate(id, { isPublic: false }, { new: true });
       if (!updated) return res.status(404).json({ status: "error", message: "Không tìm thấy mã giảm giá" });
 
       const ops = userIds.map((uid) => ({
@@ -210,7 +216,6 @@ module.exports = {
   setPublic: async (req, res) => {
     try {
       const { id } = req.params;
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
       
       // Xóa tất cả assignment cũ khi set discount thành công khai
       // Vì discount công khai không cần assignment (tất cả người dùng đều có thể sử dụng)
@@ -297,7 +302,6 @@ module.exports = {
       // Nếu set discount thành công khai, xóa tất cả assignment cũ
       // Vì discount công khai không cần assignment (tất cả người dùng đều có thể sử dụng)
       if (isPublic !== undefined && isPublic === true) {
-        const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
         await DiscountAssignment.deleteMany({ discountId: id });
       }
       
@@ -328,7 +332,6 @@ module.exports = {
       if (ownerId) filter.ownerId = ownerId;
       if (itemId) filter.itemId = itemId;
       const skip = (Number(page) - 1) * Number(limit);
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
       
       // Lấy user assignments với filter effectiveFrom/effectiveTo
       const userAssignmentsQuery = req.user?._id 
@@ -450,7 +453,6 @@ module.exports = {
       const doc = await Discount.findOne({ code: code?.toUpperCase(), active: true, startAt: { $lte: now }, endAt: { $gte: now } }).lean();
       if (!doc) return res.status(404).json({ status: "error", message: "Mã không khả dụng" });
       if (!doc.isPublic) {
-        const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
         const assign = await DiscountAssignment.findOne({ discountId: doc._id, userId: req.user?._id, active: true }).lean();
         if (!assign) return res.status(403).json({ status: "error", message: "Bạn không được phép sử dụng mã này" });
         if (assign.effectiveFrom && now < new Date(assign.effectiveFrom)) return res.status(403).json({ status: "error", message: "Mã chưa đến thời gian sử dụng" });
@@ -469,12 +471,35 @@ module.exports = {
       if (!code || baseAmount == null) {
         return res.status(400).json({ status: "error", message: "Thiếu mã hoặc tổng tiền" });
       }
-      const result = await module.exports.validateAndCompute({ code, baseAmount: Number(baseAmount), ownerId, itemId, userId: req.user?._id });
+      
+      console.log("[DISCOUNT] publicValidate called:", {
+        code: code?.toUpperCase()?.trim(),
+        baseAmount,
+        ownerId,
+        itemId,
+        userId: req.user?._id
+      });
+      
+      const result = await module.exports.validateAndCompute({ 
+        code, 
+        baseAmount: Number(baseAmount), 
+        ownerId, 
+        itemId, 
+        userId: req.user?._id 
+      });
+      
+      console.log("[DISCOUNT] validateAndCompute result:", {
+        valid: result.valid,
+        reason: result.reason,
+        code: code?.toUpperCase()?.trim()
+      });
+      
       if (!result.valid) {
         return res.status(400).json({ status: "error", message: "Mã không hợp lệ hoặc không áp dụng", reason: result.reason });
       }
       return res.json({ status: "success", message: "Áp dụng mã thành công", data: { amount: result.amount, discount: result.discount } });
     } catch (err) {
+      console.error("[DISCOUNT] publicValidate error:", err);
       return res.status(500).json({ status: "error", message: "Lỗi xác thực mã", error: err.message });
     }
   },
@@ -507,7 +532,6 @@ module.exports = {
       }
 
       // Kiểm tra xem user đã claim mã này chưa
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
       const existingAssignment = await DiscountAssignment.findOne({ 
         discountId: discount._id, 
         userId: userId 
@@ -551,7 +575,6 @@ module.exports = {
     // Internal helper used by order create
   validateAndCompute: async ({ code, baseAmount, ownerId, itemId, userId }) => {
         const now = new Date();
-    const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
         const codeUpper = code?.toUpperCase().trim();
         if (!codeUpper) return { valid: false, reason: "INVALID_CODE" };
         
@@ -560,14 +583,26 @@ module.exports = {
         
      if (!discount) {
        console.log("[DISCOUNT] Not found with code:", codeUpper);
+       // Thử tìm với case-insensitive
+       const caseInsensitive = await Discount.findOne({ 
+         code: { $regex: new RegExp(`^${codeUpper}$`, "i") } 
+       }).lean();
+       
+       if (caseInsensitive) {
+         console.log("[DISCOUNT] Found with case-insensitive search, but code mismatch:", {
+           searched: codeUpper,
+           found: caseInsensitive.code
+         });
+       }
+       
        const similar = await Discount.find({
          code: { $regex: codeUpper, $options: "i" },
        })
-         .select("code")
+         .select("code active isPublic")
          .limit(5);
        console.log(
          "[DISCOUNT] Similar codes in DB:",
-         similar.map((d) => d.code)
+         similar.map((d) => ({ code: d.code, active: d.active, isPublic: d.isPublic }))
        );
        return { valid: false, reason: "INVALID_CODE" };
      }
@@ -577,7 +612,8 @@ module.exports = {
           console.error("Discount found but not active:", {
             code: discount.code,
             active: discount.active,
-            isPublic: discount.isPublic
+            isPublic: discount.isPublic,
+            _id: discount._id
           });
           return { valid: false, reason: "INVALID_CODE" };
         }
@@ -609,6 +645,10 @@ module.exports = {
         if (assignment.effectiveFrom && now < new Date(assignment.effectiveFrom)) return { valid: false, reason: "ASSIGN_NOT_STARTED" };
         if (assignment.effectiveTo && now > new Date(assignment.effectiveTo)) return { valid: false, reason: "ASSIGN_EXPIRED" };
         if (assignment.perUserLimit > 0 && (assignment.usedCount || 0) >= assignment.perUserLimit) return { valid: false, reason: "PER_USER_LIMIT" };
+        // Nếu có assignment, vẫn kiểm tra discount.usageLimit để đảm bảo tổng số lần sử dụng không vượt quá giới hạn
+        if (discount.usageLimit > 0 && (discount.usedCount || 0) >= discount.usageLimit) {
+          return { valid: false, reason: "USAGE_LIMIT" };
+        }
       } else if (isInAllowedUsers) {
         // Nếu chỉ có trong allowedUsers mà không có assignment, kiểm tra usageLimit của discount
         if (discount.usageLimit > 0 && (discount.usedCount || 0) >= discount.usageLimit) {

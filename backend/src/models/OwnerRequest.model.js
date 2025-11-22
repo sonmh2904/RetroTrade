@@ -37,6 +37,18 @@ const ownerRequestSchema = new mongoose.Schema(
       type: String,
       maxlength: 1000,
     },
+    serviceFeeAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    serviceFeePaidAt: {
+      type: Date,
+    },
+    serviceFeeTransaction: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "WalletTransaction",
+    },
   },
   {
     collection: "ownerRequests",

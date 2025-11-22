@@ -46,6 +46,11 @@ const reportSchema = new Schema({
     decision: { type: String },
     notes: { type: String },
     refundAmount: { type: Number, default: 0 },
+    refundPercentage: { type: Number, default: 0 },
+    refundTarget: {
+      type: String,
+      enum: ["reporter", "reported"],
+    },
   },
   assignedBy: {
     type: Types.ObjectId,
@@ -65,11 +70,14 @@ const reportSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+}, {
+  collection: "reports" // Giữ nguyên collection name để không ảnh hưởng đến dữ liệu hiện có
 });
 
 reportSchema.index({ orderId: 1, status: 1 });
 reportSchema.index({ reporterId: 1, createdAt: -1 });
 
-const Report = mongoose.model("Report", reportSchema);
+// Đổi tên model thành "OrderReport" để tránh xung đột với model "Report" trong Report.model.js
+const OrderReport = mongoose.model("OrderReport", reportSchema);
 
-module.exports = Report;
+module.exports = OrderReport;

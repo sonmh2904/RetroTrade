@@ -31,36 +31,89 @@ const submitComplaint = async (req, res) => {
             status: 'pending'
         });
 
-        // Send notification to admins
+        // Send notification to admins and moderators
         try {
-            const admins = await User.find({ role: 'admin', isDeleted: false });
+            const adminsAndModerators = await User.find({ 
+                role: { $in: ['admin', 'moderator'] }, 
+                isDeleted: false 
+            });
             
-            for (const admin of admins) {
-                await createNotification({
-                    userId: admin._id,
-                    type: 'complaint',
-                    title: 'Khiếu nại mới về tài khoản bị khóa',
-                    message: `Người dùng ${email} đã gửi khiếu nại về tài khoản bị khóa. Vui lòng xem xét.`,
-                    link: `/admin/complaints/${complaint._id}`,
-                    relatedUserId: user ? user._id : null
-                });
+            for (const adminOrModerator of adminsAndModerators) {
+                await createNotification(
+                    adminOrModerator._id,
+                    'complaint',
+                    'Khiếu nại mới về tài khoản bị khóa',
+                    `Người dùng ${email} đã gửi khiếu nại về tài khoản bị khóa. Vui lòng xem xét.`,
+                    {
+                        link: adminOrModerator.role === 'admin' 
+                            ? `/admin/complaints/${complaint._id}` 
+                            : `/moderator?tab=complaints`,
+                        relatedUserId: user ? user._id : null
+                    }
+                );
+            }
 
-                // Send email to admin (optional)
-                try {
+            // Send email to system (RetroTrade email) instead of individual admin emails
+            try {
+                const systemEmail = process.env.SYSTEM_EMAIL || process.env.EMAIL_USER;
+                if (systemEmail) {
                     const emailHtml = `
-                        <h2>Khiếu nại mới về tài khoản bị khóa</h2>
-                        <p><strong>Email người dùng:</strong> ${email}</p>
-                        <p><strong>Chủ đề:</strong> ${complaint.subject}</p>
-                        <p><strong>Nội dung:</strong></p>
-                        <p>${message}</p>
-                        <p><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</p>
-                        <p>Vui lòng xem xét và phản hồi người dùng.</p>
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <div style="background-color: #dbeafe; border-left: 4px solid #2563eb; padding: 16px; margin-bottom: 20px;">
+                                <h2 style="color: #2563eb; margin: 0; font-size: 20px;">📧 Khiếu nại mới về tài khoản bị khóa</h2>
+                            </div>
+                            
+                            <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+                                <p style="color: #374151; font-size: 16px; margin: 0 0 16px 0;">
+                                    Hệ thống RetroTrade nhận được khiếu nại mới:
+                                </p>
+                                
+                                <div style="background-color: #f3f4f6; border-left: 4px solid #6b7280; padding: 16px; margin: 20px 0;">
+                                    <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                        <strong>Email người dùng:</strong> ${email}
+                                    </p>
+                                    <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                        <strong>Chủ đề:</strong> ${complaint.subject}
+                                    </p>
+                                    ${user ? `
+                                    <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                        <strong>Họ tên:</strong> ${user.fullName || user.displayName || 'N/A'}
+                                    </p>
+                                    <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                        <strong>User ID:</strong> ${user._id}
+                                    </p>
+                                    ` : '<p style="color: #374151; font-size: 14px; margin: 4px 0;"><em>Người dùng chưa đăng ký tài khoản</em></p>'}
+                                    <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                        <strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}
+                                    </p>
+                                </div>
+                                
+                                <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                                    <p style="color: #374151; font-size: 14px; margin: 0 0 8px 0;">
+                                        <strong>Nội dung khiếu nại:</strong>
+                                    </p>
+                                    <p style="color: #374151; font-size: 14px; margin: 0; white-space: pre-wrap; line-height: 1.6;">${message}</p>
+                                </div>
+                                
+                                <div style="margin: 24px 0;">
+                                    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/complaints/${complaint._id}" 
+                                       style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                                        Xem và xử lý khiếu nại
+                                    </a>
+                                </div>
+                                
+                                <p style="color: #6b7280; font-size: 14px; margin: 20px 0 0 0; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+                                    Trân trọng,<br>
+                                    <strong>Hệ thống RetroTrade</strong>
+                                </p>
+                            </div>
+                        </div>
                     `;
-                    await sendEmail(admin.email, `[RetroTrade] Khiếu nại mới về tài khoản bị khóa - ${email}`, emailHtml);
-                } catch (emailError) {
-                    console.error("Error sending email to admin:", emailError);
-                    // Continue even if email fails
+                    await sendEmail(systemEmail, `[RetroTrade] Khiếu nại mới về tài khoản bị khóa - ${email}`, emailHtml);
                 }
+            } catch (emailError) {
+                console.error("Error sending email to system:", emailError);
+                // Continue even if email fails
             }
         } catch (notifError) {
             console.error("Error creating notifications:", notifError);
@@ -86,7 +139,7 @@ const submitComplaint = async (req, res) => {
 };
 
 /**
- * Admin: Lấy danh sách khiếu nại ban tài khoản
+ * Admin/Moderator: Lấy danh sách khiếu nại ban tài khoản
  */
 const getAllComplaints = async (req, res) => {
     try {
@@ -146,7 +199,7 @@ const getAllComplaints = async (req, res) => {
 };
 
 /**
- * Admin: Lấy chi tiết khiếu nại
+ * Admin/Moderator: Lấy chi tiết khiếu nại
  */
 const getComplaintById = async (req, res) => {
     try {
@@ -195,7 +248,7 @@ const getComplaintById = async (req, res) => {
 };
 
 /**
- * Admin: Xử lý khiếu nại (resolve/reject)
+ * Admin/Moderator: Xử lý khiếu nại (resolve/reject)
  */
 const handleComplaint = async (req, res) => {
     try {
@@ -223,11 +276,16 @@ const handleComplaint = async (req, res) => {
         if (complaint.status === 'resolved' || complaint.status === 'rejected') {
             return res.json({
                 code: 400,
-                message: "Khiếu nại này đã được xử lý"
+                message: `Khiếu nại này đã được xử lý (${complaint.status === 'resolved' ? 'đã chấp nhận' : 'đã từ chối'})`,
+                data: {
+                    currentStatus: complaint.status,
+                    handledBy: complaint.handledBy,
+                    handledAt: complaint.handledAt
+                }
             });
         }
 
-        // Update complaint
+        // Update complaint with final status
         complaint.status = action === 'resolve' ? 'resolved' : 'rejected';
         complaint.handledBy = adminId;
         complaint.handledAt = new Date();
@@ -240,14 +298,16 @@ const handleComplaint = async (req, res) => {
         if (action === 'resolve' && complaint.userId) {
             try {
                 const user = await User.findById(complaint.userId);
-                if (user && (user.isDeleted || !user.isActive)) {
+                if (!user) {
+                    console.log(`User ${complaint.userId} not found for unban`);
+                } else if (user.isDeleted || !user.isActive) {
                     // Unban user
                     user.isDeleted = false;
                     user.isActive = true;
                     await user.save();
 
-                    // Update ban history
-                    await BanHistory.updateMany(
+                    // Update ban history - mark all active bans as inactive
+                    const updateResult = await BanHistory.updateMany(
                         { userId: user._id, isActive: true },
                         { 
                             isActive: false,
@@ -255,6 +315,8 @@ const handleComplaint = async (req, res) => {
                             unlockedBy: adminId
                         }
                     );
+                    
+                    console.log(`Unbanned user ${user._id}, updated ${updateResult.modifiedCount} ban history records`);
 
                     // Send email to user
                     try {
@@ -355,18 +417,85 @@ const handleComplaint = async (req, res) => {
         // Send notification to user if exists
         if (complaint.userId) {
             try {
-                await createNotification({
-                    userId: complaint.userId,
-                    type: 'complaint',
-                    title: action === 'resolve' ? 'Khiếu nại đã được chấp nhận' : 'Khiếu nại đã được xem xét',
-                    message: action === 'resolve' 
+                const user = await User.findById(complaint.userId);
+                if (user) {
+                    const title = action === 'resolve' ? 'Khiếu nại đã được chấp nhận' : 'Khiếu nại đã được xem xét';
+                    const body = action === 'resolve' 
                         ? 'Khiếu nại của bạn đã được chấp nhận. Tài khoản của bạn đã được mở khóa.'
-                        : 'Khiếu nại của bạn đã được xem xét. Vui lòng kiểm tra email để biết thêm chi tiết.',
-                    link: action === 'resolve' ? '/auth/login' : '/auth/banned'
-                });
+                        : 'Khiếu nại của bạn đã được xem xét. Vui lòng kiểm tra email để biết thêm chi tiết.';
+                    const link = action === 'resolve' ? '/auth/login' : '/auth/banned';
+                    
+                    await createNotification(
+                        complaint.userId,
+                        'complaint',
+                        title,
+                        body,
+                        { link, complaintId: complaint._id.toString() }
+                    );
+                }
             } catch (notifError) {
                 console.error("Error creating notification:", notifError);
             }
+        }
+
+        // Send email to system about complaint resolution
+        try {
+            const systemEmail = process.env.SYSTEM_EMAIL || process.env.EMAIL_USER;
+            if (systemEmail) {
+                const emailSubject = `[RetroTrade] Khiếu nại đã được xử lý - ${action === 'resolve' ? 'Chấp nhận' : 'Từ chối'}`;
+                const emailHtml = `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <div style="background-color: ${action === 'resolve' ? '#d1fae5' : '#fee2e2'}; border-left: 4px solid ${action === 'resolve' ? '#10b981' : '#dc2626'}; padding: 16px; margin-bottom: 20px;">
+                            <h2 style="color: ${action === 'resolve' ? '#10b981' : '#dc2626'}; margin: 0; font-size: 20px;">
+                                ${action === 'resolve' ? '✅' : '❌'} Khiếu nại đã được xử lý
+                            </h2>
+                        </div>
+                        
+                        <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+                            <p style="color: #374151; font-size: 16px; margin: 0 0 16px 0;">
+                                Hệ thống RetroTrade thông báo:
+                            </p>
+                            
+                            <div style="background-color: #f3f4f6; border-left: 4px solid #6b7280; padding: 16px; margin: 20px 0;">
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Email người dùng:</strong> ${complaint.email}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Chủ đề:</strong> ${complaint.subject}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Kết quả:</strong> ${action === 'resolve' ? '✅ Chấp nhận' : '❌ Từ chối'}
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Xử lý bởi:</strong> Admin (ID: ${adminId})
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 4px 0;">
+                                    <strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}
+                                </p>
+                            </div>
+                            
+                            ${adminResponse ? `
+                            <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                                <p style="color: #374151; font-size: 14px; margin: 0 0 8px 0;">
+                                    <strong>Phản hồi từ quản trị viên:</strong>
+                                </p>
+                                <p style="color: #374151; font-size: 14px; margin: 0; white-space: pre-wrap; line-height: 1.6;">${adminResponse}</p>
+                            </div>
+                            ` : ''}
+                            
+                            <div style="margin: 24px 0;">
+                                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/complaints/${complaint._id}" 
+                                   style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                                    Xem chi tiết khiếu nại
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                await sendEmail(systemEmail, emailSubject, emailHtml);
+            }
+        } catch (emailError) {
+            console.error("Error sending email to system:", emailError);
         }
 
         return res.json({
