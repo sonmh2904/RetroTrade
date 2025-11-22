@@ -52,6 +52,8 @@ interface SignatureResponse {
   validTo?: string;
   isActive: boolean;
   decryptedData?: string | null;
+  isUsedInContract?: boolean;
+  isExpired?: boolean;
 }
 
 interface ContractTemplate {
@@ -144,18 +146,17 @@ export default function SignContractPage() {
   const proseRef = useRef<HTMLPreElement | null>(null);
   const draggingRef = useRef<string | null>(null);
 
-  // Unified style - Giống hệt ContractTemplateForm để khớp 100% định dạng (Times New Roman, spaces, độ dài dòng)
   const unifiedStyle = {
     fontFamily: "'Times New Roman', Times, serif",
     lineHeight: "1.6",
     fontSize: "14px",
     wordBreak: "break-word" as const,
     hyphens: "auto" as const,
-    whiteSpace: "pre-wrap" as const, // Giữ nguyên spaces/newline
-    maxWidth: "800px", // Độ dài cố định: ~85 chars/line ở 14px (khớp A4)
-    letterSpacing: "0.02em", // Align spaces đều hơn cho serif font
-    overflowWrap: "anywhere" as const, // Break line chính xác nếu vượt width
-    margin: "0 auto", // Center để giống trang giấy
+    whiteSpace: "pre-wrap" as const, 
+    maxWidth: "800px",
+    letterSpacing: "0.02em", 
+    overflowWrap: "anywhere" as const, 
+    margin: "0 auto", 
   } as React.CSSProperties;
 
   // Get current user from Redux token
@@ -170,6 +171,19 @@ export default function SignContractPage() {
       if (res.ok) {
         const data: SignatureResponse = await res.json();
         setUserSignature(data);
+        // Auto-set useExistingSignature based on usage
+        if (data.isUsedInContract) {
+          setUseExistingSignature(true);
+        }
+      } else if (res.status === 410) {
+        // Handle expired signature
+        const errorData = await res.json();
+        setUserSignature({
+          ...errorData,
+          signatureUrl: null,
+          isActive: false,
+        });
+        toast.warning("Chữ ký của bạn đã hết hạn. Vui lòng tạo chữ ký mới.");
       } else {
         setUserSignature(null);
       }
@@ -285,11 +299,16 @@ export default function SignContractPage() {
       setLoadingAction(false);
     }
   };
-
-  const handleSignContract = async (): Promise<void> => {
+  const handleSignContract = async (
+    forceUseExisting?: boolean
+  ): Promise<void> => {
     if (!contractData || !contractData.contractId || !contractData.canSign) {
       toast.error("Không thể ký hợp đồng lúc này.");
       return;
+    }
+    // Set useExistingSignature if forced (for used signature case)
+    if (forceUseExisting !== undefined) {
+      setUseExistingSignature(forceUseExisting);
     }
     // Reset checkbox state when opening modal
     setTermsChecked(false);
@@ -806,48 +825,94 @@ export default function SignContractPage() {
                 )}
                 Xuất PDF
               </button>
-              {userSignature && userSignature.isActive && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useExistingSignature}
-                    onChange={(e) => {
-                      setUseExistingSignature(e.target.checked);
-                    }}
-                    className="rounded"
-                  />
-                  <span className="text-sm text-gray-600">
-                    Sử dụng chữ ký hiện có (
-                    {userSignature.validTo
-                      ? `Hết hạn ${new Date(
-                          userSignature.validTo
-                        ).toLocaleDateString("vi-VN")}`
-                      : "Vô hạn"}
-                    )
-                  </span>
-                </label>
+              {userSignature?.isActive && !userSignature.isExpired && (
+                <>
+                  {userSignature.isUsedInContract ? (
+                    // Case: Signature exists and is used - only button, no checkbox
+                    <button
+                      onClick={() => handleSignContract(true)} // Force use existing
+                      disabled={
+                        loadingAction ||
+                        !contractData.canSign ||
+                        !userSignature.signatureUrl
+                      }
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                    >
+                      {loadingAction ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Đang ký...
+                        </>
+                      ) : (
+                        <>
+                          <PenTool className="w-4 h-4" />
+                          Ký bằng chữ ký hiện có
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    // Case: Signature exists but not used - checkbox + dynamic button
+                    <>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useExistingSignature}
+                          onChange={(e) => {
+                            setUseExistingSignature(e.target.checked);
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-gray-600">
+                          Sử dụng chữ ký hiện có
+                        </span>
+                      </label>
+                      <button
+                        onClick={() => handleSignContract()}
+                        disabled={
+                          loadingAction ||
+                          !contractData.canSign ||
+                          (useExistingSignature && !userSignature?.signatureUrl)
+                        }
+                        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                      >
+                        {loadingAction ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Đang ký...
+                          </>
+                        ) : (
+                          <>
+                            <PenTool className="w-4 h-4" />
+                            {useExistingSignature
+                              ? "Ký bằng chữ ký hiện có"
+                              : "Ký mới"}
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
+                </>
               )}
-              <button
-                onClick={handleSignContract}
-                disabled={
-                  loadingAction ||
-                  !contractData.canSign ||
-                  (useExistingSignature && !userSignature?.signatureUrl)
-                }
-                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
-              >
-                {loadingAction ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Đang ký...
-                  </>
-                ) : (
-                  <>
-                    <PenTool className="w-4 h-4" />
-                    {useExistingSignature ? "Ký bằng chữ ký hiện có" : "Ký mới"}
-                  </>
-                )}
-              </button>
+              {/* Case: No signature or expired - only new sign button */}
+              {!userSignature?.isActive && (
+                <button
+                  onClick={() => handleSignContract(false)} // Force new
+                  disabled={loadingAction || !contractData.canSign}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                >
+                  {loadingAction ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang ký...
+                    </>
+                  ) : (
+                    <>
+                      <PenTool className="w-4 h-4" />
+                      Ký mới
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             {contractData.signaturesCount > 0 && (
               <div className="mt-6 pt-6 border-t border-gray-200">
@@ -991,7 +1056,7 @@ export default function SignContractPage() {
                 <span className="text-sm text-gray-700">
                   Tôi đã đọc và đồng ý với{" "}
                   <a
-                    href="#"
+                    href="/terms"
                     target="_blank"
                     className="text-blue-600 hover:underline font-medium"
                   >

@@ -790,6 +790,8 @@ exports.signContract = async (req, res) => {
         { session }
       );
     }
+
+    //set vị trí chữ ký
     let defaultPositionX = 50; // ở giữa default
     let defaultPositionY = 95; // cách đáy hợp đồng
     const isOwner = userId.toString() === order.ownerId._id.toString();
@@ -798,7 +800,7 @@ exports.signContract = async (req, res) => {
       defaultPositionX = 15;
     } else {
       // Phải for renter (BÊN B)
-      defaultPositionX = 75;
+      defaultPositionX = 60;
     }
 
     const contractSig = new ContractSignature({

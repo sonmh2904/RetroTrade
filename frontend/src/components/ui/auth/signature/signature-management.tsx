@@ -20,6 +20,16 @@ import {
 } from "@/services/auth/auth.api";
 import SignaturePad from "./signature-pad";
 
+interface SignatureResponse {
+  signatureUrl?: string;
+  validFrom?: string;
+  validTo?: string;
+  isActive: boolean;
+  decryptedData?: string | null;
+  isUsedInContract?: boolean; // New field: true if used in any contract
+  isExpired?: boolean;
+}
+
 interface SignatureManagementProps {
   isOpen: boolean;
   onClose: () => void;
@@ -38,6 +48,7 @@ export function SignatureManagement({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUsedInContract, setIsUsedInContract] = useState(false); // New state
 
   // Confirm modal
   const [showConfirmSave, setShowConfirmSave] = useState(false);
@@ -58,21 +69,34 @@ export function SignatureManagement({
       setIsLoading(true);
       const response = await getSignature();
       if (response.ok) {
-        const data = await response.json();
+        const data: SignatureResponse = await response.json();
         setCurrentSignatureUrl(data.signatureUrl || null);
+        setIsUsedInContract(data.isUsedInContract || false); // Set the new flag
+        if (data.isExpired) {
+          toast.warning("Chữ ký của bạn đã hết hạn. Vui lòng tạo chữ ký mới.");
+        }
       } else {
         setCurrentSignatureUrl(null);
+        setIsUsedInContract(false);
       }
     } catch (error) {
       console.error("Error fetching signature:", error);
       toast.error("Không thể tải chữ ký hiện tại");
       setCurrentSignatureUrl(null);
+      setIsUsedInContract(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSaveSignature = async (newUrl: string) => {
+    if (isUsedInContract) {
+      toast.warning(
+        "Chữ ký đã được sử dụng trong hợp đồng, không thể cập nhật."
+      );
+      return;
+    }
+
     if (inline) {
       // Save immediately without confirm dialogs
       setPendingSignatureUrl(newUrl);
@@ -85,7 +109,7 @@ export function SignatureManagement({
 
   // XÁC NHẬN LƯU
   const confirmSaveSignature = async () => {
-    if (!pendingSignatureUrl) return;
+    if (!pendingSignatureUrl || isUsedInContract) return;
 
     try {
       setIsSaving(true);
@@ -93,6 +117,7 @@ export function SignatureManagement({
       if (response.ok) {
         const data = await response.json();
         setCurrentSignatureUrl(data.signatureUrl);
+        setIsUsedInContract(false);
         toast.success("Chữ ký số đã được cập nhật thành công!");
         onSuccess(data.signatureUrl);
         onClose();
@@ -112,13 +137,14 @@ export function SignatureManagement({
 
   // Inline-saving path (no popup)
   const confirmSaveSignatureInline = async () => {
-    if (!pendingSignatureUrl) return;
+    if (!pendingSignatureUrl || isUsedInContract) return;
     try {
       setIsSaving(true);
       const response = await saveSignature(pendingSignatureUrl);
       if (response.ok) {
         const data = await response.json();
         setCurrentSignatureUrl(data.signatureUrl);
+        setIsUsedInContract(false); 
         toast.success("Chữ ký số đã được cập nhật thành công!");
         onSuccess(data.signatureUrl);
       } else {
@@ -140,6 +166,11 @@ export function SignatureManagement({
   };
 
   const handleDeleteSignature = async () => {
+    if (isUsedInContract) {
+      toast.warning("Chữ ký đã được sử dụng trong hợp đồng, không thể xóa.");
+      return;
+    }
+
     if (inline) {
       await confirmDeleteSignature();
     } else {
@@ -148,10 +179,12 @@ export function SignatureManagement({
   };
 
   const confirmDeleteSignature = async () => {
+    if (isUsedInContract) return;
     try {
       const response = await deleteSignature();
       if (response.ok) {
         setCurrentSignatureUrl(null);
+        setIsUsedInContract(false);
         toast.success("Chữ ký số đã được xóa!");
         onSuccess(null);
       } else {
@@ -185,14 +218,60 @@ export function SignatureManagement({
     );
   }
 
+  const renderSignatureView = () => {
+    if (isUsedInContract) {
+      return (
+        <div className="text-center py-6">
+          <Image
+            src={currentSignatureUrl!}
+            alt="Chữ ký đã sử dụng"
+            width={200}
+            height={100}
+            className="border-2 border-blue-300 rounded-lg mx-auto mb-4"
+          />
+          <p className="text-sm text-gray-600">
+            Chữ ký này đã được sử dụng trong hợp đồng. Không thể chỉnh sửa hoặc
+            xóa. Vui lòng tạo chữ ký mới nếu cần.
+          </p>
+          <Button onClick={onClose} className="mt-4" variant="outline">
+            Đóng
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="py-4">
+        <SignaturePad
+          onSave={handleSaveSignature}
+          onClear={() => {
+            console.log("[DEBUG] Signature cleared");
+          }}
+          className="mx-auto"
+          disabled={showConfirmSave || showConfirmDelete || isSaving}
+        />
+      </div>
+    );
+  };
+
   if (inline) {
     return (
       <div className="space-y-4">
         <div className="border rounded-xl p-4">
-          <h3 className="font-semibold text-gray-900 mb-1">{currentSignatureUrl ? "Cập nhật chữ ký số" : "Tạo chữ ký số"}</h3>
-          {currentSignatureUrl && (
+          <h3 className="font-semibold text-gray-900 mb-1">
+            {currentSignatureUrl && !isUsedInContract
+              ? "Cập nhật chữ ký số"
+              : currentSignatureUrl && isUsedInContract
+              ? "Chữ ký số (Đã sử dụng)"
+              : "Tạo chữ ký số"}
+          </h3>
+          {currentSignatureUrl ? (
             <div className="mt-2">
-              <p className="text-sm text-gray-600 mb-1">Chữ ký hiện tại:</p>
+              <p className="text-sm text-gray-600 mb-1">
+                {isUsedInContract
+                  ? "Chữ ký hiện tại (đã sử dụng):"
+                  : "Chữ ký hiện tại:"}
+              </p>
               <Image
                 src={currentSignatureUrl}
                 alt="Chữ ký hiện tại"
@@ -200,23 +279,36 @@ export function SignatureManagement({
                 height={64}
                 className="border border-gray-300 rounded mb-2"
               />
+              {isUsedInContract && (
+                <p className="text-xs text-red-600 mt-1">
+                  Chữ ký đã được sử dụng trong hợp đồng, không thể chỉnh sửa.
+                </p>
+              )}
             </div>
+          ) : null}
+          {!isUsedInContract && (
+            <>
+              <div className="py-4">
+                <SignaturePad
+                  onSave={handleSaveSignature}
+                  onClear={() => {}}
+                  className="mx-auto"
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="flex gap-2">
+                {currentSignatureUrl && (
+                  <Button
+                    variant="destructive"
+                    onClick={confirmDeleteSignature}
+                    disabled={isSaving}
+                  >
+                    Xóa chữ ký hiện tại
+                  </Button>
+                )}
+              </div>
+            </>
           )}
-          <div className="py-4">
-            <SignaturePad
-              onSave={handleSaveSignature}
-              onClear={() => {}}
-              className="mx-auto"
-              disabled={isSaving}
-            />
-          </div>
-          <div className="flex gap-2">
-            {currentSignatureUrl && (
-              <Button variant="destructive" onClick={confirmDeleteSignature} disabled={isSaving}>
-                Xóa chữ ký hiện tại
-              </Button>
-            )}
-          </div>
         </div>
       </div>
     );
@@ -229,13 +321,21 @@ export function SignatureManagement({
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {currentSignatureUrl ? "Cập nhật chữ ký số" : "Tạo chữ ký số"}
+              {currentSignatureUrl && !isUsedInContract
+                ? "Cập nhật chữ ký số"
+                : currentSignatureUrl && isUsedInContract
+                ? "Chữ ký số (Đã sử dụng)"
+                : "Tạo chữ ký số"}
             </DialogTitle>
             <DialogDescription>
               Vẽ chữ ký điện tử của bạn để sử dụng trong hợp đồng và xác minh.
               {currentSignatureUrl && (
                 <div className="mt-2">
-                  <p className="text-sm text-gray-600 mb-1">Chữ ký hiện tại:</p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    {isUsedInContract
+                      ? "Chữ ký hiện tại (đã sử dụng):"
+                      : "Chữ ký hiện tại:"}
+                  </p>
                   <Image
                     src={currentSignatureUrl}
                     alt="Chữ ký hiện tại"
@@ -243,36 +343,35 @@ export function SignatureManagement({
                     height={64}
                     className="border border-gray-300 rounded mb-2 mx-auto block"
                   />
+                  {isUsedInContract && (
+                    <p className="text-sm text-red-600 mt-1">
+                      Chữ ký này đã được sử dụng trong hợp đồng. Không thể chỉnh
+                      sửa hoặc xóa.
+                    </p>
+                  )}
                 </div>
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <SignaturePad
-              onSave={handleSaveSignature}
-              onClear={() => {
-                console.log("[DEBUG] Signature cleared");
-              }}
-              className="mx-auto"
-              disabled={showConfirmSave || showConfirmDelete || isSaving}
-            />
-          </div>
-          <DialogFooter>
-            {currentSignatureUrl && (
-              <Button
-                variant="destructive"
-                onClick={handleDeleteSignature}
-                disabled={isSaving || showConfirmSave}
-                className="mr-auto"
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                Xóa chữ ký hiện tại
+          {renderSignatureView()}
+          {!isUsedInContract && (
+            <DialogFooter>
+              {currentSignatureUrl && (
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteSignature}
+                  disabled={isSaving || showConfirmSave}
+                  className="mr-auto"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Xóa chữ ký hiện tại
+                </Button>
+              )}
+              <Button variant="outline" onClick={onClose} disabled={isSaving}>
+                Đóng
               </Button>
-            )}
-            <Button variant="outline" onClick={onClose} disabled={isSaving}>
-              Đóng
-            </Button>
-          </DialogFooter>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 
