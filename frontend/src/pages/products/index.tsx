@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   getAllItems,
-  getAllCategories,
+  getAllPublicCategories,
   getFeaturedItems,
   getSearchTags,
   addToFavorites,
@@ -43,6 +43,7 @@ const logout = () => ({ type: "auth/logout" });
 interface Category {
   _id: string;
   name: string;
+  slug?: string;
   parentCategoryId?: string | null;
   isActive?: boolean;
   level?: number;
@@ -172,13 +173,22 @@ export default function ProductPage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const itemsPerPage = 9;
 
-  // Initialize currentPage from URL
+  // Initialize currentPage and category from URL
   useEffect(() => {
     const p = Number(searchParams?.get("page") || "");
     if (Number.isFinite(p) && p >= 1) {
       setCurrentPage(p);
     }
-  }, [searchParams]);
+    
+    // Handle category from URL
+    const categorySlug = searchParams?.get("category");
+    if (categorySlug && categories.length > 0) {
+      const category = categories.find(c => c.slug === categorySlug);
+      if (category) {
+        setSelectedCategory(category._id);
+      }
+    }
+  }, [searchParams, categories]);
   const updatePageInUrl = (page: number) => {
     try {
       const sp = new URLSearchParams(searchParams?.toString() || "");
@@ -344,26 +354,49 @@ export default function ProductPage() {
         setError(null);
         const [itemData, cateData, featuredRes, tagsRes] = await Promise.all([
           getAllItems(),
-          getAllCategories(),
+          getAllPublicCategories(),
           getFeaturedItems({ page: 1, limit: 12 }),
           getSearchTags(),
         ]);
         const normalizedItems = normalizeItems(
           itemData?.data?.items || itemData?.items || []
         );
+        console.log('DEBUG - Products loaded:', normalizedItems.length);
+        console.log('DEBUG - Sample product:', normalizedItems[0]);
+        
         const normalizedCates = cateData?.data || cateData || [];
-        const processedCates: Category[] = (normalizedCates as any[]).map(
-          (c: any) => ({
-            _id: toIdString(c._id || c.id),
-            name: c.name,
-            parentCategoryId:
-              c.parentCategoryId === "" || c.parentCategoryId == null
+        console.log('DEBUG - Categories loaded:', normalizedCates.length);
+        
+        // Flatten the nested category structure
+        const flattenCategories = (categories: any[]): Category[] => {
+          const result: Category[] = [];
+          
+          const processCategory = (category: any) => {
+            const processed: Category = {
+              _id: toIdString(category._id),
+              name: category.name,
+              slug: category.slug || category.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+              parentCategoryId: category.parentCategoryId === "" || category.parentCategoryId == null
                 ? null
-                : toIdString(c.parentCategoryId),
-            isActive: c.isActive,
-            level: typeof c.level === "number" ? c.level : undefined,
-          })
-        );
+                : toIdString(category.parentCategoryId),
+              isActive: category.isActive,
+              level: typeof category.level === "number" ? category.level : undefined,
+            };
+            result.push(processed);
+            
+            // Process children recursively
+            if (category.children && Array.isArray(category.children)) {
+              category.children.forEach(processCategory);
+            }
+          };
+          
+          categories.forEach(processCategory);
+          return result;
+        };
+        
+        const processedCates = flattenCategories(normalizedCates);
+        console.log('DEBUG - Flattened categories:', processedCates.length);
+        console.log('DEBUG - Sample category:', processedCates[0]);
         setAllItems(normalizedItems);
         setItems(normalizedItems);
         setCategories(processedCates);
@@ -415,6 +448,7 @@ export default function ProductPage() {
           const errorData = await res.json().catch(() => ({}));
           const errorMsg =
             errorData.message || `Lỗi tải danh sách yêu thích: ${res.status}`;
+
           if (res.status === 401 || res.status === 403) {
             dispatch(logout());
             router.push("/auth/login");
@@ -440,21 +474,53 @@ export default function ProductPage() {
     router,
   ]);
 
+  // Helper functions for categories
+  const getChildren = (parentId: string | null) =>
+    categories.filter((c) => (c.parentCategoryId ?? null) === parentId);
+
+  const getRootCategories = () =>
+    categories.filter((c) => (c.level ?? 0) === 0);
+
+  const getDescendantIds = (categoryId: string): string[] => {
+    const direct = getChildren(categoryId);
+    const all: string[] = [];
+    for (const c of direct) {
+      all.push(c._id);
+      all.push(...getDescendantIds(c._id));
+    }
+    return all;
+  };
+
   // Filter items
   useEffect(() => {
     let filtered = [...allItems];
+    console.log('DEBUG - Filter start - Total items:', filtered.length);
+    console.log('DEBUG - Selected category:', selectedCategory);
 
     if (selectedCategory) {
       const selected = categories.find((c) => c._id === selectedCategory);
       if (selected) {
+        console.log('DEBUG - Selected category found:', selected.name);
         // For all category levels, get all descendant IDs
+        const descendantIds = getDescendantIds(selectedCategory);
+        console.log('DEBUG - Descendant IDs:', descendantIds);
         const allowed = new Set([
           selectedCategory,
-          ...getDescendantIds(selectedCategory),
+          ...descendantIds,
         ]);
+        console.log('DEBUG - Allowed category IDs:', Array.from(allowed));
         filtered = filtered.filter(
-          (item) => item.category && allowed.has(item.category._id)
+          (item) => {
+            const hasCategory = item.category && allowed.has(item.category._id);
+            if (!hasCategory && item.category) {
+              console.log('DEBUG - Item category not in allowed:', item.category._id, item.category.name);
+            }
+            return hasCategory;
+          }
         );
+        console.log('DEBUG - Items after category filter:', filtered.length);
+      } else {
+        console.log('DEBUG - Selected category not found!');
       }
     }
     filtered = filtered.filter((item) => item.basePrice <= maxPrice);
@@ -477,6 +543,7 @@ export default function ProductPage() {
       });
     }
 
+    console.log('DEBUG - Final filtered items:', filtered.length);
     setItems(filtered);
     setCurrentPage(1);
   }, [
@@ -511,23 +578,27 @@ export default function ProductPage() {
   }, [items, currentPage]);
 
   const handleCategorySelect = (categoryId: string) => {
-    setSelectedCategory((prev) => (prev === categoryId ? null : categoryId));
-  };
-
-  const getChildren = (parentId: string | null) =>
-    categories.filter((c) => (c.parentCategoryId ?? null) === parentId);
-
-  const getRootCategories = () =>
-    categories.filter((c) => (c.level ?? 0) === 0);
-
-  const getDescendantIds = (categoryId: string): string[] => {
-    const direct = getChildren(categoryId);
-    const all: string[] = [];
-    for (const c of direct) {
-      all.push(c._id);
-      all.push(...getDescendantIds(c._id));
+    const newSelectedCategory = categoryId === '' ? null : (selectedCategory === categoryId ? null : categoryId);
+    setSelectedCategory(newSelectedCategory);
+    
+    // Update URL with category slug
+    if (newSelectedCategory) {
+      const category = categories.find(c => c._id === newSelectedCategory);
+      if (category?.slug) {
+        const sp = new URLSearchParams(searchParams?.toString() || "");
+        sp.set("category", category.slug);
+        const qs = sp.toString();
+        const newUrl = qs ? `${pathname}?${qs}` : pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    } else {
+      // Remove category from URL
+      const sp = new URLSearchParams(searchParams?.toString() || "");
+      sp.delete("category");
+      const qs = sp.toString();
+      const newUrl = qs ? `${pathname}?${qs}` : pathname;
+      window.history.replaceState({}, '', newUrl);
     }
-    return all;
   };
 
   const renderChildTree = (parentId: string, level = 0) => {
@@ -739,7 +810,7 @@ export default function ProductPage() {
                     type="radio"
                     name="category"
                     checked={selectedCategory === null}
-                    onChange={() => setSelectedCategory(null)}
+                    onChange={() => handleCategorySelect('')}
                     className="border-gray-300"
                   />
                   <span className="text-sm text-gray-700 font-medium">
