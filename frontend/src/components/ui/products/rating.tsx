@@ -422,12 +422,12 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
         </form>
       )}
 
-      {!canReview && !editingRatingId && currentUser && (
+      {/* {!canReview && !editingRatingId && currentUser && (
         <p className="mt-4 text-sm text-gray-500">
           Bạn chỉ có thể đánh giá sản phẩm sau khi hoàn thành đơn hàng và chưa
           từng đánh giá trước đó.
         </p>
-      )}
+      )} */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* Backdrop kính mờ */}

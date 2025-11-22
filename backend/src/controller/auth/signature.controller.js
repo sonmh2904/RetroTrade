@@ -1,4 +1,5 @@
 const UserSignature = require("../../models/UserSignature.model");
+const ContractSignature = require("../../models/ContractSignature.model"); // Đảm bảo import này
 const cloudinary = require("cloudinary").v2;
 const { generateString } = require("../../utils/generateString");
 const {
@@ -6,11 +7,12 @@ const {
   decryptSignature,
 } = require("../../utils/cryptoHelper");
 const AuditLog = require("../../models/AuditLog.model");
+const { createNotification } = require("../../middleware/createNotification"); 
 
 exports.createSignature = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { signatureData } = req.body; 
+    const { signatureData } = req.body;
 
     if (!userId) {
       return res
@@ -25,6 +27,21 @@ exports.createSignature = async (req, res) => {
       userId,
       isActive: true,
     });
+
+    let isUsedInContract = false; // Khai báo ngoài để scope toàn hàm
+    if (existingSignature) {
+      // Check if existing signature is used in any contract
+      const usedSig = await ContractSignature.findOne({
+        signatureId: existingSignature._id,
+        isValid: true,
+      });
+      isUsedInContract = !!usedSig; // true nếu tồn tại
+      if (isUsedInContract) {
+        console.warn(
+          `Existing signature ${existingSignature._id} is used in contract, creating new one`
+        );
+      }
+    }
 
     const { iv, encryptedData } = encryptSignature(signatureData);
     const encryptedBuffer = Buffer.from(encryptedData, "hex");
@@ -50,7 +67,9 @@ exports.createSignature = async (req, res) => {
     let operation = "INSERT";
     let signatureId = null;
 
-    if (existingSignature) {
+    if (existingSignature && !isUsedInContract) {
+      // Only update if not used
+      // Delete old image from Cloudinary
       const oldPublicId = existingSignature.signatureImagePath
         .split("/")
         .pop()
@@ -67,7 +86,7 @@ exports.createSignature = async (req, res) => {
           signatureData: encryptedBuffer,
           iv,
           signatureImagePath: uploadResult.secure_url,
-          validFrom: new Date(), 
+          validFrom: new Date(),
           updatedAt: new Date(),
         },
         { new: true }
@@ -76,7 +95,7 @@ exports.createSignature = async (req, res) => {
       signatureId = updatedSignature._id;
       operation = "UPDATE";
     } else {
-      // Tạo mới nếu chưa có
+      // Tạo mới nếu chưa có hoặc đã sử dụng (tạo signature mới)
       const signature = new UserSignature({
         userId,
         signatureData: encryptedBuffer,
@@ -88,6 +107,7 @@ exports.createSignature = async (req, res) => {
       signatureId = savedSignature._id;
     }
 
+    // Log Audit
     if (AuditLog) {
       await AuditLog.create({
         TableName: "UserSignatures",
@@ -103,15 +123,14 @@ exports.createSignature = async (req, res) => {
       message: "Chữ ký được cập nhật thành công",
       signatureUrl: uploadResult.secure_url,
       signatureId: signatureId,
+      isUsedInContract: false, // New signature is not used yet
     });
   } catch (error) {
     console.error("Create signature error:", error);
-    res
-      .status(500)
-      .json({
-        message: "Lỗi server khi cập nhật chữ ký",
-        details: error.message,
-      });
+    res.status(500).json({
+      message: "Lỗi server khi cập nhật chữ ký",
+      details: error.message,
+    });
   }
 };
 
@@ -126,6 +145,36 @@ exports.getSignature = async (req, res) => {
 
     if (!signature) {
       return res.status(404).json({ message: "Chưa có chữ ký" });
+    }
+
+    // Check if used in any contract
+    const isUsedInContract = await ContractSignature.findOne({
+      signatureId: signature._id,
+      isValid: true,
+    });
+
+    // Check if expired
+    const now = new Date();
+    const isExpired = signature.validTo && now > signature.validTo;
+    if (isExpired) {
+      // Deactivate the signature
+      await UserSignature.findByIdAndUpdate(signature._id, { isActive: false });
+
+      // Notify user to create new signature
+      await createNotification(
+        userId,
+        "Signature Expired",
+        "Chữ ký điện tử hết hạn",
+        "Chữ ký của bạn đã hết hạn. Vui lòng tạo chữ ký mới để tiếp tục ký hợp đồng.",
+        { action: "create_new_signature" }
+      );
+
+      return res.status(410).json({
+        message: "Chữ ký đã hết hạn",
+        isExpired: true,
+        expiredAt: signature.validTo,
+        isUsedInContract: !!isUsedInContract, // Still return flag even if expired
+      });
     }
 
     let decryptedData = null;
@@ -150,6 +199,8 @@ exports.getSignature = async (req, res) => {
       decryptedData: decryptedData || null,
       validTo: signature.validTo,
       isActive: signature.isActive,
+      isExpired: false,
+      isUsedInContract: !!isUsedInContract, // Return flag for FE to disable edit/delete
     });
   } catch (error) {
     console.error("Get signature error:", error);
@@ -170,6 +221,20 @@ exports.deleteSignature = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy chữ ký để xóa" });
     }
 
+    // Check if used in any contract
+    const isUsedInContract = await ContractSignature.findOne({
+      signatureId: signatureToDelete._id,
+      isValid: true,
+    });
+
+    if (isUsedInContract) {
+      return res.status(403).json({
+        message:
+          "Không thể xóa chữ ký đã được sử dụng trong hợp đồng. Vui lòng tạo chữ ký mới nếu cần.",
+      });
+    }
+
+    // Delete image from Cloudinary
     const publicId = signatureToDelete.signatureImagePath
       .split("/")
       .pop()
