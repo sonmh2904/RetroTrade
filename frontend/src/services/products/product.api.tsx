@@ -142,7 +142,7 @@ export const getTopViewedItemsByOwner = async (ownerId: string, limit: number = 
 };
 export const getAllItems = async () => {
   try {
-    const res = await instance.get(`/products/product/public`);
+    const res = await instance.get(`/products/public/items`);
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -193,6 +193,19 @@ export const getPublicItemById = async (id: string) => {
   } catch (error) {
     console.error("Error fetching item detail:", error);
     throw error;
+  }
+};
+
+export const getAllPublicCategories = async () => {
+  try {
+    const res = await instance.get(`/products/public/categories`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching all public categories:", error);
+    return { data: [] };
   }
 };
 
