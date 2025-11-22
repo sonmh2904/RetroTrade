@@ -1,250 +1,332 @@
 "use client"
 
-import { motion, Variants, Transition } from "framer-motion"
+import { motion, Variants, AnimatePresence } from "framer-motion"
 import Image from "next/image"
+import { useState, useRef, useEffect } from "react"
+import { ArrowRight, ChevronLeft, ChevronRight, Quote, Sparkles } from "lucide-react"
 
-type BenefitItem = {
-  title: string
-  description: string
-  icon: string
-  color: string
+const stories = [
+  {
+    id: 1,
+    title: "Ý tưởng và cảm hứng",
+    content: "RetroTrade ra đời từ một ý tưởng giản dị nhưng đầy khát vọng: biến những món đồ không còn dùng tới thành nguồn tài nguyên quý giá. Nhóm sáng lập được truyền cảm hứng từ việc nhìn thấy hàng ngàn món đồ vẫn còn giá trị bị bỏ phí, đồng thời nhận ra rằng việc tái sử dụng đồ cũ không chỉ giúp tiết kiệm chi phí mà còn góp phần giảm rác thải và bảo vệ môi trường. Ý tưởng này không chỉ là kinh tế mà còn là lời kêu gọi cộng đồng sống xanh, bền vững hơn mỗi ngày.",
+    author: "RetroTrade",
+    role: "Nguồn cảm hứng và ý tưởng",
+    image: "/stories/story-1.jpg",
+    stats: "Từ những nhu cầu thực tế hàng ngày"
+  },
+  {
+    id: 2,
+    title: "Hành trình thực hiện",
+    content: "Từ ý tưởng, RetroTrade bắt đầu xây dựng nền tảng trực tuyến dễ sử dụng, nơi người dùng có thể cho thuê, thuê lại hoặc chia sẻ đồ dùng chất lượng. Mỗi tính năng được thiết kế để đơn giản hóa quy trình trao đổi, đảm bảo minh bạch và thuận tiện. Đồng thời, chúng tôi triển khai các chương trình ưu đãi, sự kiện cộng đồng và hướng dẫn cách tái sử dụng đồ cũ, để việc sống xanh không chỉ là lý thuyết mà trở thành thói quen thực tế trong đời sống hàng ngày.",
+    author: "RetroTrade",
+    role: "Hành trình thực hiện",
+    image: "/stories/story-2.jpg",
+    stats: "Nhiều món đồ được tái sử dụng mỗi ngày"
+  },
+  {
+    id: 3,
+    title: "Ý nghĩa và thông điệp",
+    content: "Qua từng giao dịch, từng câu chuyện chia sẻ, RetroTrade trở thành cầu nối kết nối cộng đồng những người yêu môi trường. Chúng tôi mong muốn gửi gắm thông điệp rằng mỗi hành động nhỏ như thuê đồ cũ, chia sẻ kinh nghiệm hay tái sử dụng một món đồ đều mang ý nghĩa to lớn: giảm rác thải, tiết kiệm tài nguyên và xây dựng lối sống bền vững. RetroTrade không chỉ là nền tảng giao dịch, mà còn là nơi truyền cảm hứng, lan tỏa giá trị xanh đến mọi người và góp phần xây dựng một hành tinh xanh hơn cho thế hệ mai sau.",
+    author: "RetroTrade",
+    role: "Ý nghĩa và thông điệp",
+    image: "/stories/story-3.jpeg",
+    stats: "Cộng đồng rộng lớn và ngày càng phát triển"
+  }
+];
+
+
+const fadeInUp: Variants = {
+  hidden: { opacity: 0, y: 40 },
+  visible: (i: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.15,
+      duration: 0.8,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  })
 }
 
-const benefits: BenefitItem[] = [
-  {
-    title: "Tiết kiệm chi phí",
-    description: "Giảm thiểu chi phí mua sắm bằng cách tận dụng đồ dùng còn tốt",
-    icon: "💰",
-    color: "from-emerald-500 to-teal-600"
-  },
-  {
-    title: "Bảo vệ môi trường",
-    description: "Góp phần giảm thiểu rác thải và bảo vệ tài nguyên thiên nhiên",
-    icon: "🌱",
-    color: "from-green-500 to-emerald-600"
-  },
-  {
-    title: "Trải nghiệm đa dạng",
-    description: "Khám phá và trải nghiệm nhiều sản phẩm khác nhau",
-    icon: "✨",
-    color: "from-amber-400 to-orange-500"
-  },
-  {
-    title: "Kết nối cộng đồng",
-    description: "Giao lưu và chia sẻ với những người có cùng đam mê",
-    icon: "👥",
-    color: "from-blue-500 to-indigo-600"
-  },
-]
-
-const containerVariants: Variants = {
+const fadeIn: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.3,
-    },
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 30, scale: 0.95 },
-  visible: (i: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      duration: 0.7,
-      ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
-      delay: i * 0.15,
-    },
-  }),
-  hover: {
-    scale: 1.03,
-    y: -5,
-    transition: {
-      duration: 0.4,
-      ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
-      type: "spring",
-      stiffness: 400,
-      damping: 20,
+      duration: 0.8,
+      ease: [0.16, 1, 0.3, 1]
     }
   }
-};
+}
+
+const slideIn = (direction: 'left' | 'right'): Variants => ({
+  hidden: { 
+    x: direction === 'left' ? -100 : 100,
+    opacity: 0 
+  },
+  visible: {
+    x: 0,
+    opacity: 1,
+    transition: {
+      duration: 0.8,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  }
+})
 
 export function StorySection() {
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(0)
+  const [isHovering, setIsHovering] = useState(false)
+  const intervalRef = useRef<number | null>(null)
+
+  const nextStory = () => {
+    setCurrentStoryIndex((prev) => (prev + 1) % stories.length)
+  }
+
+  const prevStory = () => {
+    setCurrentStoryIndex((prev) => (prev - 1 + stories.length) % stories.length)
+  }
+
+  const goToStory = (index: number) => {
+    setCurrentStoryIndex(index)
+  }
+
+  useEffect(() => {
+    if (!isHovering) {
+      intervalRef.current = window.setInterval(() => {
+        nextStory()
+      }, 5000)
+    }
+    return () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [isHovering])
+
+  const currentStory = stories[currentStoryIndex]
+
   return (
-    <section className="relative z-10 py-24 px-4 bg-gradient-to-br from-indigo-50 via-white to-purple-50 overflow-hidden">
-      {/* Enhanced background with multiple layers */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-100/30 to-purple-100/30" />
-        <div 
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%239C92AC\' fill-opacity=\'0.1\' fill-rule=\'evenodd\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/svg%3E")',
-            backgroundSize: '60px 60px',
-          }}
-        />
-        {/* Floating shapes for dynamism */}
-        <div className="absolute top-20 left-10 w-32 h-32 bg-indigo-200/20 rounded-full blur-xl animate-pulse" style={{ animationDelay: '0s' }} />
-        <div className="absolute bottom-20 right-20 w-40 h-40 bg-purple-200/20 rounded-full blur-xl animate-pulse" style={{ animationDelay: '2s' }} />
-        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-emerald-200/30 rounded-full blur-lg animate-bounce" style={{ animationDelay: '1s' }} />
-      </div>
+    <section 
+      className="relative py-24 px-4 overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-purple-50"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
+      {/* Animated background elements */}
+      <motion.div 
+        className="absolute inset-0 opacity-5"
+        style={{
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%239C92AC\' fill-opacity=\'0.1\' fill-rule=\'evenodd\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/svg%3E")',
+          backgroundSize: '60px 60px',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.03 }}
+        transition={{ duration: 1 }}
+      />
 
-      <div className="container mx-auto relative">
-        <div className="text-center mb-20">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            whileInView={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.6, type: "spring", stiffness: 300 }}
-            viewport={{ once: true }}
+      <div className="container mx-auto relative z-10">
+        {/* Section Header */}
+        <motion.div 
+          className="text-center mb-16"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "0px 0px -100px 0px" }}
+        >
+          <motion.div 
             className="inline-flex items-center gap-2 mb-6 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 text-sm font-semibold shadow-lg"
+            variants={fadeInUp}
+            custom={0}
           >
-            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping" />
-            CÂU CHUYỆN CỦA CHÚNG TÔI
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            CÂU CHUYỆN RETROTRADE
           </motion.div>
+          
           <motion.h2 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            viewport={{ once: true }}
-            className="text-5xl md:text-6xl font-bold text-center mb-6 text-gray-900 leading-tight relative"
+            className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
+            variants={fadeInUp}
+            custom={1}
           >
-            Hãy cùng nhau tạo nên
-            <motion.span 
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 animate-gradient-x"
-              style={{ 
-                backgroundSize: '200% 100%',
-                animation: 'gradientShift 3s ease infinite',
-              }}
-            >
-              Những câu chuyện ý nghĩa
-            </motion.span>
+            Hành trình <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+              RetroTrade
+            </span>
           </motion.h2>
-          <motion.p
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            viewport={{ once: true }}
-            className="text-xl md:text-2xl text-center text-gray-600 max-w-4xl mx-auto leading-relaxed font-light"
+          
+          <motion.p 
+            className="text-lg text-gray-600 max-w-3xl mx-auto"
+            variants={fadeInUp}
+            custom={2}
           >
-            Mỗi món đồ cũ đều mang trong mình một câu chuyện, hãy cùng chúng tôi viết tiếp những câu chuyện đó
+            Khám phá hành trình phát triển và những cột mốc ý nghĩa của RetroTrade trong sứ mệnh sống xanh
           </motion.p>
-        </div>
+        </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+        {/* Story Content */}
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          {/* Image with parallax effect */}
           <motion.div 
             className="relative"
-            initial={{ opacity: 0, x: -60, rotate: -2 }}
-            whileInView={{ opacity: 1, x: 0, rotate: 0 }}
-            transition={{ duration: 1, ease: [0.22, 1, 0.36, 1], type: "spring", stiffness: 100 }}
-            viewport={{ once: true }}
-            whileHover={{ scale: 1.02, rotate: 1 }}
+            variants={slideIn('left')}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "0px 0px -100px 0px" }}
           >
-            <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl border border-white/30 group">
-              <Image 
-                src="/people-sharing-and-collaborating-at-desk.jpg" 
-                alt="Cộng đồng RetroTrade" 
-                width={700} 
-                height={500}
-                className="w-full h-auto transition-transform duration-500 group-hover:scale-105"
-              />
-              {/* Overlay gradient for depth */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl border-8 border-white">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentStory.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.5 }}
+                  className="relative aspect-[4/3]"
+                >
+                  <Image
+                    src={currentStory.image}
+                    alt={currentStory.title}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                </motion.div>
+              </AnimatePresence>
             </div>
+            
             {/* Decorative elements */}
             <motion.div 
-              className="absolute -top-8 -left-8 w-40 h-40 bg-indigo-100/40 rounded-full -z-10 blur-xl"
+              className="absolute -top-6 -left-6 w-32 h-32 bg-indigo-100/50 rounded-full -z-10 blur-xl"
               initial={{ scale: 0.8, opacity: 0.5 }}
               whileInView={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.8, delay: 0.5 }}
             />
             <motion.div 
-              className="absolute -bottom-8 -right-8 w-32 h-32 bg-purple-100/40 rounded-full -z-10 blur-xl"
+              className="absolute -bottom-8 -right-8 w-40 h-40 bg-purple-100/50 rounded-full -z-10 blur-xl"
               initial={{ scale: 0.8, opacity: 0.5 }}
               whileInView={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
+              transition={{ duration: 0.8, delay: 0.7 }}
             />
-            {/* Quote bubble or accent */}
-            <motion.div 
-              className="absolute top-10 right-10 w-20 h-20 bg-gradient-to-br from-yellow-300/20 to-orange-300/20 rounded-full flex items-center justify-center text-2xl opacity-0 lg:opacity-100"
-              initial={{ scale: 0 }}
-              whileInView={{ scale: 1 }}
-              transition={{ duration: 0.6, delay: 0.7, type: "spring" }}
-            >
-              💭
-            </motion.div>
           </motion.div>
 
+          {/* Story Content */}
           <motion.div 
-            className="space-y-6"
-            variants={containerVariants}
+            className="relative"
+            variants={slideIn('right')}
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true }}
+            viewport={{ once: true, margin: "0px 0px -100px 0px" }}
           >
-            {benefits.map((benefit, index) => (
-              <motion.div 
-                key={index}
-                custom={index}
-                variants={itemVariants}
-                whileHover="hover"
-                className="relative p-8 rounded-3xl bg-white/70 backdrop-blur-md shadow-xl hover:shadow-2xl transition-all duration-500 border border-white/30 group overflow-hidden"
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentStory.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5 }}
+                className="space-y-6"
               >
-                {/* Subtle gradient overlay on hover */}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="relative z-10 flex items-start gap-5">
-                  <motion.div 
-                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${benefit.color} flex items-center justify-center text-3xl flex-shrink-0 shadow-lg group-hover:shadow-xl transition-all duration-400 group-hover:rotate-12`}
-                    whileHover={{ scale: 1.1, rotate: 360 }}
-                    transition={{ duration: 0.6, type: "spring", stiffness: 300 }}
-                  >
-                    {benefit.icon}
-                  </motion.div>
-                  <div className="flex-1 min-w-0">
-                    <motion.h3 
-                      className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors duration-300"
-                      initial={{ x: 20, opacity: 0 }}
-                      whileInView={{ x: 0, opacity: 1 }}
-                      transition={{ duration: 0.5, delay: index * 0.1 + 0.8 }}
-                      viewport={{ once: true }}
-                    >
-                      {benefit.title}
-                    </motion.h3>
-                    <motion.p 
-                      className="text-gray-600 leading-relaxed"
-                      initial={{ x: 20, opacity: 0 }}
-                      whileInView={{ x: 0, opacity: 1 }}
-                      transition={{ duration: 0.5, delay: index * 0.1 + 0.9 }}
-                      viewport={{ once: true }}
-                    >
-                      {benefit.description}
-                    </motion.p>
+                
+                <h3 className="text-3xl font-bold text-gray-900">{currentStory.title}</h3>
+                
+                <div className="relative">
+                  <Quote className="absolute -top-4 -left-2 text-gray-200 w-12 h-12 -z-10" />
+                  <p className="text-lg text-gray-600 leading-relaxed pl-8">
+                    "{currentStory.content}"
+                  </p>
+                </div>
+                
+                <div className="pt-4 border-t border-gray-100">
+                  <p className="font-semibold text-gray-900">{currentStory.author}</p>
+                  <p className="text-sm text-gray-500">{currentStory.role}</p>
+                  <div className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-full text-sm">
+                    <Sparkles className="w-4 h-4" />
+                    {currentStory.stats}
                   </div>
                 </div>
-                {/* Hover accent line */}
-                <motion.div 
-                  className={`absolute bottom-0 left-0 h-1 bg-gradient-to-r ${benefit.color} w-0 group-hover:w-full transition-all duration-700`}
-                />
               </motion.div>
-            ))}
+            </AnimatePresence>
+
+            {/* Navigation Dots */}
+            <div className="flex justify-center lg:justify-start gap-2 mt-8">
+              {stories.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => goToStory(index)}
+                  className={`w-3 h-3 rounded-full transition-all ${
+                    index === currentStoryIndex 
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 w-8' 
+                      : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                  aria-label={`Chuyển đến câu chuyện ${index + 1}`}
+                />
+              ))}
+            </div>
+
+            {/* Navigation Arrows */}
+            <div className="hidden lg:flex gap-4 mt-8">
+              <button
+                onClick={prevStory}
+                className="p-3 rounded-full bg-white shadow-md hover:shadow-lg transition-shadow"
+                aria-label="Câu chuyện trước"
+              >
+                <ChevronLeft className="w-6 h-6 text-gray-700" />
+              </button>
+              <button
+                onClick={nextStory}
+                className="p-3 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md hover:shadow-lg transition-all hover:scale-105"
+                aria-label="Câu chuyện tiếp theo"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
           </motion.div>
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes gradientShift {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .animate-gradient-x {
-          background-size: 200% 100%;
-        }
-      `}</style>
+      {/* Animated floating elements */}
+      <motion.div 
+        className="absolute top-1/4 left-1/4 w-16 h-16 bg-amber-200/30 rounded-full -z-10"
+        animate={{
+          y: [0, -20, 0],
+          x: [0, 10, 0],
+          scale: [1, 1.1, 1]
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: "easeInOut",
+          repeatType: "reverse"
+        }}
+      />
+      <motion.div 
+        className="absolute bottom-1/3 right-1/4 w-24 h-24 bg-purple-200/30 rounded-full -z-10"
+        animate={{
+          y: [0, 20, 0],
+          x: [0, -15, 0],
+          scale: [1, 0.9, 1]
+        }}
+        transition={{
+          duration: 10,
+          repeat: Infinity,
+          ease: "easeInOut",
+          repeatType: "reverse",
+          delay: 1
+        }}
+      />
     </section>
+  )
+}
+
+// Star icon component for ratings
+function Star({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className={className}
+    >
+      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+    </svg>
   )
 }
