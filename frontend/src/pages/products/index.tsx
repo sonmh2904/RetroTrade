@@ -173,6 +173,26 @@ export default function ProductPage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const itemsPerPage = 9;
 
+  // Helper function to find category by path
+  const findCategoryByPath = (path: string): Category | undefined => {
+    const pathParts = path.split('/').filter(part => part);
+    if (pathParts.length === 0) return undefined;
+    
+    // Find category with matching slug (last part of path)
+    const targetSlug = pathParts[pathParts.length - 1];
+    const candidateCategories = categories.filter(c => c.slug === targetSlug);
+    
+    // Find the one that matches the full path
+    for (const candidate of candidateCategories) {
+      const candidatePath = buildCategoryPath(candidate._id);
+      if (candidatePath === path) {
+        return candidate;
+      }
+    }
+    
+    return undefined;
+  };
+
   // Initialize currentPage and category from URL
   useEffect(() => {
     const p = Number(searchParams?.get("page") || "");
@@ -180,10 +200,10 @@ export default function ProductPage() {
       setCurrentPage(p);
     }
     
-    // Handle category from URL
-    const categorySlug = searchParams?.get("category");
-    if (categorySlug && categories.length > 0) {
-      const category = categories.find(c => c.slug === categorySlug);
+    // Handle category from URL (full path support)
+    const categoryPath = searchParams?.get("category");
+    if (categoryPath && categories.length > 0) {
+      const category = findCategoryByPath(categoryPath);
       if (category) {
         setSelectedCategory(category._id);
       }
@@ -577,18 +597,41 @@ export default function ProductPage() {
     return items.slice(start, end);
   }, [items, currentPage]);
 
+  // Helper function to build category path
+  const buildCategoryPath = (categoryId: string): string => {
+    const category = categories.find(c => c._id === categoryId);
+    if (!category) return '';
+    
+    const path: string[] = [];
+    let currentCategory: Category | undefined = category;
+    
+    // Build path from root to current category
+    while (currentCategory) {
+      path.unshift(currentCategory.slug || '');
+      if (currentCategory.parentCategoryId) {
+        currentCategory = categories.find(c => c._id === currentCategory!.parentCategoryId);
+      } else {
+        currentCategory = undefined;
+      }
+    }
+    
+    return path.filter(slug => slug).join('/');
+  };
+
   const handleCategorySelect = (categoryId: string) => {
     const newSelectedCategory = categoryId === '' ? null : (selectedCategory === categoryId ? null : categoryId);
     setSelectedCategory(newSelectedCategory);
     
-    // Update URL with category slug
+    // Update URL with full category path
     if (newSelectedCategory) {
-      const category = categories.find(c => c._id === newSelectedCategory);
-      if (category?.slug) {
-        const sp = new URLSearchParams(searchParams?.toString() || "");
-        sp.set("category", category.slug);
-        const qs = sp.toString();
-        const newUrl = qs ? `${pathname}?${qs}` : pathname;
+      const categoryPath = buildCategoryPath(newSelectedCategory);
+      if (categoryPath) {
+        // Manually construct URL to avoid encoding slashes
+        const otherParams = new URLSearchParams(searchParams?.toString() || "");
+        otherParams.delete("category"); // Remove category from other params
+        
+        const otherParamsString = otherParams.toString();
+        const newUrl = `${pathname}?category=${categoryPath}${otherParamsString ? '&' + otherParamsString : ''}`;
         window.history.replaceState({}, '', newUrl);
       }
     } else {
