@@ -7,19 +7,21 @@ import { Button } from "@/components/ui/common/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
 import { getAllWalletTransactions } from "@/services/wallet/wallet.api";
 
-const ITEMS_PER_PAGE = 15;
+const DEFAULT_PAGE_SIZE = 15;
 
 const typeLabelsVi: { [key: string]: string } = {
   deposit: "Nạp tiền",
   withdraw: "Rút tiền",
   payment: "Thanh toán",
-  transfer: "Chuyển khoản",
-  payout_renter_refund : "Admin hoàn tiền cọc ",
-  payout_owner_payment : "Admin hoàn tiền người cho thuê ",
-  refund_deposit : "Nhận lại tiền cọc",
-  owner_payment : "Nhận tiền cho thuê",
-  USER_PAYMENT : "Thanh toán đơn hàng",
-  SYSTEM_RECEIVE : "Hệ thống nhận tiền đơn hàng",
+  payout_renter_refund: "Hệ thống hoàn tiền cọc ",
+  payout_owner_payment: "Hệ thống hoàn tiền người cho thuê ",
+  SYSTEM_RECEIVE: "Hệ thống nhận tiền đơn hàng ",
+  payout_cancel_refund: "Hệ thống hoàn tiền do chủ đồ hủy đơn ",
+  refund_deposit: "Nhận lại tiền cọc",
+  owner_payment: "Nhận tiền cho thuê",
+  renter_payment: "Thanh toán tiền thuê",
+  USER_PAYMENT: "Thanh toán đơn hàng",
+  refund_from_cancelled: "Nhận lại tiền đơn thuê bị hủy",
 };
 
 const statusLabelsVi: { [key: string]: string } = {
@@ -35,6 +37,7 @@ export default function TransactionPage() {
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("Tất cả");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   useEffect(() => {
     fetchTransactions();
@@ -51,7 +54,6 @@ export default function TransactionPage() {
   };
 
   const transactionTypes = ["Tất cả", ...Array.from(new Set(transactions.map(t => typeLabelsVi[t.typeId] || "Khác")))];
-
   const filteredTransactions = transactions.filter(tx => {
     const userName = tx.walletId?.userId?.fullName || "";
     const typeVi = typeLabelsVi[tx.typeId] || "Khác";
@@ -61,11 +63,14 @@ export default function TransactionPage() {
     return matchesSearch && matchesType;
   });
 
-  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredTransactions.length / pageSize);
   const paginatedTransactions = filteredTransactions.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
+
+  const startIndex = (currentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(currentPage * pageSize, filteredTransactions.length);
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
@@ -87,7 +92,6 @@ export default function TransactionPage() {
 
   const renderStatus = (tx: any) => {
     if (tx.typeId === "deposit") return "Đã thanh toán";
-    // Chuẩn hóa nếu backend dùng hoặc không dùng enum tiếng Việt
     return (
       statusLabelsVi[tx.status] ||
       (tx.status && tx.status[0].toUpperCase() + tx.status.slice(1)) ||
@@ -111,24 +115,34 @@ export default function TransactionPage() {
       </div>
 
       {/* Filter & Search */}
-      <div className="flex gap-4">
-        <input
-          type="text"
-          placeholder="Tìm kiếm người dùng"
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 flex-grow focus:outline-none focus:ring-2 focus:ring-purple-600"
-        />
+      <div className="flex gap-3 items-center mb-6">
+        <div className="relative flex-grow">
+          <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
+            {/* Icon kính lúp SVG */}
+            <svg width="18" height="18" fill="none" stroke="currentColor">
+              <circle cx="8" cy="8" r="7" strokeWidth="2" />
+              <line x1="13" y1="13" x2="17" y2="17" strokeWidth="2" />
+            </svg>
+          </span>
+          <input
+            type="text"
+            placeholder="Tìm kiếm người dùng, ngân hàng, số tk, ngày..."
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            className="border border-gray-200 rounded-xl pl-9 pr-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-900 shadow-sm"
+          />
+        </div>
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-600"
+          onChange={e => setTypeFilter(e.target.value)}
+          className="border border-gray-200 bg-white rounded-xl px-4 py-2 text-gray-900 shadow-sm min-w-[180px] focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
           {transactionTypes.map((type) => (
             <option key={type} value={type}>{type}</option>
           ))}
         </select>
       </div>
+
 
       {/* Transaction Table */}
       <Card>
@@ -139,12 +153,12 @@ export default function TransactionPage() {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100 text-left text-sm text-gray-700">
-                <th className="p-3">STT</th>
+                <th className="p-3 text-center">STT</th>
                 <th className="p-3">Người dùng</th>
                 <th className="p-3">Loại giao dịch</th>
-                <th className="p-3">Số tiền</th>
+                <th className="p-3 text-right">Số tiền</th>
                 <th className="p-3">Ngày tạo</th>
-                <th className="p-3">Trạng thái</th>
+                <th className="p-3 text-center">Trạng thái</th>
               </tr>
             </thead>
             <tbody>
@@ -157,12 +171,23 @@ export default function TransactionPage() {
               ) : (
                 paginatedTransactions.map((tx, index) => (
                   <tr key={tx._id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">{(currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
-                    <td className="p-3">{tx.walletId?.userId?.fullName || "Không rõ"}</td>
+                    <td className="p-3 text-center">{startIndex + index}</td>
+                    <td className="p-3 font-semibold">{tx.walletId?.userId?.fullName || "Không rõ"}</td>
                     <td className="p-3">{typeLabelsVi[tx.typeId] || "Khác"}</td>
-                    <td className="p-3">{tx.amount?.toLocaleString()} VNĐ</td>
-                    <td className="p-3">{formatDateTime(tx.createdAt)}</td>
-                    <td className="p-3">{renderStatus(tx)}</td>
+                    <td className="p-3 whitespace-nowrap text-right font-bold text-indigo-600">
+                      {tx.amount?.toLocaleString()} <span className="text-gray-500 text-xs">VNĐ</span>
+                    </td>
+                    <td className="p-3 whitespace-nowrap">{formatDateTime(tx.createdAt)}</td>
+                    <td className="p-3 whitespace-nowrap text-center">
+                      <span className={
+                        `px-2 py-0.5 rounded font-semibold text-xs whitespace-nowrap
+                        ${tx.status === "completed" || tx.status === "paid" || tx.status === "approved" ? "bg-green-100 text-green-700" :
+                          tx.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                            tx.status === "rejected" ? "bg-red-100 text-red-700" : "bg-gray-200 text-gray-800"}`
+                      }>
+                        {renderStatus(tx)}
+                      </span>
+                    </td>
                   </tr>
                 ))
               )}
@@ -170,27 +195,42 @@ export default function TransactionPage() {
           </table>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-4 flex justify-center items-center gap-3">
-              <Button
-                variant="outline"
+          <div className="flex items-center justify-between bg-blue-50 px-4 py-2 rounded-xl mt-4">
+            {/* Hiển thị số dòng */}
+            <span className="text-gray-700 text-sm">
+              Hiển thị {startIndex} - {endIndex} của {filteredTransactions.length} kết quả
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                className="px-3 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100"
                 disabled={currentPage === 1}
-                onClick={() => goToPage(currentPage - 1)}
+                onClick={() => setCurrentPage(currentPage - 1)}
               >
-                Trước
-              </Button>
-              <span className="text-gray-700">
-                Trang <strong>{currentPage}</strong> / {totalPages}
-              </span>
-              <Button
-                variant="outline"
+                &lt;
+              </button>
+              <span className="px-4 py-1 bg-white rounded font-semibold border border-gray-300">Trang {currentPage} / {totalPages}</span>
+              <button
+                className="px-3 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100"
                 disabled={currentPage === totalPages}
-                onClick={() => goToPage(currentPage + 1)}
+                onClick={() => setCurrentPage(currentPage + 1)}
               >
-                Sau
-              </Button>
+                &gt;
+              </button>
+              <select
+                className="ml-2 px-2 py-1 rounded border border-gray-300 bg-white font-medium"
+                value={pageSize}
+                onChange={e => {
+                  setCurrentPage(1);
+                  setPageSize(parseInt(e.target.value));
+                }}
+              >
+                <option value={10}>10 / trang</option>
+                <option value={15}>15 / trang</option>
+                <option value={25}>25 / trang</option>
+                <option value={50}>50 / trang</option>
+              </select>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>

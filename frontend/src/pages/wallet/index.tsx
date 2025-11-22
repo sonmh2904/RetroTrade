@@ -204,7 +204,7 @@ export default function WalletPage() {
   // Chuyển đến trang xem tất cả giao dịch
   const router = useRouter();
   const handleViewAllTransactions = () => {
-    router.push('/wallet/transactions'); 
+    router.push('/wallet/transactions');
   };
   const convertWithdrawStatusVN = (st: string): string => {
     switch (st) {
@@ -430,6 +430,13 @@ export default function WalletPage() {
                             </span>
                           )
                           : null}
+
+                        {/* Dòng mã đơn nằm dưới ngày tháng */}
+                        {t.orderId && (
+                          <div className="mt-1 px-2 py-0.5 bg-gray-100 rounded text-gray-700 w-fit">
+                            Mã đơn: {typeof t.orderId === "string" ? t.orderId : t.orderId._id}
+                          </div>
+                        )}
                       </div>
 
                     </div>

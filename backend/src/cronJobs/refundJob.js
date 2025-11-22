@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const Order = require('../models/Order/Order.model');
 const { refundOrder } = require('../controller/wallet/userRefund.Controller');
+const { refundPendingOrder } = require('../controller/wallet/refundCancelledOrder.Controller');
 
 cron.schedule('*/1 * * * *', async () => {
   const now = new Date();
@@ -36,5 +37,28 @@ cron.schedule('*/1 * * * *', async () => {
     console.error('Lỗi khi lấy danh sách đơn:', error);
   }
 });
+
+// HOÀN TIỀN ĐƠN BỊ HUỶ (cancelled/pending đã thanh toán)
+cron.schedule('*/1 * * * *', async () => {
+  try {
+    const cancelledOrders = await Order.find({
+      isRefunded: false,
+      paymentStatus: "paid",
+      orderStatus: { $in: ["pending", "cancelled"] }
+    });
+
+    for (const order of cancelledOrders) {
+      try {
+        await refundPendingOrder(order._id);
+        console.log(`Hoàn tiền tự động cho đơn bị huỷ ${order._id} thành công.`);
+      } catch (err) {
+        console.error(`Lỗi hoàn tiền đơn bị huỷ ${order._id}:`, err);
+      }
+    }
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách đơn cancelled/pending:', error);
+  }
+});
+
 
 module.exports = cron;

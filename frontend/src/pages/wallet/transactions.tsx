@@ -107,13 +107,13 @@ export default function WalletTransactionsPage() {
                                 <div className="font-semibold text-lg text-gray-900 mb-1">
                                     {t.typeId === "USER_PAYMENT"
                                         ? (
-                                            t.orderId?.itemSnapshot?.title || "Thanh toán đơn hàng"
+                                            "Thanh toán : " + t.orderId?.itemSnapshot?.title || "Thanh toán đơn hàng"
                                         )
                                         : t.typeId === "withdraw"
                                             ? "Rút tiền"
                                             : t.note || t.typeId}
                                 </div>
-                                <div className="flex flex-wrap items-center gap-2 text-gray-500 text-sm">
+                                <div className="flex flex-wrap items-center gap-2 text-gray-500 text-sm flex-col items-start">
                                     <span className="inline-flex items-center">
                                         <svg className="mr-1" width={17} height={17} fill="none" viewBox="0 0 20 20">
                                             <circle cx={10} cy={10} r={9} stroke="#888" strokeWidth={2} />
@@ -121,7 +121,12 @@ export default function WalletTransactionsPage() {
                                         </svg>
                                         {new Date(t.createdAt).toLocaleString("vi-VN")}
                                     </span>
-                                    {/* Badge trạng thái */}
+                                    {/* Mã đơn hiển thị bên dưới ngày tháng */}
+                                    {t.orderId && (
+                                        <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-700">
+                                            Mã đơn: {typeof t.orderId === "string" ? t.orderId : t.orderId._id}
+                                        </span>
+                                    )}
                                     {t.typeId === "withdraw" && t.status && (
                                         <span className={`ml-2 px-3 py-1 text-xs font-semibold rounded-2xl ${(statusColor as any)[t.status] || "bg-gray-200 text-gray-800"}`}>
                                             {convertWithdrawStatusVN(t.status)}

@@ -124,16 +124,17 @@ export default function WithdrawPage() {
     );
   });
 
-  const totalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
+  const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const paginatedRequests = filteredRequests.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
-
+  const totalPages = Math.ceil(filteredRequests.length / pageSize);
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
-  };
+  }
+
 
   const getStatusBadge = (status: string) => {
     const base = "px-2 py-1 rounded-full text-xs font-medium";
@@ -312,14 +313,47 @@ export default function WithdrawPage() {
             </table>
           )}
           {totalPages > 1 && (
-            <div className="mt-6 flex justify-center items-center gap-3">
-              <Button variant="outline" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>Trước</Button>
-              <span className="text-gray-600">
-                Trang <span className="font-semibold">{currentPage}</span> / {totalPages}
+            <div className="flex items-center justify-between bg-blue-50 px-4 py-2 rounded-xl mt-4">
+              {/* Hiển thị số dòng */}
+              <span className="text-gray-700 text-sm">
+                Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredRequests.length)} của {filteredRequests.length} kết quả
               </span>
-              <Button variant="outline" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>Sau</Button>
+              <div className="flex items-center gap-1">
+                <button
+                  className="px-3 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100"
+                  disabled={currentPage === 1}
+                  onClick={() => goToPage(currentPage - 1)}
+                >
+                  &lt;
+                </button>
+                <span className="px-4 py-1 bg-white rounded font-semibold border border-gray-300">
+                  Trang {currentPage} / {totalPages}
+                </span>
+                <button
+                  className="px-3 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100"
+                  disabled={currentPage === totalPages}
+                  onClick={() => goToPage(currentPage + 1)}
+                >
+                  &gt;
+                </button>
+                {/* Dropdown chọn số dòng/trang */}
+                <select
+                  className="ml-2 px-2 py-1 rounded border border-gray-300 bg-white font-medium"
+                  value={ITEMS_PER_PAGE}
+                  onChange={e => {
+                    setCurrentPage(1);
+                    setPageSize(parseInt(e.target.value));
+                  }}
+                >
+                  <option value={10}>10 / trang</option>
+                  <option value={15}>15 / trang</option>
+                  <option value={25}>25 / trang</option>
+                  <option value={50}>50 / trang</option>
+                </select>
+              </div>
             </div>
           )}
+
         </CardContent>
       </Card>
     </div>
