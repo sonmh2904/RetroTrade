@@ -1,6 +1,10 @@
+const mongoose = require("mongoose");
 const User = require("../../models/User.model");
 const BanHistory = require("../../models/BanHistory.model");
 const AuditLog = require("../../models/AuditLog.model");
+const Complaint = require("../../models/Complaint.model");
+const Report = require("../../models/Report.model");
+const OrderReport = require("../../models/Order/Reports.model");
 const { sendEmail } = require("../../utils/sendEmail");
 
 module.exports.getAllUsers = async (req, res) => {
@@ -100,6 +104,196 @@ module.exports.getAllUsers = async (req, res) => {
     } catch (error) {
         console.error("Error in getAllUsers:", error);
         return res.json({ code: 500, message: "Lấy danh sách người dùng thất bại", error: error.message });
+    }
+};
+
+/**
+ * Moderator: Lấy danh sách user cần xử lý (có report, complaint, dispute, hoặc đã bị ban)
+ */
+module.exports.getUsersForModeration = async (req, res) => {
+    try {
+        const { skip = 0, limit = 10, page = 1 } = req.pagination || {};
+        const { 
+            search = '', 
+            role = '', 
+            status = '',
+            issueType = '' // Filter theo loại vấn đề: 'complaint', 'report', 'dispute', 'banned', hoặc 'all'
+        } = req.query || {};
+
+        // Lấy danh sách user IDs có vấn đề theo từng loại
+        const userIdsWithComplaints = new Set();
+        const userIdsWithReports = new Set();
+        const userIdsWithDisputes = new Set();
+        const userIdsBanned = new Set();
+
+        // 1. Users có complaint
+        const complaints = await Complaint.find({ 
+            status: { $in: ['pending', 'reviewing'] },
+            userId: { $exists: true, $ne: null }
+        }).select('userId').lean();
+        complaints.forEach(c => {
+            if (c.userId) userIdsWithComplaints.add(c.userId.toString());
+        });
+
+        // 2. Users bị report (Report model)
+        const reports = await Report.find({ 
+            status: { $in: ['pending', 'in_review'] },
+            reportedUserId: { $exists: true, $ne: null }
+        }).select('reportedUserId').lean();
+        reports.forEach(r => {
+            if (r.reportedUserId) userIdsWithReports.add(r.reportedUserId.toString());
+        });
+
+        // 3. Users có dispute (Order Report model)
+        const disputes = await OrderReport.find({ 
+            type: 'dispute',
+            status: { $in: ['Pending', 'In Progress', 'Reviewed'] },
+            reportedUserId: { $exists: true, $ne: null }
+        }).select('reportedUserId').lean();
+        disputes.forEach(d => {
+            if (d.reportedUserId) userIdsWithDisputes.add(d.reportedUserId.toString());
+        });
+
+        // 4. Users đã bị ban (có ban history)
+        const bannedUsers = await BanHistory.find({ 
+            isActive: true 
+        }).select('userId').lean();
+        bannedUsers.forEach(b => {
+            if (b.userId) userIdsBanned.add(b.userId.toString());
+        });
+
+        // Filter theo issueType
+        let userIdsWithIssues = new Set();
+        if (issueType === 'complaint') {
+            userIdsWithIssues = userIdsWithComplaints;
+        } else if (issueType === 'report') {
+            userIdsWithIssues = userIdsWithReports;
+        } else if (issueType === 'dispute') {
+            userIdsWithIssues = userIdsWithDisputes;
+        } else if (issueType === 'banned') {
+            userIdsWithIssues = userIdsBanned;
+        } else {
+            // 'all' hoặc không có filter: lấy tất cả
+            userIdsWithComplaints.forEach(id => userIdsWithIssues.add(id));
+            userIdsWithReports.forEach(id => userIdsWithIssues.add(id));
+            userIdsWithDisputes.forEach(id => userIdsWithIssues.add(id));
+            userIdsBanned.forEach(id => userIdsWithIssues.add(id));
+        }
+
+        // Nếu không có user nào có vấn đề, trả về danh sách rỗng
+        if (userIdsWithIssues.size === 0) {
+            return res.json({
+                code: 200,
+                message: "Lấy danh sách người dùng cần xử lý thành công",
+                data: {
+                    items: [],
+                    page: page,
+                    limit: limit,
+                    totalItems: 0,
+                    totalPages: 0
+                }
+            });
+        }
+
+        // Build filter object
+        const filter = {
+            _id: { $in: Array.from(userIdsWithIssues).map(id => new mongoose.Types.ObjectId(id)) }
+        };
+
+        // Filter by role
+        if (role && role !== 'all' && ['renter', 'owner', 'admin', 'moderator'].includes(role)) {
+            filter.role = role;
+        }
+
+        // Filter by status (verification status)
+        if (status && status !== 'all') {
+            switch (status) {
+                case 'verified':
+                    filter.isEmailConfirmed = true;
+                    filter.isPhoneConfirmed = true;
+                    filter.isIdVerified = true;
+                    break;
+                case 'pending':
+                    filter.isEmailConfirmed = true;
+                    filter.$or = [
+                        { isPhoneConfirmed: { $ne: true } },
+                        { isIdVerified: { $ne: true } }
+                    ];
+                    break;
+                case 'unverified':
+                    filter.isEmailConfirmed = false;
+                    break;
+            }
+        }
+
+        // Search filter
+        if (search && search.trim()) {
+            const searchRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const searchConditions = { $or: [
+                { email: searchRegex },
+                { fullName: searchRegex },
+                { displayName: searchRegex }
+            ]};
+            
+            if (filter.$or && Array.isArray(filter.$or)) {
+                const statusOr = filter.$or;
+                delete filter.$or;
+                filter.$and = [
+                    { $or: statusOr },
+                    searchConditions
+                ];
+            } else {
+                Object.assign(filter, searchConditions);
+            }
+        }
+
+        // Build query
+        const query = User.find(filter)
+            .select('userGuid email fullName displayName avatarUrl role isEmailConfirmed isPhoneConfirmed isIdVerified reputationScore points isDeleted isActive createdAt');
+
+        query.sort({ createdAt: -1 });
+        query.skip(skip).limit(limit);
+
+        const [users, totalItems] = await Promise.all([
+            query.lean(),
+            User.countDocuments(filter)
+        ]);
+
+        // Map users với thông tin vấn đề của họ
+        const usersWithIssues = users.map(user => {
+            const userId = user._id.toString();
+            const issues = [];
+            
+            if (userIdsWithComplaints.has(userId)) {
+                issues.push('complaint');
+            }
+            if (userIdsWithReports.has(userId)) {
+                issues.push('report');
+            }
+            if (userIdsWithDisputes.has(userId)) {
+                issues.push('dispute');
+            }
+            if (userIdsBanned.has(userId)) {
+                issues.push('banned');
+            }
+            
+            return {
+                ...user,
+                issues: issues // Array các loại vấn đề
+            };
+        });
+
+        return res.json({
+            code: 200,
+            message: "Lấy danh sách người dùng cần xử lý thành công",
+            data: {
+                items: usersWithIssues,
+                ...(res.paginationMeta ? res.paginationMeta(totalItems) : { page, limit, totalItems, totalPages: Math.max(Math.ceil(totalItems / (limit || 1)), 1) })
+            }
+        });
+    } catch (error) {
+        console.error("Error in getUsersForModeration:", error);
+        return res.json({ code: 500, message: "Lấy danh sách người dùng cần xử lý thất bại", error: error.message });
     }
 };
 
@@ -212,7 +406,7 @@ module.exports.updateUserRole = async (req, res) => {
 };
 
 /**
- * Ban user (soft delete) - chỉ admin mới có quyền
+ * Ban user (soft delete) - admin và moderator có quyền
  * Yêu cầu: lý do ban (reason)
  */
 module.exports.banUser = async (req, res) => {
@@ -220,6 +414,7 @@ module.exports.banUser = async (req, res) => {
         const { id } = req.params;
         const { reason } = req.body;
         const adminId = req.user._id || req.user.id;
+        const currentUserRole = req.user.role;
 
         // Validate input
         if (!id) {
@@ -252,12 +447,64 @@ module.exports.banUser = async (req, res) => {
             });
         }
 
-        // Không cho phép ban admin khác
+        // Không cho phép ban admin
         if (user.role === 'admin') {
             return res.json({
                 code: 403,
                 message: "Không thể khóa tài khoản admin"
             });
+        }
+
+        // Moderator không thể ban moderator khác (cùng cấp bậc)
+        if (currentUserRole === 'moderator' && user.role === 'moderator') {
+            return res.json({
+                code: 403,
+                message: "Bạn không thể khóa tài khoản cùng cấp bậc"
+            });
+        }
+
+        // Moderator chỉ có thể ban user khi có lý do hợp lệ (có report, complaint, hoặc dispute)
+        if (currentUserRole === 'moderator') {
+            let hasValidReason = false;
+            let validationDetails = [];
+
+            // Kiểm tra user có complaint không
+            const complaint = await Complaint.findOne({ 
+                userId: id, 
+                status: { $in: ['pending', 'reviewing'] } 
+            });
+            if (complaint) {
+                hasValidReason = true;
+                validationDetails.push(`Có khiếu nại (ID: ${complaint._id})`);
+            }
+
+            // Kiểm tra user có bị report không
+            const report = await Report.findOne({ 
+                reportedUserId: id, 
+                status: { $in: ['pending', 'in_review'] } 
+            });
+            if (report) {
+                hasValidReason = true;
+                validationDetails.push(`Bị báo cáo (ID: ${report._id})`);
+            }
+
+            // Kiểm tra user có dispute không
+            const dispute = await OrderReport.findOne({ 
+                reportedUserId: id, 
+                type: 'dispute',
+                status: { $in: ['Pending', 'In Progress', 'Reviewed'] } 
+            });
+            if (dispute) {
+                hasValidReason = true;
+                validationDetails.push(`Có tranh chấp (ID: ${dispute._id})`);
+            }
+
+            if (!hasValidReason) {
+                return res.json({
+                    code: 403,
+                    message: "Bạn chỉ có thể khóa tài khoản khi người dùng có khiếu nại, bị báo cáo hoặc có tranh chấp. Vui lòng kiểm tra lại thông tin người dùng."
+                });
+            }
         }
 
         // Check if user is already banned

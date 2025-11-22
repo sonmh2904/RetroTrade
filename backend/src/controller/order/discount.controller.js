@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Discount = require("../../models/Discount/Discount.model");
+const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const { generateString } = require("../../utils/generateString");
 
 function clampDiscountAmount(type, value, baseAmount, maxDiscountAmount) {
@@ -169,11 +170,9 @@ module.exports = {
       if (!Array.isArray(userIds)) {
         return res.status(400).json({ status: "error", message: "Danh sách người dùng không hợp lệ" });
       }
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-      const DiscountModel = require("../../models/Discount/Discount.model");
       
       // Kiểm tra discount trước khi gán
-      const discount = await DiscountModel.findById(id).lean();
+      const discount = await Discount.findById(id).lean();
       if (!discount) {
         return res.status(404).json({ status: "error", message: "Không tìm thấy mã giảm giá" });
       }
@@ -186,7 +185,7 @@ module.exports = {
         });
       }
       
-      const updated = await DiscountModel.findByIdAndUpdate(id, { isPublic: false }, { new: true });
+      const updated = await Discount.findByIdAndUpdate(id, { isPublic: false }, { new: true });
       if (!updated) return res.status(404).json({ status: "error", message: "Không tìm thấy mã giảm giá" });
 
       const ops = userIds.map((uid) => ({
@@ -217,7 +216,6 @@ module.exports = {
   setPublic: async (req, res) => {
     try {
       const { id } = req.params;
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
       
       // Xóa tất cả assignment cũ khi set discount thành công khai
       // Vì discount công khai không cần assignment (tất cả người dùng đều có thể sử dụng)
@@ -304,7 +302,6 @@ module.exports = {
       // Nếu set discount thành công khai, xóa tất cả assignment cũ
       // Vì discount công khai không cần assignment (tất cả người dùng đều có thể sử dụng)
       if (isPublic !== undefined && isPublic === true) {
-        const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
         await DiscountAssignment.deleteMany({ discountId: id });
       }
       
@@ -335,7 +332,6 @@ module.exports = {
       if (ownerId) filter.ownerId = ownerId;
       if (itemId) filter.itemId = itemId;
       const skip = (Number(page) - 1) * Number(limit);
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
       
       // Lấy user assignments với filter effectiveFrom/effectiveTo
       const userAssignmentsQuery = req.user?._id 
@@ -457,7 +453,6 @@ module.exports = {
       const doc = await Discount.findOne({ code: code?.toUpperCase(), active: true, startAt: { $lte: now }, endAt: { $gte: now } }).lean();
       if (!doc) return res.status(404).json({ status: "error", message: "Mã không khả dụng" });
       if (!doc.isPublic) {
-        const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
         const assign = await DiscountAssignment.findOne({ discountId: doc._id, userId: req.user?._id, active: true }).lean();
         if (!assign) return res.status(403).json({ status: "error", message: "Bạn không được phép sử dụng mã này" });
         if (assign.effectiveFrom && now < new Date(assign.effectiveFrom)) return res.status(403).json({ status: "error", message: "Mã chưa đến thời gian sử dụng" });
@@ -537,7 +532,6 @@ module.exports = {
       }
 
       // Kiểm tra xem user đã claim mã này chưa
-      const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
       const existingAssignment = await DiscountAssignment.findOne({ 
         discountId: discount._id, 
         userId: userId 
@@ -581,7 +575,6 @@ module.exports = {
     // Internal helper used by order create
   validateAndCompute: async ({ code, baseAmount, ownerId, itemId, userId }) => {
         const now = new Date();
-    const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
         const codeUpper = code?.toUpperCase().trim();
         if (!codeUpper) return { valid: false, reason: "INVALID_CODE" };
         

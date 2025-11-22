@@ -99,7 +99,7 @@ const orderSchema = new mongoose.Schema(
     isContractSigned: { type: Boolean, default: false },
     disputeId: {
       type: Types.ObjectId,
-      ref: "Report",
+      ref: "OrderReport",
       default: null,
     },
     returnInfo: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import { useSelector } from "react-redux";
 import Image from "next/image";
@@ -100,7 +100,7 @@ interface Product {
   rejectReason?: string;
 }
 
-const OwnerProductDetailPage: React.FC = () => {
+const ProductDetail: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
   const [loading, setLoading] = useState(true);
@@ -117,7 +117,7 @@ const OwnerProductDetailPage: React.FC = () => {
     return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " ₫";
   };
 
-  const fetchProduct = async (productId: string) => {
+  const fetchProduct = useCallback(async (productId: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -138,7 +138,7 @@ const OwnerProductDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (id && isAuthenticated) {
@@ -146,7 +146,7 @@ const OwnerProductDetailPage: React.FC = () => {
     } else if (!isAuthenticated) {
       router.push("/auth/login");
     }
-  }, [id, isAuthenticated, router]);
+  }, [id, isAuthenticated, fetchProduct, router]);
 
   const handleDeleteClick = () => {
     setShowDeleteModal(true);
@@ -755,4 +755,4 @@ const OwnerProductDetailPage: React.FC = () => {
   );
 };
 
-export default OwnerProductDetailPage;
+export default ProductDetail;

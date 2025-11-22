@@ -1,3 +1,4 @@
+const ServiceFee = require("../../models/ServiceFee.model");
 
 function getTimeUnitInDays(unitId) {
   const units = { 1: 1 / 24, 2: 1, 3: 7, 4: 30 };
@@ -43,7 +44,6 @@ module.exports.calculateTotals = async function (
     }
 
     // Lấy serviceFee rate từ database
-    const ServiceFee = require("../../models/ServiceFee.model");
     const serviceFeeRate = await ServiceFee.getCurrentServiceFeeRate();
 
     const duration = calculateDurationInUnit(startAt, endAt, priceUnitId);

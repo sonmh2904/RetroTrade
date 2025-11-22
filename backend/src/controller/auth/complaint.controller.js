@@ -31,18 +31,23 @@ const submitComplaint = async (req, res) => {
             status: 'pending'
         });
 
-        // Send notification to admins
+        // Send notification to admins and moderators
         try {
-            const admins = await User.find({ role: 'admin', isDeleted: false });
+            const adminsAndModerators = await User.find({ 
+                role: { $in: ['admin', 'moderator'] }, 
+                isDeleted: false 
+            });
             
-            for (const admin of admins) {
+            for (const adminOrModerator of adminsAndModerators) {
                 await createNotification(
-                    admin._id,
+                    adminOrModerator._id,
                     'complaint',
                     'Khiếu nại mới về tài khoản bị khóa',
                     `Người dùng ${email} đã gửi khiếu nại về tài khoản bị khóa. Vui lòng xem xét.`,
                     {
-                        link: `/admin/complaints/${complaint._id}`,
+                        link: adminOrModerator.role === 'admin' 
+                            ? `/admin/complaints/${complaint._id}` 
+                            : `/moderator?tab=complaints`,
                         relatedUserId: user ? user._id : null
                     }
                 );
@@ -134,7 +139,7 @@ const submitComplaint = async (req, res) => {
 };
 
 /**
- * Admin: Lấy danh sách khiếu nại ban tài khoản
+ * Admin/Moderator: Lấy danh sách khiếu nại ban tài khoản
  */
 const getAllComplaints = async (req, res) => {
     try {
@@ -194,7 +199,7 @@ const getAllComplaints = async (req, res) => {
 };
 
 /**
- * Admin: Lấy chi tiết khiếu nại
+ * Admin/Moderator: Lấy chi tiết khiếu nại
  */
 const getComplaintById = async (req, res) => {
     try {
@@ -243,7 +248,7 @@ const getComplaintById = async (req, res) => {
 };
 
 /**
- * Admin: Xử lý khiếu nại (resolve/reject)
+ * Admin/Moderator: Xử lý khiếu nại (resolve/reject)
  */
 const handleComplaint = async (req, res) => {
     try {

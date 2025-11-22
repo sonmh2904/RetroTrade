@@ -1141,7 +1141,9 @@ export default function Checkout() {
         } else {
           sessionStorage.removeItem("checkoutItems");
         }
-        router.push("/auth/order/my-order");
+        if (router.pathname !== "/my-orders" && router.asPath !== "/my-orders") {
+          router.push("/auth/my-orders");
+        }
       } else if (successCount > 0) {
         toast.warning(
           `Đã xử lý thành công ${successCount} đơn hàng. ${failedItemMessages.length} đơn thất bại: ${failedItemMessages.join(", ")}`

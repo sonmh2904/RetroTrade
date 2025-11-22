@@ -115,6 +115,27 @@ export const getAllUsers = async (
     return await parseResponse(response);
 };
 
+// Moderator: Lấy danh sách user cần xử lý (có report, complaint, dispute, hoặc đã bị ban)
+export const getUsersForModeration = async (
+    page: number = 1, 
+    limit: number = 10, 
+    search: string = '',
+    role: string = '',
+    status: string = '',
+    issueType: string = '' // 'complaint', 'report', 'dispute', 'banned', hoặc 'all'
+): Promise<ApiResponse<{ items: UserProfile[], totalPages: number, totalItems: number }>> => {
+    const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(search && { search }),
+        ...(role && role !== 'all' && { role }),
+        ...(status && status !== 'all' && { status }),
+        ...(issueType && issueType !== 'all' && { issueType })
+    });
+    const response = await api.get(`/user/moderation?${queryParams}`);
+    return await parseResponse(response);
+};
+
 export const getUserById = async (id: string): Promise<ApiResponse<UserProfile>> => {
     const response = await api.get(`/user/${id}`);
     return await parseResponse(response);

@@ -566,7 +566,7 @@ export default function SignContractPage() {
           <h2 className="text-xl font-bold text-gray-800 mb-2">
             Đơn hàng không tồn tại
           </h2>
-          <Link href="/auth/order">
+          <Link href="/my-orders">
             <button className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
               Quay lại danh sách đơn hàng
             </button>
@@ -597,7 +597,7 @@ export default function SignContractPage() {
           </Link>
           <ChevronRight className="w-4 h-4 text-gray-400" />
           <Link
-            href={`/auth/order/${orderId}`}
+            href={`/my-orders/${orderId}`}
             className="hover:text-blue-600 flex items-center gap-1"
           >
             <ShoppingBag className="w-4 h-4" />

@@ -17,6 +17,8 @@ const {
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
+const DiscountController = require("./discount.controller");
+const loyaltyController = require("../loyalty/loyalty.controller");
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
@@ -102,8 +104,6 @@ module.exports = {
 
       const publicCode = publicDiscountCode || discountCode;
       const privateCode = privateDiscountCode;
-
-      const DiscountController = require("./discount.controller");
 
       // --- Public Discount ---
       if (publicCode) {
@@ -355,7 +355,6 @@ module.exports = {
 
       // Cộng RT Points cho renter khi order được xác nhận (không block nếu lỗi)
       try {
-        const loyaltyController = require("../loyalty/loyalty.controller");
         const {
           createNotification,
         } = require("../../middleware/createNotification");
