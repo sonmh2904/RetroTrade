@@ -151,7 +151,8 @@ export default function ProductPage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [maxPrice, setMaxPrice] = useState(5000000);
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPrice, setMaxPrice] = useState(Number.MAX_SAFE_INTEGER);
   const [featuredItems, setFeaturedItems] = useState<Product[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
@@ -171,6 +172,11 @@ export default function ProductPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [showCustomPrice, setShowCustomPrice] = useState(false);
+  const [priceRange, setPriceRange] = useState({ from: 0, to: 0 });
+  const [selectedPriceRange, setSelectedPriceRange] = useState<string | null>(
+    null
+  );
   const itemsPerPage = 9;
 
   // Helper function to find category by path
@@ -543,7 +549,11 @@ export default function ProductPage() {
         console.log('DEBUG - Selected category not found!');
       }
     }
-    filtered = filtered.filter((item) => item.basePrice <= maxPrice);
+    // Apply price filtering based on min and max price
+    filtered = filtered.filter((item) => {
+      const price = item.basePrice || 0;
+      return price >= minPrice && price <= maxPrice;
+    });
     if (search) {
       filtered = filtered.filter((p) =>
         p.title.toLowerCase().includes(search.toLowerCase())
@@ -568,6 +578,7 @@ export default function ProductPage() {
     setCurrentPage(1);
   }, [
     selectedCategory,
+    minPrice,
     maxPrice,
     search,
     selectedTagIds,
@@ -848,7 +859,7 @@ export default function ProductPage() {
               {/* Categories */}
               <div className="space-y-3 mb-6">
                 <h4 className="font-medium text-gray-700">Danh mục</h4>
-                <div className="flex items-center gap-2 px-2 py-2 rounded hover:bg-gray-50">
+                <div className="flex items-center gap-2 flex-1 min-w-[260px]">
                   <input
                     type="radio"
                     name="category"
@@ -894,24 +905,165 @@ export default function ProductPage() {
               </div>
               {/* Price */}
               <div className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-2">
-                  Giá thuê (VND)
+                <h4 className="font-medium text-gray-700 mb-3">
+                  Giá thuê
                 </h4>
-                <input
-                  type="range"
-                  min={0}
-                  max={5000000}
-                  step={50000}
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(Number(e.target.value))}
-                  className="w-full accent-blue-600"
-                />
-                <div className="flex justify-between text-xs text-gray-600 mt-1">
-                  <span>0</span>
-                  <span>5.000.000</span>
-                </div>
-                <div className="text-right text-sm text-gray-700 mt-1">
-                  Tối đa: {new Intl.NumberFormat("vi-VN").format(maxPrice)}đ
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={!selectedPriceRange}
+                      onChange={() => {
+                        setSelectedPriceRange(null);
+                        setMinPrice(0);
+                        setMaxPrice(Number.MAX_SAFE_INTEGER);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Tất cả</span>
+                  </label>
+                  {/* <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '0'}
+                      onChange={() => {
+                        setSelectedPriceRange('0');
+                        setMinPrice(0);
+                        setMaxPrice(0);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Sản phẩm 0đ</span>
+                  </label> */}
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '100000'}
+                      onChange={() => {
+                        setSelectedPriceRange('100000');
+                        setMinPrice(0);
+                        setMaxPrice(100000);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Dưới 100.000đ</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '100000-200000'}
+                      onChange={() => {
+                        setSelectedPriceRange('100000-200000');
+                        setMinPrice(100000);
+                        setMaxPrice(200000);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>100.000đ - 200.000đ</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '200000-500000'}
+                      onChange={() => {
+                        setSelectedPriceRange('200000-500000');
+                        setMinPrice(200000);
+                        setMaxPrice(500000);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>200.000đ - 500.000đ</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '500000'}
+                      onChange={() => {
+                        setSelectedPriceRange('500000');
+                        setMinPrice(500000);
+                        setMaxPrice(Number.MAX_SAFE_INTEGER);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Trên 500.000đ</span>
+                  </label>
+                  
+                  <div className="pt-2">
+                    <div 
+                      className="flex items-center gap-2 text-sm text-blue-600 cursor-pointer"
+                      onClick={() => setShowCustomPrice(!showCustomPrice)}
+                    >
+                      <span>Chọn khoảng giá</span>
+                      <span>{showCustomPrice ? '−' : '+'}</span>
+                    </div>
+                    
+                    {showCustomPrice && (
+                      <div className="mt-2 space-y-2 pl-4 border-l-2 border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700 w-8">Từ</span>
+                          <input
+                            type="text"
+                            value={priceRange.from === 0 ? '' : priceRange.from}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setPriceRange(prev => ({
+                                ...prev,
+                                from: value ? parseInt(value) : 0
+                              }));
+                            }}
+                            placeholder="0"
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">đ</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700 w-8">Đến</span>
+                          <input
+                            type="text"
+                            value={priceRange.to === 0 ? '' : priceRange.to}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setPriceRange(prev => ({
+                                ...prev,
+                                to: value ? parseInt(value) : 0
+                              }));
+                            }}
+                            placeholder="0"
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">đ</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (priceRange.from >= priceRange.to) {
+                              toast.error('Giá bắt đầu phải nhỏ hơn giá kết thúc');
+                              return;
+                            }
+                            setSelectedPriceRange('custom');
+                            setMinPrice(priceRange.from);
+                            setMaxPrice(priceRange.to);
+                          }}
+                          disabled={priceRange.from >= priceRange.to || priceRange.from === 0 || priceRange.to === 0}
+                          className={`w-full py-1 text-sm rounded ${
+                            priceRange.from >= priceRange.to || priceRange.from === 0 || priceRange.to === 0
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : 'bg-blue-500 text-white hover:bg-blue-600'
+                          }`}
+                        >
+                          Áp dụng
+                        </button>
+                        {priceRange.from > 0 && priceRange.to > 0 && priceRange.from >= priceRange.to && (
+                          <p className="text-xs text-red-500 mt-1">Giá bắt đầu phải nhỏ hơn giá kết thúc</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               {/* Province */}
