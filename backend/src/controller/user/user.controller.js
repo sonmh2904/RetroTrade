@@ -314,7 +314,7 @@ module.exports.getProfile = async (req, res) => {
 
         const user = await User.findOne({
             email: email
-        }).select("userGuid email fullName displayName avatarUrl bio phone isEmailConfirmed isPhoneConfirmed isIdVerified reputationScore points role wallet lastLoginAt createdAt updatedAt").lean();
+        }).select("userGuid email fullName displayName avatarUrl bio phone isEmailConfirmed isPhoneConfirmed isIdVerified reputationScore points role lastLoginAt createdAt updatedAt").lean();
 
         if (!user) {
             return res.json({

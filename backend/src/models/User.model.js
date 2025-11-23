@@ -35,10 +35,6 @@ const userSchema = new mongoose.Schema({
         enum: ['renter', 'owner', 'admin', 'moderator'],
         default: 'renter'
     },
-    wallet: {
-        currency: { type: String, default: 'VND' },
-        balance: { type: Number, default: 0 }
-    },
     documents: [{
         documentType: String,
         documentNumber: String,

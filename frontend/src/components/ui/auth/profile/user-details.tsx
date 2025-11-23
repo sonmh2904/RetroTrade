@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Input } from "@/components/ui/common/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/common/dialog";
 import { User, Mail, Phone, Calendar, MapPin, CreditCard, Shield, CheckCircle, XCircle, Clock, Lock, Eye, EyeOff } from "lucide-react";
 import type { UserProfile } from "@iService";
 import { verifyPassword } from "@/services/auth/user.api";

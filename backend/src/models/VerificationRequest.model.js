@@ -20,7 +20,7 @@ const verificationRequestSchema = new mongoose.Schema({
     },
     // Ảnh đã upload
     documents: [{
-        documentType: { type: String, enum: ['selfie', 'idCardFront', 'idCardBack'] },
+        documentType: { type: String, enum: ['idCardFront', 'idCardBack'] },
         fileUrl: String,
         uploadedAt: { type: Date, default: Date.now }
     }],

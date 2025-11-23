@@ -60,7 +60,7 @@ export default function VerificationForm({
     const steps = [
         { id: 1, title: "Nhập số điện thoại", description: "Nhập số điện thoại Việt Nam để nhận mã OTP" },
         { id: 2, title: "Nhập mã OTP", description: "Nhập mã xác thực 6 chữ số" },
-        { id: 3, title: "Tải ảnh xác minh", description: "Tải lên ảnh cá nhân và CCCD" },
+        { id: 3, title: "Tải ảnh xác minh", description: "Tải lên ảnh mặt trước và mặt sau CCCD" },
         { id: 4, title: "Kết quả", description: "Kết quả xác minh danh tính" },
     ];
 
