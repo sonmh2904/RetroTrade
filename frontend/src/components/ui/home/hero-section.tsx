@@ -1,119 +1,235 @@
 "use client";
 import { Button } from "@/components/ui/common/button";
-import { motion, type Variants } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { MessageCircle, ShoppingBag } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+const heroItems = [
+  {
+    mainImage: "/banners/kham-pha-san-pham.jpg",
+    title: "RetroTrade - Nền tảng cho thuê đồ cũ",
+    subtitle: "Tiết kiệm chi phí, bảo vệ môi trường",
+    description: "RetroTrade là nền tảng hàng đầu tại Việt Nam giúp bạn thuê và chia sẻ đồ dùng chất lượng. Giải pháp thông minh để bạn tiết kiệm chi phí, trải nghiệm tiện lợi và góp phần giảm rác thải.",
+    buttonText: "Tìm hiểu thêm",
+    buttonHref: "/about",
+    previewImages: ["/banners/tiet-kiem-chi-phi.jpg", "/banners/bao-ve-moi-truong.jpg", "/banners/discount.jpg"],
+  },
+  {
+    mainImage: "/banners/tiet-kiem-chi-phi.jpg",
+    title: "Tiết kiệm tối đa chi phí",
+    subtitle: "Thuê thay vì mua",
+    description: "Thay vì mua mới, bạn có thể thuê những món đồ chất lượng với giá chỉ bằng 30% chi phí. RetroTrade giúp bạn vừa tiết kiệm, vừa duy trì phong cách và linh hoạt trong mọi nhu cầu sử dụng.",
+    buttonText: "Xem sản phẩm",
+    buttonHref: "/products",
+    previewImages: ["/banners/bao-ve-moi-truong.jpg", "/banners/discount.jpg", "/banners/ket-noi-cong-dong.jpg"],
+  },
+  {
+    mainImage: "/banners/bao-ve-moi-truong.jpg",
+    title: "Bảo vệ môi trường cùng RetroTrade",
+    subtitle: "Tái sử dụng thông minh, giảm thiểu rác thải",
+    description: "Mỗi món đồ được thuê và tái sử dụng là một bước ý nghĩa trong việc bảo vệ môi trường. Tham gia RetroTrade để giảm thiểu rác thải, sống bền vững và góp phần xây dựng hành tinh xanh hơn.",
+    buttonText: "Tham gia cộng đồng",
+    buttonHref: "/join",
+    previewImages: ["/banners/discount.jpg", "/banners/ket-noi-cong-dong.jpg", "/banners/kham-pha-san-pham.jpg"],
+  },
+  {
+    mainImage: "/banners/discount.jpg",
+    title: "Nhận ưu đãi hấp dẫn khi thuê đồ",
+    subtitle: "Mua sắm thông minh, tiết kiệm hơn",
+    description: "Đăng ký tài khoản RetroTrade ngay hôm nay để nhận những ưu đãi đặc biệt khi thuê đồ cũ. Tiết kiệm chi phí, tận hưởng dịch vụ chất lượng và trải nghiệm mua sắm thông minh.",
+    buttonText: "Tham gia ngay",
+    buttonHref: "/auth/register",
+    previewImages: ["/banners/ket-noi-cong-dong.jpg", "/banners/kham-pha-san-pham.jpg", "/banners/tiet-kiem-chi-phi.jpg"],
+  },
+  {
+    mainImage: "/banners/ket-noi-cong-dong.jpg",
+    title: "Kết nối cộng đồng bền vững",
+    subtitle: "Chia sẻ, giao lưu và học hỏi",
+    description: "Tham gia cộng đồng RetroTrade, nơi mọi người cùng nhau chia sẻ đồ dùng, học hỏi kinh nghiệm và trải nghiệm các giá trị bền vững. Tạo kết nối, tiết kiệm và cùng bảo vệ môi trường.",
+    buttonText: "Tham gia ngay",
+    buttonHref: "/community",
+    previewImages: ["/banners/kham-pha-san-pham.jpg", "/banners/tiet-kiem-chi-phi.jpg", "/banners/bao-ve-moi-truong.jpg"],
+  },
+];
 
-const buttonsContainerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
+
+const slideVariants: Variants = {
+  initial: { 
+    opacity: 0, 
+    x: 90, 
+    scale: 1.05, 
+    filter: "blur(10px)" 
+  },
+  animate: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.3,
+    x: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: { 
+      duration: 0.9, 
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number] 
+    },
+  },
+  exit: {
+    opacity: 0,
+    x: -90,
+    scale: 0.95,
+    filter: "blur(12px)",
+    transition: { 
+      duration: 0.7, 
+      ease: "easeIn" 
     },
   },
 };
-
-const buttonVariants: Variants = {
-  hidden: { opacity: 0, y: 20, scale: 0.95 },
-  visible: {
+// Ảnh preview bên phải (fade + pop)
+const previewItem = {
+  hidden: { opacity: 0, y: 25, scale: 0.9 },
+  show: {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.5, ease: "easeOut" },
-  },
-  hover: {
-    scale: 1.05,
-    y: -2,
-    transition: { type: "spring", stiffness: 400, damping: 17 },
+    transition: { duration: 0.55 },
   },
 };
-
 export function HeroSection() {
-  const sectionRef = useRef(null);
-
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const timer = useRef<any>(null);
+  
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("animate-fade-in-up");
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
-
+    startAuto();
+    return () => clearInterval(timer.current);
+  }, [currentSlide]);
+  
+  const startAuto = () => {
+    clearInterval(timer.current);
+    timer.current = setInterval(() => nextSlide(), 5000);
+  };
+  const nextSlide = () =>
+    setCurrentSlide((prev) => (prev + 1) % heroItems.length);
+  const prevSlide = () =>
+    setCurrentSlide((prev) => (prev - 1 + heroItems.length) % heroItems.length);
+  const goToSlide = (index: number) => {
+    setCurrentSlide(index);
+    startAuto();
+  };
+  const currentItem = heroItems[currentSlide];
   return (
-    <section ref={sectionRef} className="relative z-10 py-20 px-4">
-      <div className="container mx-auto grid md:grid-cols-2 gap-12 items-center">
-        {/* Cột bên trái */}
-        <motion.div className="space-y-6" initial="hidden" animate="visible">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 leading-tight">
-            Cho thuê đồ cũ
-            <br />
-            <span className="text-indigo-600">Tiết kiệm & Bền vững</span>
-          </h1>
+    <section className="relative h-[600px] w-full overflow-hidden font-['Be_Vietnam_Pro',sans-serif]">
+      {/* Full-width background image */}
+      <div 
+        className="absolute inset-0 w-full h-full z-0"
+        style={{
+          backgroundImage: 'url("/banners/about-1.jpg")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      />
+      
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/40 z-10" />
 
-          <p className="text-lg text-gray-600">
-            Nền tảng chia sẻ và cho thuê đồ cũ hàng đầu Việt Nam
-          </p>
-
-          {/* Buttons Container */}
-          <motion.div 
-            variants={buttonsContainerVariants}
-            initial="hidden"
-            animate="visible"
-            className="flex flex-col sm:flex-row gap-4 w-full max-w-md mx-auto md:mx-0"
-          >
-            <motion.div 
-              className="flex-1"
-              variants={buttonVariants}
-              whileHover="hover"
+      <div className="relative z-20 h-full flex items-center justify-center">
+        <div className="container mx-auto px-4 max-w-7xl">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+              className="bg-white/90 backdrop-blur-sm rounded-2xl overflow-hidden shadow-2xl"
             >
-              <Link href="/auth/messages" className="block w-full">
-                <Button
-                  size="lg"
-                  className="w-full rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-6 text-base font-medium whitespace-nowrap shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+              <div className="relative w-full h-[500px] rounded-2xl overflow-hidden shadow-2xl">
+                {/* Main image background */}
+                <div 
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: `url(${currentItem.mainImage})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
                 >
-                  <MessageCircle className="w-5 h-5" />
-                  Tư vấn ngay
-                </Button>
-              </Link>
+                  <div className="relative z-10 h-full w-full p-8 flex flex-col md:flex-row items-center">
+                    <div className="w-full md:w-1/2 flex items-center">
+                      <div className="max-w-md relative">
+                        {/* Text shadow container for better readability */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent rounded-lg -m-2 -z-10"></div>
+                        
+                        <motion.h1 
+                          className="text-4xl md:text-5xl font-bold mb-6 text-white drop-shadow-lg font-['Be_Vietnam_Pro',sans-serif]"
+                          initial={{ x: -20, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 100 }}
+                        >
+                          {currentItem.title}
+                        </motion.h1>
+                        <motion.p 
+                          className="text-xl mb-6 text-amber-100 font-semibold font-['Be_Vietnam_Pro',sans-serif] drop-shadow-md"
+                          initial={{ x: -20, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
+                        >
+                          {currentItem.subtitle}
+                        </motion.p>
+                        <motion.p 
+                          className="mb-8 text-white/90 font-normal leading-relaxed font-['Be_Vietnam_Pro',sans-serif] text-justify drop-shadow-sm"
+                          initial={{ x: -20, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{ delay: 0.4, type: 'spring', stiffness: 100 }}
+                        >
+                          {currentItem.description}
+                        </motion.p>
+                      </div>
+                    </div>
+                    <div className="w-full md:w-1/2 flex items-center justify-center md:justify-end mt-8 md:mt-0 md:pl-8">
+                      <div className="relative h-[400px] flex items-end gap-6">
+                        {currentItem.previewImages.map((img, index) => (
+                          <motion.div
+                            key={index}
+                            className="relative w-40 h-56 rounded-xl overflow-hidden shadow-2xl hover:shadow-2xl transition-all"
+                            whileHover={{ y: -20, scale: 1.05 }}
+                            initial={{ y: 60, opacity: 0, rotate: 5 - (index * 2) }}
+                            animate={{ y: 0, opacity: 1, rotate: 0 }}
+                            transition={{ 
+                              delay: 0.3 + (index * 0.15),
+                              type: 'spring',
+                              stiffness: 80,
+                              damping: 10
+                            }}
+                            style={{
+                              zIndex: 3 - index,
+                              transformOrigin: 'bottom center'
+                            }}
+                          >
+                            <img
+                              src={img}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </motion.div>
+          </AnimatePresence>
 
-            <motion.div 
-              className="flex-1"
-              variants={buttonVariants}
-              whileHover="hover"
-            >
-              <Link href="/products" className="block w-full">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full rounded-full border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 py-6 text-base font-medium whitespace-nowrap transition-all duration-300 flex items-center justify-center gap-2"
-                >
-                  <ShoppingBag className="w-5 h-5" />
-                  Xem sản phẩm
-                </Button>
-              </Link>
-            </motion.div>
-          </motion.div>
-        </motion.div>
-
-        {/* Cột bên phải: Hình minh họa */}
-        <div className="relative">
-          <img
-            src="/v.gif"
-            alt="Hero illustration"
-            className="w-full h-auto rounded-2xl"
-          />
+          {/* Navigation dots */}
+          <div className="flex justify-center mt-8 space-x-2">
+            {heroItems.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  index === currentSlide ? 'bg-orange-500 scale-125' : 'bg-white/50 hover:bg-white/75'
+                }`}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>

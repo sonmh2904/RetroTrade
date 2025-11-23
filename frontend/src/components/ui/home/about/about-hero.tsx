@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useEffect, useState } from "react"
 import { motion, type Variants } from "framer-motion"
-import * as THREE from "three"
 import { Button } from "@/components/ui/common/button"
 import Link from "next/link"
 import { MessageCircle, ShoppingBag } from "lucide-react"
+import Image from "next/image"
 
 const buttonsContainerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -34,184 +34,7 @@ const buttonVariants: Variants = {
 };
 
 export function AboutHero() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    if (!canvasRef.current) return
-
-    const canvas = canvasRef.current
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000)
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true })
-
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    camera.position.z = 5
-
-    // Enhanced particles with varied sizes and colors
-    const particlesGeometry = new THREE.BufferGeometry()
-    const particlesCount = 1500
-    const posArray = new Float32Array(particlesCount * 3)
-    const sizesArray = new Float32Array(particlesCount)
-    const colorsArray = new Float32Array(particlesCount * 3)
-
-    for (let i = 0; i < particlesCount * 3; i += 3) {
-      posArray[i] = (Math.random() - 0.5) * 12
-      posArray[i + 1] = (Math.random() - 0.5) * 12
-      posArray[i + 2] = (Math.random() - 0.5) * 12
-
-      sizesArray[i / 3] = Math.random() * 0.05 + 0.01
-
-      // Gradient colors from indigo to pink
-      const hue = Math.random() * 0.3 + 0.7 // Indigo-purple-pink range
-      colorsArray[i] = 1 // R
-      colorsArray[i + 1] = hue * 0.5 // G
-      colorsArray[i + 2] = 1 // B
-    }
-
-    particlesGeometry.setAttribute("position", new THREE.BufferAttribute(posArray, 3))
-    particlesGeometry.setAttribute("size", new THREE.BufferAttribute(sizesArray, 1))
-    const particlesMaterial = new THREE.PointsMaterial({
-      vertexColors: true,
-      size: 0.03,
-      transparent: true,
-      opacity: 0.7,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-    })
-
-    const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial)
-    scene.add(particlesMesh)
-
-    // Enhanced 3D shapes with better materials and glow
-    const geometry1 = new THREE.TorusKnotGeometry(1, 0.3, 100, 16)
-    const geometry2 = new THREE.DodecahedronGeometry(1)
-    const geometry3 = new THREE.IcosahedronGeometry(0.8)
-
-    const material1 = new THREE.MeshPhysicalMaterial({
-      color: 0x6366f1,
-      metalness: 0.8,
-      roughness: 0.2,
-      transparent: true,
-      opacity: 0.8,
-      clearcoat: 1,
-      clearcoatRoughness: 0.1,
-      emissive: 0x6366f1,
-      emissiveIntensity: 0.2,
-    })
-
-    const material2 = new THREE.MeshPhysicalMaterial({
-      color: 0x8b5cf6,
-      metalness: 0.8,
-      roughness: 0.2,
-      transparent: true,
-      opacity: 0.8,
-      clearcoat: 1,
-      clearcoatRoughness: 0.1,
-      emissive: 0x8b5cf6,
-      emissiveIntensity: 0.2,
-    })
-
-    const material3 = new THREE.MeshPhysicalMaterial({
-      color: 0xf97316,
-      metalness: 0.8,
-      roughness: 0.2,
-      transparent: true,
-      opacity: 0.8,
-      clearcoat: 1,
-      clearcoatRoughness: 0.1,
-      emissive: 0xf97316,
-      emissiveIntensity: 0.2,
-    })
-
-    const torusKnot = new THREE.Mesh(geometry1, material1)
-    const dodecahedron = new THREE.Mesh(geometry2, material2)
-    const icosahedron = new THREE.Mesh(geometry3, material3)
-
-    torusKnot.position.set(-2, 1, 0)
-    dodecahedron.position.set(2, -1, 0)
-    icosahedron.position.set(0, 1.5, -1)
-
-    scene.add(torusKnot, dodecahedron, icosahedron)
-
-    // Improved lighting with more dynamic sources
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
-    const pointLight1 = new THREE.PointLight(0x6366f1, 1.5, 100)
-    const pointLight2 = new THREE.PointLight(0xf97316, 1.5, 100)
-    const pointLight3 = new THREE.PointLight(0x8b5cf6, 1.5, 100)
-    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6)
-
-    pointLight1.position.set(5, 5, 5)
-    pointLight2.position.set(-5, -5, 5)
-    pointLight3.position.set(0, 5, -5)
-
-    scene.add(ambientLight, pointLight1, pointLight2, pointLight3, hemisphereLight)
-
-    // Animation loop with smoother interactions
-    const animate = () => {
-      requestAnimationFrame(animate)
-
-      // Rotate shapes with easing
-      torusKnot.rotation.x += 0.008
-      torusKnot.rotation.y += 0.01
-
-      dodecahedron.rotation.x += 0.012
-      dodecahedron.rotation.y += 0.015
-
-      icosahedron.rotation.x += 0.018
-      icosahedron.rotation.y += 0.02
-
-      // Animate particles rotation and subtle float
-      particlesMesh.rotation.y += 0.0005
-      particlesMesh.rotation.x += 0.0003
-
-      // Enhanced mouse interaction with damping
-      const damping = 0.05
-      torusKnot.position.x += (mousePosition.x * 1 - torusKnot.position.x) * damping
-      torusKnot.position.y += (mousePosition.y * 1 - torusKnot.position.y) * damping
-
-      dodecahedron.position.x += (-mousePosition.x * 0.8 - dodecahedron.position.x) * damping
-      dodecahedron.position.y += (-mousePosition.y * 0.8 - dodecahedron.position.y) * damping
-
-      // Rotate lights for dynamic glow
-      pointLight1.position.x = Math.sin(Date.now() * 0.001) * 5
-      pointLight2.position.y = Math.cos(Date.now() * 0.0008) * 5
-
-      renderer.render(scene, camera)
-    }
-
-    animate()
-
-    const handleResize = () => {
-      if (!canvas.parentElement) return
-      const width = canvas.parentElement.clientWidth
-      const height = canvas.parentElement.clientHeight
-      camera.aspect = width / height
-      camera.updateProjectionMatrix()
-      renderer.setSize(width, height)
-    }
-
-    window.addEventListener("resize", handleResize)
-
-    return () => {
-      window.removeEventListener("resize", handleResize)
-      renderer.dispose()
-    }
-  }, [mousePosition])
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({
-        x: (e.clientX / window.innerWidth) * 2 - 1,
-        y: -(e.clientY / window.innerHeight) * 2 + 1,
-      })
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    return () => window.removeEventListener("mousemove", handleMouseMove)
-  }, [])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -402,10 +225,19 @@ export function AboutHero() {
               visible: { opacity: 1, scale: 1 },
             }}
           >
-            <canvas ref={canvasRef} className="w-full h-full" />
+            <div className="w-full h-full relative">
+              <Image
+                src="/v.gif"
+                alt="About us illustration"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
           </motion.div>
         </motion.div>
       </div>
     </section>
   )
 }
+

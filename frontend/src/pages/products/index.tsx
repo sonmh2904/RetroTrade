@@ -500,6 +500,19 @@ export default function ProductPage() {
     router,
   ]);
 
+  // Reset all filters
+  const resetAllFilters = () => {
+    setSelectedCategory(null);
+    setMinPrice(0);
+    setMaxPrice(Number.MAX_SAFE_INTEGER);
+    setSelectedPriceRange(null);
+    setSelectedProvince("");
+    setSelectedTagIds(new Set());
+    setSearch("");
+    setShowCustomPrice(false);
+    setPriceRange({ from: 0, to: 0 });
+  };
+
   // Helper functions for categories
   const getChildren = (parentId: string | null) =>
     categories.filter((c) => (c.parentCategoryId ?? null) === parentId);
@@ -642,7 +655,7 @@ export default function ProductPage() {
         otherParams.delete("category"); // Remove category from other params
         
         const otherParamsString = otherParams.toString();
-        const newUrl = `${pathname}?category=${categoryPath}${otherParamsString ? '&' + otherParamsString : ''}`;
+        const newUrl = `${pathname}/${categoryPath}${otherParamsString ? '&' + otherParamsString : ''}`;
         window.history.replaceState({}, '', newUrl);
       }
     } else {
@@ -855,7 +868,19 @@ export default function ProductPage() {
           {/* Sidebar */}
           <aside className="w-72 hidden lg:block">
             <div className="bg-white shadow rounded-2xl p-4 sticky top-6">
-              <h3 className="font-semibold mb-4">Bộ lọc</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold">Bộ lọc</h3>
+                {(selectedCategory || minPrice > 0 || maxPrice < Number.MAX_SAFE_INTEGER || 
+                  selectedProvince || selectedTagIds.size > 0) && (
+                  <button
+                    onClick={resetAllFilters}
+                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    <X size={14} />
+                    <span>Xóa lọc</span>
+                  </button>
+                )}
+              </div>
               {/* Categories */}
               <div className="space-y-3 mb-6">
                 <h4 className="font-medium text-gray-700">Danh mục</h4>
@@ -1079,28 +1104,18 @@ export default function ProductPage() {
                     </button>
                   )}
                 </div>
-                <div className="space-y-2">
-                  {(showAllProvinces ? vietnamProvinces : vietnamProvinces.slice(0, 6)).map((p) => (
-                    <label key={p} className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="radio"
-                        name="province"
-                        checked={selectedProvince === p}
-                        onChange={() => setSelectedProvince(p)}
-                        className="accent-blue-600"
-                      />
-                      <span>{p}</span>
-                    </label>
+                <select
+                  value={selectedProvince}
+                  onChange={(e) => setSelectedProvince(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Tất cả tỉnh thành</option>
+                  {vietnamProvinces.map((province) => (
+                    <option key={province} value={province}>
+                      {province}
+                    </option>
                   ))}
-                  {vietnamProvinces.length > 6 && (
-                    <button
-                      onClick={() => setShowAllProvinces((v) => !v)}
-                      className="text-xs text-blue-500 hover:underline"
-                    >
-                      {showAllProvinces ? "Thu gọn" : "Xem thêm"}
-                    </button>
-                  )}
-                </div>
+                </select>
               </div>
               {/* Tags */}
               <div className="mb-6">
@@ -1136,31 +1151,12 @@ export default function ProductPage() {
             </div>
           </aside>
 
-          {/* Main Content */}
           <main
             className={`flex-1 transition-all duration-500 ease-out ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
               }`}
           >
-            <div className="flex justify-between items-center mb-6">
+            <div className="mb-6">
               <h1 className="text-3xl font-bold">Sản phẩm cho thuê</h1>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => router.push("/products/myfavorite")}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm"
-                  disabled={!isAuthenticated}
-                >
-                  <Bookmark className="w-4 h-4 text-yellow-300" />
-                  <span>Danh sách yêu thích</span>
-                </button>
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="text-blue-500 hover:underline"
-                  >
-                    <X size={20} />
-                  </button>
-                )}
-              </div>
             </div>
             <div className="mb-6">
               <div className="flex items-center gap-3 flex-wrap">
