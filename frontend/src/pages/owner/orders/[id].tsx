@@ -433,7 +433,9 @@ function OwnerOrderDetailContent() {
                     <XCircle className="w-6 h-6 text-red-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-red-700 mb-1">Đã hủy đơn hàng</p>
+                    <p className="font-semibold text-red-700 mb-1">
+                      Đã hủy đơn hàng
+                    </p>
                     {order.updatedAt && (
                       <p className="text-xs text-red-600 mb-2">
                         {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
@@ -443,7 +445,8 @@ function OwnerOrderDetailContent() {
                       <div className="mt-2 flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-amber-700">
-                          <span className="font-medium">Lý do:</span> {order.cancelReason}
+                          <span className="font-medium">Lý do:</span>{" "}
+                          {order.cancelReason}
                         </p>
                       </div>
                     )}
@@ -455,7 +458,9 @@ function OwnerOrderDetailContent() {
                     <AlertCircle className="w-6 h-6 text-orange-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-orange-700 mb-1">Đang tranh chấp</p>
+                    <p className="font-semibold text-orange-700 mb-1">
+                      Đang tranh chấp
+                    </p>
                     <p className="text-xs text-orange-600 mb-3">
                       {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
                     </p>
@@ -476,7 +481,9 @@ function OwnerOrderDetailContent() {
                         Xem chi tiết tranh chấp
                       </button>
                     ) : (
-                      <p className="text-xs text-orange-500">Đang tải thông tin tranh chấp...</p>
+                      <p className="text-xs text-orange-500">
+                        Đang tải thông tin tranh chấp...
+                      </p>
                     )}
                   </div>
                 </div>
@@ -487,7 +494,10 @@ function OwnerOrderDetailContent() {
 
                   <div className="relative flex items-start justify-between gap-2 overflow-x-auto pb-4">
                     {timelineSteps
-                      .filter((s) => s.status !== "cancelled" && s.status !== "disputed")
+                      .filter(
+                        (s) =>
+                          s.status !== "cancelled" && s.status !== "disputed"
+                      )
                       .map((step, idx, arr) => {
                         const isLast = idx === arr.length - 1;
                         const getStepIcon = () => {
@@ -524,7 +534,10 @@ function OwnerOrderDetailContent() {
                         const stepDate = getStepDate();
 
                         return (
-                          <div key={idx} className="relative flex flex-col items-center flex-1 min-w-[120px]">
+                          <div
+                            key={idx}
+                            className="relative flex flex-col items-center flex-1 min-w-[120px]"
+                          >
                             {/* Icon */}
                             <div className="relative z-10 mb-3">
                               <div
@@ -539,19 +552,22 @@ function OwnerOrderDetailContent() {
                                 {getStepIcon()}
                               </div>
                             </div>
-                            
+
                             {/* Connecting line - horizontal */}
                             {!isLast && (
-                              <div 
+                              <div
                                 className={`absolute top-6 left-1/2 w-full h-0.5 ${
-                                  arr[idx + 1]?.active 
-                                    ? "bg-emerald-300" 
+                                  arr[idx + 1]?.active
+                                    ? "bg-emerald-300"
                                     : "bg-gray-200"
                                 }`}
-                                style={{ width: 'calc(100% - 48px)', left: 'calc(50% + 24px)' }}
+                                style={{
+                                  width: "calc(100% - 48px)",
+                                  left: "calc(50% + 24px)",
+                                }}
                               ></div>
                             )}
-                            
+
                             {/* Content */}
                             <div className="text-center w-full">
                               <div
@@ -789,6 +805,13 @@ function OwnerOrderDetailContent() {
                   )}
                 </span>
               </div>
+              {!order.isContractSigned && (
+                <Link href={`/auth/contract/sign/${id}`}>
+                  <button className="mt-3 w-full bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 transition">
+                    Ký hợp đồng ngay
+                  </button>
+                </Link>
+              )}
             </div>
 
             {/* Tiện ích */}
