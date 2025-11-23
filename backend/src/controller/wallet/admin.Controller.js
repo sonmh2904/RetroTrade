@@ -180,8 +180,9 @@ const completeWithdrawal = async (req, res) => {
     if (wallet.balance < transaction.amount) {
       return res.status(400).json({ message: "Số dư ví không đủ" });
     }
-    wallet.balance -= transaction.amount;
+    wallet.balance -= Math.abs(transaction.amount);
     wallet.updatedAt = new Date();
+    transaction.completedAt = new Date();
     await wallet.save();
 
     transaction.status = 'completed';
