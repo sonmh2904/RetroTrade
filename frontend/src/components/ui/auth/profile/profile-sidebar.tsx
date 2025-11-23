@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avat
 type MenuKey = "discounts" | "messages" | "settings" | "security" | "addresses" | "ownership" | "disputes" | "changePassword" | "signature" | "loyalty" | "details";
 
 export interface ProfileSidebarProps {
-  active: MenuKey;
+  active: MenuKey | null;
   onChange: (key: MenuKey) => void;
   user?: { fullName?: string; email: string; avatarUrl?: string };
 }

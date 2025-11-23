@@ -337,34 +337,47 @@ export function VerificationRequestManagement() {
                       {getStatusBadge(request.status)}
                     </div>
 
-                    {request.idCardInfo && (
-                      <div className="mt-3 space-y-1 text-sm text-gray-600">
-                        {request.idCardInfo.idNumber && (
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="w-4 h-4" />
-                            <span>Số CCCD: {request.idCardInfo.idNumber}</span>
-                          </div>
-                        )}
-                        {request.idCardInfo.fullName && (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4" />
-                            <span>Họ tên: {request.idCardInfo.fullName}</span>
-                          </div>
-                        )}
-                        {request.idCardInfo.dateOfBirth && (
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            <span>
-                              Ngày sinh: {new Date(request.idCardInfo.dateOfBirth).toLocaleDateString('vi-VN')}
-                            </span>
-                          </div>
-                        )}
-                        {request.idCardInfo.address && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            <span>Địa chỉ: {request.idCardInfo.address}</span>
-                          </div>
-                        )}
+                    {request.idCardInfo ? (
+                      <div className="mt-3 space-y-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="w-4 h-4 text-green-600" />
+                          <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded">
+                            Đã có thông tin OCR
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          {request.idCardInfo.idNumber && (
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="w-4 h-4 text-indigo-600" />
+                              <span><strong>Số CCCD:</strong> {request.idCardInfo.idNumber}</span>
+                            </div>
+                          )}
+                          {request.idCardInfo.fullName && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-indigo-600" />
+                              <span><strong>Họ tên:</strong> {request.idCardInfo.fullName}</span>
+                            </div>
+                          )}
+                          {request.idCardInfo.dateOfBirth && (
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-indigo-600" />
+                              <span>
+                                <strong>Ngày sinh:</strong> {new Date(request.idCardInfo.dateOfBirth).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
+                          )}
+                          {request.idCardInfo.address && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-indigo-600" />
+                              <span><strong>Địa chỉ:</strong> {request.idCardInfo.address}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                        <Shield className="w-4 h-4" />
+                        <span>Chưa có thông tin OCR - cần nhập thủ công</span>
                       </div>
                     )}
 
@@ -472,24 +485,30 @@ export function VerificationRequestManagement() {
               </div>
 
               {/* ID Card Info */}
-              {selectedRequest.idCardInfo && (
+              {selectedRequest.idCardInfo ? (
                 <div className="border-b pb-4">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <CreditCard className="w-5 h-5" />
-                    Thông tin căn cước công dân
+                    <CreditCard className="w-5 h-5 text-indigo-600" />
+                    Thông tin căn cước công dân (đã được OCR và xác nhận)
                   </h3>
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-indigo-800 flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Thông tin này đã được hệ thống OCR tự động và được người dùng xác nhận trước khi gửi yêu cầu.
+                    </p>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-700">Số căn cước công dân</label>
-                      <p className="text-gray-900">{selectedRequest.idCardInfo.idNumber || "N/A"}</p>
+                      <p className="text-gray-900 font-semibold">{selectedRequest.idCardInfo.idNumber || "N/A"}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700">Họ và tên</label>
-                      <p className="text-gray-900">{selectedRequest.idCardInfo.fullName || "N/A"}</p>
+                      <p className="text-gray-900 font-semibold">{selectedRequest.idCardInfo.fullName || "N/A"}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700">Ngày tháng năm sinh</label>
-                      <p className="text-gray-900">
+                      <p className="text-gray-900 font-semibold">
                         {selectedRequest.idCardInfo.dateOfBirth
                           ? new Date(selectedRequest.idCardInfo.dateOfBirth).toLocaleDateString('vi-VN')
                           : "N/A"}
@@ -497,8 +516,21 @@ export function VerificationRequestManagement() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700">Địa chỉ thường trú</label>
-                      <p className="text-gray-900">{selectedRequest.idCardInfo.address || "N/A"}</p>
+                      <p className="text-gray-900 font-semibold">{selectedRequest.idCardInfo.address || "N/A"}</p>
                     </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="border-b pb-4">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-orange-600" />
+                    Thông tin căn cước công dân
+                  </h3>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-sm text-orange-800 flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Không có thông tin OCR. Vui lòng nhập thủ công thông tin từ ảnh CCCD khi duyệt yêu cầu.
+                    </p>
                   </div>
                 </div>
               )}
@@ -514,9 +546,9 @@ export function VerificationRequestManagement() {
                     {selectedRequest.documents.map((doc, index) => (
                       <div key={index} className="border rounded-lg p-2">
                         <p className="text-sm font-medium text-gray-700 mb-2">
-                          {doc.documentType === 'selfie' ? 'Ảnh cá nhân' :
-                           doc.documentType === 'idCardFront' ? 'Mặt trước CCCD' :
-                           doc.documentType === 'idCardBack' ? 'Mặt sau CCCD' : 'Tài liệu'}
+                          {doc.documentType === 'idCardFront' ? 'Mặt trước CCCD' :
+                           doc.documentType === 'idCardBack' ? 'Mặt sau CCCD' : 
+                           doc.documentType === 'selfie' ? 'Ảnh cá nhân (cũ)' : 'Tài liệu'}
                         </p>
                         <img
                           src={doc.fileUrl}

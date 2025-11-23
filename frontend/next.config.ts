@@ -46,6 +46,11 @@ const nextConfig: NextConfig = {
         hostname: "googleusercontent.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "picsum.photos",
+        pathname: "/**",
+      },
     ],
   },
 };

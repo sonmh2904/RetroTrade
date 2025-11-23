@@ -16,6 +16,10 @@ import {
   AlignLeft,
   FileCheck,
   Sparkles,
+  FileUp,
+  FileDown,
+  Eye,
+  XCircle,
 } from "lucide-react";
 import {
   createContractTemplate,
@@ -27,7 +31,9 @@ interface ContractTemplate {
   _id?: string;
   templateName: string;
   description: string;
-  templateContent: string;
+  headerContent: string;
+  bodyContent: string;
+  footerContent: string;
   isActive: boolean;
 }
 
@@ -45,26 +51,57 @@ export function ContractTemplateForm({
   const [formData, setFormData] = useState({
     templateName: template?.templateName || "",
     description: template?.description || "",
-    templateContent: template?.templateContent || "",
+    headerContent: template?.headerContent || "",
+    bodyContent: template?.bodyContent || "",
+    footerContent: template?.footerContent || "",
     isActive: template?.isActive ?? true,
   });
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
+
+  const unifiedStyle = {
+    fontFamily: "'Times New Roman', Times, serif",
+    lineHeight: "1.6",
+    fontSize: "14px",
+    wordBreak: "break-word" as const,
+    hyphens: "auto" as const,
+    whiteSpace: "pre-wrap" as const,
+    maxWidth: "800px",
+    letterSpacing: "0.02em",
+    overflowWrap: "anywhere" as const,
+    margin: "0 auto",
+  } as React.CSSProperties;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const preservedData = {
+      ...formData,
+      headerContent: formData.headerContent
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n"),
+      bodyContent: formData.bodyContent
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n"),
+      footerContent: formData.footerContent
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n"),
+      templateContent: `${formData.headerContent}\n\n${formData.bodyContent}\n\n${formData.footerContent}`,
+    };
     try {
       setLoading(true);
       let response;
       if (template?._id) {
-        response = await updateContractTemplate(template._id, formData);
+        response = await updateContractTemplate(template._id, preservedData);
       } else {
-        response = await createContractTemplate(formData);
+        response = await createContractTemplate(preservedData);
       }
       if (response.ok) {
         toast.success(template ? "Cập nhật thành công" : "Tạo mới thành công");
         onSuccess();
         onClose();
+        // Reload trang để cập nhật dữ liệu mới nhất
+        window.location.reload();
       } else {
         const errorData = await response.json();
         toast.error(errorData.message || "Thao tác thất bại");
@@ -101,6 +138,35 @@ export function ContractTemplateForm({
       y: 0,
       transition: { duration: 0.3 },
     },
+  };
+
+  const updateField = (field: keyof ContractTemplate, value: string) => {
+    setFormData({ ...formData, [field]: value });
+  };
+  const combinedContent = `${formData.headerContent}\n\n${formData.bodyContent}\n\n${formData.footerContent}`;
+
+  const footerPlaceholder = `                                                                                                    
+ĐẠI DIỆN BÊN CHO THUÊ (BÊN A)                                                                 ĐẠI DIỆN BÊN THUÊ (BÊN B)
+Họ và tên: {ownerName}                                                                                      Họ và tên: {renterName}   `;
+
+  const handlePreviewClick = () => {
+    if (
+      !formData.headerContent.trim() ||
+      !formData.bodyContent.trim() ||
+      !formData.footerContent.trim()
+    ) {
+      toast.warning(
+        "Vui lòng nhập đầy đủ nội dung header, body và footer trước khi xem trước."
+      );
+      return;
+    }
+
+    if (!combinedContent.includes("\n\n")) {
+      toast.warning(
+        "Cảnh báo: Đảm bảo có ít nhất 2 newline giữa header-body-footer để align chính xác."
+      );
+    }
+    setShowPreviewModal(true);
   };
 
   return (
@@ -184,7 +250,7 @@ export function ContractTemplateForm({
         </CardHeader>
 
         <CardContent className="p-8 bg-white">
-          <div className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <motion.div variants={itemVariants}>
               <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-indigo-600" />
@@ -198,9 +264,7 @@ export function ContractTemplateForm({
               >
                 <Input
                   value={formData.templateName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, templateName: e.target.value })
-                  }
+                  onChange={(e) => updateField("templateName", e.target.value)}
                   onFocus={() => setFocusedField("templateName")}
                   onBlur={() => setFocusedField(null)}
                   className="border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl transition-all duration-200 text-base px-4 py-3"
@@ -223,9 +287,7 @@ export function ContractTemplateForm({
               >
                 <Textarea
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
+                  onChange={(e) => updateField("description", e.target.value)}
                   onFocus={() => setFocusedField("description")}
                   onBlur={() => setFocusedField(null)}
                   placeholder="Mô tả ngắn gọn về mục đích sử dụng của mẫu hợp đồng này..."
@@ -236,35 +298,106 @@ export function ContractTemplateForm({
 
             <motion.div variants={itemVariants}>
               <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                Nội dung mẫu hợp đồng <span className="text-red-500">*</span>
+                <FileUp className="w-4 h-4 text-indigo-600" />
+                Phần đầu (Header) <span className="text-red-500">*</span>
               </label>
               <motion.div
                 animate={{
-                  scale: focusedField === "templateContent" ? 1.01 : 1,
+                  scale: focusedField === "headerContent" ? 1.01 : 1,
                 }}
                 transition={{ duration: 0.2 }}
                 className="relative"
+                style={{ maxWidth: "800px" }}
               >
                 <Textarea
-                  value={formData.templateContent}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      templateContent: e.target.value,
-                    })
-                  }
-                  onFocus={() => setFocusedField("templateContent")}
+                  value={formData.headerContent}
+                  onChange={(e) => updateField("headerContent", e.target.value)}
+                  onFocus={() => setFocusedField("headerContent")}
                   onBlur={() => setFocusedField(null)}
-                  rows={14}
+                  placeholder="Nhập phần đầu hợp đồng (ví dụ: tiêu đề, thông tin cơ bản, Cộng hòa xã hội chủ nghĩa Việt Nam...)\n\nSử dụng spaces và newlines chính xác - định dạng sẽ giống hệt khi xem trước."
+                  className="border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl transition-all duration-200 text-base px-4 py-3 resize-none overflow-y-auto min-h-[150px] mx-auto"
+                  style={unifiedStyle}
                   required
-                  placeholder="Nhập nội dung chi tiết của hợp đồng tại đây...&#10;&#10;Bạn có thể sử dụng các biến động như {{TEN_KHACH_HANG}}, {{DIA_CHI}}, v.v."
-                  className="border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl transition-all duration-200 text-base px-4 py-3 font-mono resize-none whitespace-pre-wrap"
                 />
                 <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white px-2 py-1 rounded">
-                  {formData.templateContent.length} ký tự
+                  {formData.headerContent.length} ký tự (bao gồm spaces)
                 </div>
               </motion.div>
+            </motion.div>
+
+            <motion.div variants={itemVariants}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                Phần thân (Body) <span className="text-red-500">*</span>
+              </label>
+              <motion.div
+                animate={{
+                  scale: focusedField === "bodyContent" ? 1.01 : 1,
+                }}
+                transition={{ duration: 0.2 }}
+                className="relative"
+                style={{ maxWidth: "800px" }}
+              >
+                <Textarea
+                  value={formData.bodyContent}
+                  onChange={(e) => updateField("bodyContent", e.target.value)}
+                  onFocus={() => setFocusedField("bodyContent")}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder="Nhập nội dung chính của hợp đồng tại đây...\n\nBạn có thể sử dụng các biến động như {{renterName}}, {{ownerName}}, {{itemTitle}}, {{basePrice}}, {{depositAmount}}, {{rentalStartDate}}, {{rentalEndDate}}, {{totalAmount}}, {{serviceFee}}, {{currency}}, {{unitCount}} để tự động điền thông tin.\n\nLưu ý: Sử dụng spaces chính xác để align - định dạng sẽ giống hệt khi xem trước."
+                  className="border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl transition-all duration-200 text-base px-4 py-3 resize-none overflow-y-auto min-h-[400px] mx-auto"
+                  style={unifiedStyle}
+                  required
+                />
+                <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white px-2 py-1 rounded">
+                  {formData.bodyContent.length} ký tự (bao gồm spaces)
+                </div>
+              </motion.div>
+            </motion.div>
+
+            <motion.div variants={itemVariants}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <FileDown className="w-4 h-4 text-indigo-600" />
+                Phần chân (Footer) <span className="text-red-500">*</span>
+              </label>
+              <motion.div
+                animate={{
+                  scale: focusedField === "footerContent" ? 1.01 : 1,
+                }}
+                transition={{ duration: 0.2 }}
+                className="relative"
+                style={{ maxWidth: "800px" }}
+              >
+                <Textarea
+                  value={formData.footerContent}
+                  onChange={(e) => updateField("footerContent", e.target.value)}
+                  onFocus={() => setFocusedField("footerContent")}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder={footerPlaceholder}
+                  className="border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl transition-all duration-200 text-base px-4 py-3 resize-none overflow-y-auto min-h-[300px] mx-auto"
+                  style={unifiedStyle}
+                  required
+                />
+                <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white px-2 py-1 rounded">
+                  {formData.footerContent.length} ký tự (bao gồm spaces)
+                </div>
+              </motion.div>
+            </motion.div>
+
+            <motion.div variants={itemVariants} className="flex justify-end">
+              <Button
+                type="button"
+                onClick={handlePreviewClick}
+                disabled={
+                  loading ||
+                  !formData.headerContent.trim() ||
+                  !formData.bodyContent.trim() ||
+                  !formData.footerContent.trim()
+                }
+                className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2"
+              >
+                <Eye className="w-4 h-4" />
+                Xem trước hợp đồng
+              </Button>
             </motion.div>
 
             <motion.div variants={itemVariants}>
@@ -345,10 +478,14 @@ export function ContractTemplateForm({
                 whileTap={{ scale: 0.95 }}
               >
                 <Button
-                  type="button"
-                  disabled={loading}
-                  onClick={handleSubmit}
-                  className="relative px-8 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
+                  type="submit"
+                  disabled={
+                    loading ||
+                    !formData.headerContent.trim() ||
+                    !formData.bodyContent.trim() ||
+                    !formData.footerContent.trim()
+                  }
+                  className="relative px-8 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading && (
                     <motion.div
@@ -385,9 +522,49 @@ export function ContractTemplateForm({
                 </Button>
               </motion.div>
             </motion.div>
-          </div>
+          </form>
         </CardContent>
       </Card>
+
+      {/* Preview Modal*/}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold flex items-center gap-2 text-gray-800">
+                <Eye className="w-5 h-5 text-blue-500" />
+                Xem trước hợp đồng
+              </h3>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div
+              className="border border-gray-200 rounded-xl p-4 mb-6 max-h-[50vh] overflow-y-auto bg-gray-50"
+              lang="vi"
+              style={{ maxWidth: "800px", margin: "0 auto" }}
+            >
+              <pre
+                className="prose prose-lg max-w-none whitespace-pre-wrap font-serif leading-relaxed text-base tracking-wide"
+                style={unifiedStyle}
+              >
+                {combinedContent}
+              </pre>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -86,9 +86,9 @@ export function CTASection() {
           </motion.div>
 
           <motion.div variants={buttonVariants} whileHover="hover">
-            <Link href="/about">
+            <Link href="/auth/register">
               <button className="px-10 py-5 border-2 border-white text-white font-bold text-lg rounded-2xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm">
-                Tìm hiểu thêm
+                Đăng ký ngay
               </button>
             </Link>
           </motion.div>

@@ -79,32 +79,37 @@ export function AccountVerification({ className }: AccountVerificationProps) {
     try {
       setIsLoading(true);
       if (verificationResult) {
-        const { isMatch, similarityPercentage, extractedIdCardInfo } = verificationResult.data;
+        const { extractedIdCardInfo, requestId, verificationRequestSubmitted, autoRejected, rejectionReason } = verificationResult.data || {};
         
-        // If ID card info was saved (even if face verification failed), consider it a success
-        const hasIdCardInfo = extractedIdCardInfo && 
+        // Check if request was auto-rejected due to OCR failure
+        if (autoRejected) {
+          setResult({
+            success: false,
+            message: 'Yêu cầu xác minh bị từ chối tự động',
+            details: rejectionReason || 'Hệ thống không thể đọc được thông tin từ ảnh căn cước công dân. Vui lòng chụp lại ảnh rõ nét hơn hoặc đảm bảo ảnh không bị mờ, không bị che khuất thông tin.'
+          });
+          setFailedStep(3);
+        } else if (verificationRequestSubmitted || requestId) {
+          setResult({
+            success: true,
+            message: 'Yêu cầu xác minh đã được gửi thành công',
+            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất. Bạn sẽ nhận được thông báo khi có kết quả.'
+          });
+        } else if (extractedIdCardInfo && 
           extractedIdCardInfo.idNumber && 
           extractedIdCardInfo.fullName && 
           extractedIdCardInfo.dateOfBirth && 
-          extractedIdCardInfo.address;
-        
-        if (isMatch) {
+          extractedIdCardInfo.address) {
           setResult({
             success: true,
-            message: 'Xác minh khuôn mặt thành công',
-            details: `Độ tương đồng ${similarityPercentage}%. Thông tin căn cước công dân đã được lưu.`
-          });
-        } else if (hasIdCardInfo) {
-          setResult({
-            success: true,
-            message: 'Thông tin căn cước công dân đã được lưu',
-            details: 'Xác minh khuôn mặt không thành công, nhưng thông tin căn cước công dân đã được lưu. Bạn có thể thử xác minh lại sau.'
+            message: 'Yêu cầu xác minh đã được gửi',
+            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Moderator sẽ xử lý trong thời gian sớm nhất.'
           });
         } else {
           setResult({
-            success: false,
-            message: 'Xác minh thất bại',
-            details: `Độ tương đồng: ${similarityPercentage}%. Vui lòng thử lại với ảnh rõ nét.`
+            success: true,
+            message: 'Yêu cầu xác minh đã được gửi',
+            details: 'Yêu cầu xác minh đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.'
           });
         }
       } else {

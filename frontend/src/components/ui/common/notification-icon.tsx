@@ -79,8 +79,34 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         }
       }
 
+      // Verification related notifications
+      if (meta?.requestId) {
+        return '/auth/verification-history';
+      }
+      if (meta?.type && typeof meta.type === 'string') {
+        if (meta.type.includes('verification') || meta.type.includes('phone_verification')) {
+          return '/auth/verification-history';
+        }
+      }
+
       // Type-based fallback when no metadata route
       switch (notification.notificationType) {
+        case "Xác minh số điện thoại thành công":
+        case "Đã gửi yêu cầu xác minh CCCD":
+        case "Yêu cầu xác minh CCCD đang được xử lý":
+        case "Xác minh CCCD đã được duyệt":
+        case "Xác minh CCCD bị từ chối":
+        case "Yêu cầu xác minh CCCD mới":
+        case "Phone Verification Success":
+        case "ID Card Verification Request Submitted":
+        case "ID Card Verification Request Assigned":
+        case "ID Card Verification Approved":
+        case "ID Card Verification Rejected":
+        case "Verification Request Submitted":
+        case "Verification Request Assigned":
+        case "Verification Approved":
+        case "Verification Rejected":
+          return "/auth/verification-history";
         case "Identity Verified":
         case "Profile Updated":
         case "Avatar Updated":
@@ -98,7 +124,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         case "Product Rejected":
           return "/owner/myproducts";
         case "Loyalty":
-          return "/auth/profile";
+          return "/auth/profile?menu=loyalty";
         default:
           return `/auth/notifications/${notification._id}`;
       }
@@ -266,6 +292,19 @@ export function NotificationIcon({ className }: NotificationIconProps) {
       case "Registration Success":
       case "Email Verified":
         return "✅";
+      case "Xác minh số điện thoại thành công":
+      case "Phone Verification Success":
+        return "📱";
+      case "Đã gửi yêu cầu xác minh CCCD":
+      case "Yêu cầu xác minh CCCD đang được xử lý":
+      case "Xác minh CCCD đã được duyệt":
+      case "Xác minh CCCD bị từ chối":
+      case "Yêu cầu xác minh CCCD mới":
+      case "ID Card Verification Request Submitted":
+      case "ID Card Verification Request Assigned":
+      case "ID Card Verification Approved":
+      case "ID Card Verification Rejected":
+        return "🆔";
       case "Product Approved":
         return "✨";
       case "Product Rejected":
@@ -277,6 +316,31 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         return "💰";
       default:
         return "🔔";
+    }
+  }, []);
+
+  // Format notification type name for display
+  const getNotificationTypeName = useCallback((type: string) => {
+    switch (type) {
+      case "Xác minh số điện thoại thành công":
+      case "Phone Verification Success":
+        return "Xác minh số điện thoại";
+      case "Đã gửi yêu cầu xác minh CCCD":
+      case "ID Card Verification Request Submitted":
+        return "Xác minh CCCD - Đã gửi";
+      case "Yêu cầu xác minh CCCD đang được xử lý":
+      case "ID Card Verification Request Assigned":
+        return "Xác minh CCCD - Đang xử lý";
+      case "Xác minh CCCD đã được duyệt":
+      case "ID Card Verification Approved":
+        return "Xác minh CCCD - Đã duyệt";
+      case "Xác minh CCCD bị từ chối":
+      case "ID Card Verification Rejected":
+        return "Xác minh CCCD - Bị từ chối";
+      case "Yêu cầu xác minh CCCD mới":
+        return "Xác minh CCCD - Yêu cầu mới";
+      default:
+        return type;
     }
   }, []);
 
@@ -436,7 +500,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
                             {formatDate(notification.CreatedAt)}
                           </span>
                           <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-400">
-                            {notification.notificationType}
+                            {getNotificationTypeName(notification.notificationType)}
                           </span>
                         </div>
 
