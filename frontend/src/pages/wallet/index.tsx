@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { CreditCard, ArrowDown, ArrowUp, Send, PlusCircle } from "lucide-react";
-import { getMyWallet, depositToWallet, getAllBankAccounts, deleteBankAccount, addBankAccount, withdrawFromWallet, getRecentWalletTransactions } from "@/services/wallet/wallet.api";
+import { getMyWallet, depositToWallet, getAllBankAccounts, deleteBankAccount, addBankAccount, withdrawFromWallet, getRecentWalletTransactions, getUserWalletTransactions } from "@/services/wallet/wallet.api";
 import BankAccountModal from "./bankaccountmodal";
 import { useRouter } from "next/router";
 
 export default function WalletPage() {
   const weekLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-  const weekSpend = [120000, 450000, 160000, 90000, 172000, 370000, 240000];
-  const maxSpend = Math.max(...weekSpend);
+  const [weekSpend, setWeekSpend] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const maxSpend = Math.max(...weekSpend, 1); // Tránh chia cho 0
+
 
   const [wallet, setWallet] = useState<{ balance: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,14 @@ export default function WalletPage() {
 
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
+  // Hàm format số tiền theo định dạng VNĐ
+  const formatVNMoney = (value: string) => {
+    const num = Number(value);
+    if (isNaN(num)) return "0";
+    return num.toLocaleString("vi-VN");
+  }
+  const vnNum2words = require('vn-num2words');
+
   // Lấy thông tin ví khi load trang
   useEffect(() => {
     (async () => {
@@ -220,6 +229,36 @@ export default function WalletPage() {
         return st;
     }
   };
+  // Xây dựng biểu đồ chi tiêu trong tuần
+  type WalletTransaction = {
+  amount: number;
+  createdAt: string;
+  // ... các trường khác (nếu cần)
+};
+
+useEffect(() => {
+  async function fetchAndBuildChart() {
+    try {
+      const res = await getUserWalletTransactions();
+      const txs: WalletTransaction[] = res.transactions ?? [];
+      let spend = [0, 0, 0, 0, 0, 0, 0];
+      const now = new Date();
+      txs.forEach((tx: WalletTransaction) => {
+        const d = new Date(tx.createdAt);
+        if ((now.valueOf() - d.valueOf()) < 7 * 86400000 && tx.amount < 0) {
+          const dow = (d.getDay() + 6) % 7;
+          spend[dow] += Math.abs(tx.amount);
+        }
+      });
+      setWeekSpend(spend);
+    } catch {
+      setWeekSpend([0, 0, 0, 0, 0, 0, 0]);
+    }
+  }
+  fetchAndBuildChart();
+}, []);
+
+
 
 
 
@@ -273,17 +312,28 @@ export default function WalletPage() {
               <ArrowUp className="mb-1 text-indigo-500" />
               <span className="text-sm font-medium">Rút tiền</span>
             </button>
-            <button className="flex flex-col items-center px-5 py-4 bg-white rounded-xl shadow transition hover:bg-indigo-100">
+            <button
+              className="flex flex-col items-center px-5 py-4 bg-white rounded-xl shadow transition hover:bg-indigo-100"
+              onClick={() => {
+                setSuccessMessage("Tính năng sắp ra mắt!");
+                setTimeout(() => setSuccessMessage(null), 3500); // 60 giây
+              }}
+            >
               <Send className="mb-1 text-indigo-500" />
               <span className="text-sm font-medium">Chuyển</span>
             </button>
             <button
               className="flex flex-col items-center px-5 py-4 bg-white rounded-xl shadow transition hover:bg-indigo-100"
-              onClick={() => setSuccessMessage("Tính năng sắp ra mắt!")}
+              onClick={() => {
+                setSuccessMessage("Tính năng sắp ra mắt!");
+                setTimeout(() => setSuccessMessage(null), 3500);
+              }}
             >
               <PlusCircle className="mb-1 text-indigo-500" />
               <span className="text-sm font-medium">Thêm thẻ</span>
             </button>
+
+
           </div>
         </div>
 
@@ -467,13 +517,25 @@ export default function WalletPage() {
               </div>
             )}
             <div className="space-y-4">
+
               <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVNMoney(amount)}
+                onChange={e => {
+                  // Loại bỏ tất cả ký tự không phải số (dấu chấm, ký tự lạ...)
+                  const raw = e.target.value.replace(/[^\d]/g, '');
+                  setAmount(raw);
+                }}
                 placeholder="Số tiền (VND)"
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
               />
+              {/* Hiển thị số tiền bằng chữ tiếng Việt */}
+              {amount && (
+                <div className="text-sm text-gray-500 italic pl-2 pb-2">
+                  Bằng chữ: {vnNum2words(amount.replace(/[^\d]/g, ''))} đồng
+                </div>
+              )}
               <input
                 type="text"
                 value={note}
@@ -522,12 +584,23 @@ export default function WalletPage() {
 
             <div className="space-y-4">
               <input
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVNMoney(withdrawAmount)}
+                onChange={e => {
+                  // Chỉ cho nhập số, loại bỏ mọi ký tự không phải số
+                  const raw = e.target.value.replace(/[^\d]/g, '');
+                  setWithdrawAmount(raw);
+                }}
                 placeholder="Số tiền (VND)"
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
               />
+              {/* Hiển thị số tiền bằng chữ tiếng Việt */}
+              {withdrawAmount && (
+                <div className="text-sm text-gray-500 italic pl-2 pb-2">
+                  Bằng chữ: {vnNum2words(withdrawAmount.replace(/[^\d]/g, ''))} đồng
+                </div>
+              )}
               <select
                 value={selectedBankId || ""}
                 onChange={e => setSelectedBankId(e.target.value)}
