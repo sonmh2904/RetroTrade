@@ -22,12 +22,13 @@ router.delete('/addresses/:id', authenticateToken, userAddressController.deleteU
 
 // Generic routes
 router.get('/', pagination(), userController.getAllUsers);
+router.get('/moderation', authenticateToken, authorizeRoles('moderator'), pagination(), userController.getUsersForModeration);
 router.get('/:id', userController.getUserById);
 router.post('/', authenticateToken, authorizeRoles('admin'), userController.createUser);
 router.put('/:id', authenticateToken, authorizeRoles('admin'), userController.updateUser);
 router.delete('/:id', authenticateToken, authorizeRoles('admin'), userController.deleteUser);
 router.put('/role/update', authenticateToken, authorizeRoles('admin'), userController.updateUserRole);
-router.post('/:id/ban', authenticateToken, authorizeRoles('admin'), userController.banUser);
-router.post('/:id/unban', authenticateToken, authorizeRoles('admin'), userController.unbanUser);
+router.post('/:id/ban', authenticateToken, authorizeRoles('admin', 'moderator'), userController.banUser);
+router.post('/:id/unban', authenticateToken, authorizeRoles('admin', 'moderator'), userController.unbanUser);
 
 module.exports = router;

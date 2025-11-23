@@ -1,5 +1,3 @@
-const ServiceFee = require("../../models/ServiceFee.model");
-
 function getTimeUnitInDays(unitId) {
   const units = { 1: 1 / 24, 2: 1, 3: 7, 4: 30 };
   return units[unitId] ?? 1;
@@ -44,33 +42,35 @@ module.exports.calculateTotals = async function (
     }
 
     // Lấy serviceFee rate từ database
+    const ServiceFee = require("../../models/ServiceFee.model");
     const serviceFeeRate = await ServiceFee.getCurrentServiceFeeRate();
 
     const duration = calculateDurationInUnit(startAt, endAt, priceUnitId);
     if (duration <= 0) throw new Error("Invalid date range");
 
     const rentalAmount = basePrice * duration * quantity;
-    const depositAmount = depositPerUnit * quantity;
-    // Tính serviceFee trên tiền thuê
     const serviceFee = rentalAmount * (serviceFeeRate / 100);
+    const depositAmount = depositPerUnit * quantity;
+    const totalAmount = rentalAmount + serviceFee + depositAmount;
 
     const unitName = getUnitName(priceUnitId);
 
     console.log("calculateTotals SUCCESS:", {
       duration,
       rentalAmount,
-      depositAmount,
+      totalAmount,
       serviceFeeRate,
       serviceFee,
       unitName,
     });
 
     return {
+      totalAmount: Math.round(totalAmount),
       rentalAmount: Math.round(rentalAmount),
       serviceFee: Math.round(serviceFee),
       depositAmount: Math.round(depositAmount),
       duration,
-      unitName, 
+      unitName,
     };
   } catch (error) {
     console.error("calculateTotals FAILED:", error.message);

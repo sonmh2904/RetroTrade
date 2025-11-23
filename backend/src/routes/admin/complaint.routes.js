@@ -5,9 +5,9 @@ const { authenticateToken, authorizeRoles } = require("../../middleware/auth");
 const pagination = require("../../middleware/pagination");
 
 // Admin routes for complaints
-router.get("/", authenticateToken, authorizeRoles("admin"), pagination(), complaintController.getAllComplaints);
-router.get("/:id", authenticateToken, authorizeRoles("admin"), complaintController.getComplaintById);
-router.post("/:id/handle", authenticateToken, authorizeRoles("admin"), complaintController.handleComplaint);
+router.get("/", authenticateToken, authorizeRoles("admin", "moderator"), pagination(), complaintController.getAllComplaints);
+router.get("/:id", authenticateToken, authorizeRoles("admin", "moderator"), complaintController.getComplaintById);
+router.post("/:id/handle", authenticateToken, authorizeRoles("admin", "moderator"), complaintController.handleComplaint);
 
 module.exports = router;
 

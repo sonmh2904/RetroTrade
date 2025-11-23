@@ -9,7 +9,7 @@ export default function OrdersListPage() {
   return (
     <OrdersPage
       onOpenDetail={(id: string) => {
-        const targetPath = `/my-orders/${id}`;
+        const targetPath = `/auth/my-orders/${id}`;
         if (router.asPath !== targetPath) {
           router.push(targetPath);
         }

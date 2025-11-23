@@ -665,7 +665,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                 {(() => {
                   // Lấy tất cả giá trị từ backend (đã được tính sẵn)
                   // Tiền thuê (rentalTotal) - totalAmount trong order là tiền thuê
-                  const rentalTotal = order.totalAmount || 0;
+                  const rentalTotal = order.itemSnapshot.basePrice || 0;
                   
                   // Tiền cọc (depositTotal)
                   const depositTotal = order.depositAmount || 0;
@@ -679,11 +679,11 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   const privateDiscountAmount = discount?.secondaryAmountApplied || 0;
                   const totalDiscountAmount = discount?.totalAmountApplied || (publicDiscountAmount + privateDiscountAmount);
                   
-                  // Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
+                  // Tổng tiền = tiền tong thuê - discount
                   // finalAmount từ backend là tiền thuê sau discount, nên tổng = finalAmount + deposit + serviceFee
                   const grandTotal = order.finalAmount 
-                    ? order.finalAmount + depositTotal + serviceFeeAmount
-                    : Math.max(0, rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount);
+                    ? order.finalAmount 
+                    : Math.max(0, rentalTotal - totalDiscountAmount);
                   
                   return (
                     <>

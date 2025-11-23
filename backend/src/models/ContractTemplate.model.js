@@ -4,7 +4,9 @@ const ContractTemplateSchema = new mongoose.Schema(
   {
     templateName: { type: String, required: true },
     description: { type: String },
-    templateContent: { type: String, required: true },
+    headerContent: { type: String, required: true },
+    bodyContent: { type: String, required: true },
+    footerContent: { type: String, required: true },
     isActive: { type: Boolean, default: true },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

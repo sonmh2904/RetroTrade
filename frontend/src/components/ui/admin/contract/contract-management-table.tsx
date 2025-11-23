@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/common/button";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-} from "@/components/ui/common/card";
+import { Card, CardHeader, CardContent } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Input } from "@/components/ui/common/input";
 import {
@@ -37,7 +33,9 @@ interface ContractTemplate {
   _id: string;
   templateName: string;
   description: string;
-  templateContent: string;
+  headerContent: string;
+  bodyContent: string;
+  footerContent: string;
   isActive: boolean;
   createdBy: {
     fullName: string;
