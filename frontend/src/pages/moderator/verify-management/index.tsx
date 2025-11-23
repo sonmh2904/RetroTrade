@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ModeratorHeader } from "@/components/ui/moderator/moderator-header";
-import { VerificationQueue } from "@/components/ui/moderator/verify/verification-queue";
+import { VerificationRequestManagement } from "@/components/ui/moderator/verification/verification-request-management";
 
 import { BlogManagementTable } from "@/components/ui/moderator/blog/blog-management-table";
 import { CategoryManagementTable } from "@/components/ui/moderator/blog/category-management-table";
@@ -34,7 +34,7 @@ export default function VerificationManagementDashboard() {
           return <BlogManagementTable />;
       }
     }
-    return <VerificationQueue />;
+    return <VerificationRequestManagement />;
   };
 
   const getPageTitle = () => {
