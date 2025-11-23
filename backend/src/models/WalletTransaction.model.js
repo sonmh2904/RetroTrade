@@ -20,7 +20,7 @@ const walletTransactionSchema = new mongoose.Schema({
   adminNote: { type: String, default: null }, // Ghi chú của admin khi duyệt
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // Admin duyệt
   reviewedAt: { type: Date, default: null },
-
+  completedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
