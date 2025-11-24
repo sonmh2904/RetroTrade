@@ -10,7 +10,7 @@ import {
   deleteCommentByUser,
   updateCommentByUser,
 } from "@/services/auth/blog.api";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -29,7 +29,8 @@ export default function CommentSection({ postId }: CommentSectionProps) {
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
   const isLoggedIn = !!accessToken;
-
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
   const decoded = decodeToken(accessToken);
   const currentUserId = decoded?._id || null;
 
@@ -53,13 +54,25 @@ export default function CommentSection({ postId }: CommentSectionProps) {
     await fetchComments();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc muốn xóa bình luận này không?")) return;
-    const res = await deleteCommentByUser(id);
+const openDeleteModal = (id: string) => {
+  setCommentToDelete(id);
+  setIsDeleteModalOpen(true);
+};
+
+const confirmDelete = async () => {
+  if (!commentToDelete) return;
+  try {
+    const res = await deleteCommentByUser(commentToDelete);
     if (!res.error) {
-      setComments(comments.filter((c) => c._id !== id));
+      setComments(comments.filter((c) => c._id !== commentToDelete));
     }
-  };
+  } catch (err) {
+    alert("Xóa thất bại!");
+  } finally {
+    setIsDeleteModalOpen(false);
+    setCommentToDelete(null);
+  }
+};
 
   const handleEdit = (comment: any) => {
     setEditingCommentId(comment._id);
@@ -153,7 +166,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                           ✏️ Sửa
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => handleDelete(c._id)}
+                          onClick={() => openDeleteModal(c._id)}
                           className="cursor-pointer text-red-500 hover:bg-gray-100"
                         >
                           🗑️ Xóa
@@ -164,7 +177,6 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                 )}
               </div>
 
-             
               {editingCommentId === c._id ? (
                 <div className="mt-2">
                   <textarea
@@ -192,6 +204,56 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                 </div>
               ) : (
                 <p className="text-sm mt-1">{c.content}</p>
+              )}
+
+              {/* Modal Xóa */}
+              {isDeleteModalOpen && (
+                <>
+                  <div
+                    className="fixed inset-0  backdrop-blur-sm z-50"
+                    onClick={() => setIsDeleteModalOpen(false)}
+                  />
+
+                  {/* Modal chính */}
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                      className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 relative animate-in fade-in zoom-in-95 duration-200"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Nút × đóng */}
+                      <button
+                        onClick={() => setIsDeleteModalOpen(false)}
+                        className="absolute right-4 top-4 text-gray-400 hover:text-gray-700 transition"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+
+                      <h3 className="text-xl font-semibold text-gray-900 pr-8">
+                        Xóa bình luận
+                      </h3>
+
+                      <div className="mt-4 text-gray-600">
+                        Bạn có chắc chắn muốn xóa bình luận này không? Hành động
+                        này <strong>không thể hoàn tác</strong>.
+                      </div>
+
+                      <div className="mt-8 flex justify-end gap-3">
+                        <button
+                          onClick={() => setIsDeleteModalOpen(false)}
+                          className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          onClick={confirmDelete}
+                          className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-md transition"
+                        >
+                          OK
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </li>
           );

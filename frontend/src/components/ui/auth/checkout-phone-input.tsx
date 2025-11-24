@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 interface CheckoutPhoneInputProps {
   value: string;
@@ -17,7 +17,7 @@ const validateVietnamesePhone = (phone: string): string => {
 
   // Chỉ cho phép số
   const phoneDigits = phone.replace(/\D/g, "");
-  
+
   if (phoneDigits.length === 0) {
     return "Số điện thoại chỉ được chứa số";
   }
@@ -37,7 +37,7 @@ const validateVietnamesePhone = (phone: string): string => {
     // Kiểm tra đầu số hợp lệ
     const validPrefixes = ["03", "05", "07", "08", "09", "02"];
     const prefix = phoneDigits.substring(0, 2);
-    
+
     if (!validPrefixes.includes(prefix)) {
       return "Đầu số không hợp lệ. Số điện thoại Việt Nam phải bắt đầu bằng: 03, 05, 07, 08, 09 (di động) hoặc 02 (cố định)";
     }
@@ -54,17 +54,18 @@ export function CheckoutPhoneInput({
 }: CheckoutPhoneInputProps) {
   const [useDefaultPhone, setUseDefaultPhone] = useState(true);
   const [phoneError, setPhoneError] = useState<string>("");
+  const prevUseDefaultPhoneRef = useRef<boolean>(true);
 
   // Xử lý thay đổi số điện thoại
   const handlePhoneChange = (inputValue: string) => {
     // Chỉ cho phép nhập số
     const phoneDigits = inputValue.replace(/\D/g, "");
-    
+
     // Giới hạn tối đa 10 số
     const limitedPhone = phoneDigits.slice(0, 10);
-    
+
     onChange(limitedPhone);
-    
+
     // Validate khi người dùng nhập
     if (limitedPhone.length > 0) {
       const error = validateVietnamesePhone(limitedPhone);
@@ -76,20 +77,39 @@ export function CheckoutPhoneInput({
     }
   };
 
-  // Update phone when useDefaultPhone changes
+  // Update phone when useDefaultPhone changes (chỉ khi thực sự thay đổi)
   useEffect(() => {
-    if (useDefaultPhone && defaultPhone) {
+    const prevUseDefaultPhone = prevUseDefaultPhoneRef.current;
+
+    // Chỉ xử lý khi useDefaultPhone thực sự thay đổi
+    if (useDefaultPhone !== prevUseDefaultPhone) {
+      if (useDefaultPhone && defaultPhone) {
+        // Chuyển sang dùng số mặc định
+        onChange(defaultPhone);
+        setPhoneError("");
+        const error = validateVietnamesePhone(defaultPhone);
+        onValidationChange?.(!error, error);
+      } else if (!useDefaultPhone && prevUseDefaultPhone) {
+        // Chuyển sang nhập số mới - chỉ clear khi chuyển từ default sang custom
+        onChange("");
+        setPhoneError("");
+        onValidationChange?.(false, "");
+      }
+      prevUseDefaultPhoneRef.current = useDefaultPhone;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useDefaultPhone, defaultPhone]);
+
+  // Sync với defaultPhone khi đang dùng default
+  useEffect(() => {
+    if (useDefaultPhone && defaultPhone && value !== defaultPhone) {
       onChange(defaultPhone);
       setPhoneError("");
       const error = validateVietnamesePhone(defaultPhone);
       onValidationChange?.(!error, error);
-    } else if (!useDefaultPhone) {
-      // Clear phone when switching to custom input
-      onChange("");
-      setPhoneError("");
-      onValidationChange?.(false, "");
     }
-  }, [useDefaultPhone, defaultPhone, onChange, onValidationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPhone, useDefaultPhone]);
 
   // Validate on blur
   const handleBlur = () => {
@@ -157,7 +177,9 @@ export function CheckoutPhoneInput({
             <p className="text-sm text-red-600 mt-1">{phoneError}</p>
           )}
           {!phoneError && value && value.length === 10 && (
-            <p className="text-sm text-emerald-600 mt-1">✓ Số điện thoại hợp lệ</p>
+            <p className="text-sm text-emerald-600 mt-1">
+              ✓ Số điện thoại hợp lệ
+            </p>
           )}
         </div>
       )}
@@ -167,4 +189,3 @@ export function CheckoutPhoneInput({
 
 // Export validation function for use in parent component
 export { validateVietnamesePhone };
-
