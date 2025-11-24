@@ -1,6 +1,6 @@
-const Terms = require("../../models/Terms.model"); 
+const Terms = require("../../models/Terms.model");
 
-// Public: Get active terms 
+// Public: Get active terms
 exports.getActiveTerms = async (req, res) => {
   try {
     const terms = await Terms.findOne({ isActive: true })
@@ -62,6 +62,9 @@ exports.createTerms = async (req, res) => {
         .json({ success: false, message: "Thiếu thông tin bắt buộc" });
     }
 
+    // Tắt active của điều khoản hiện tại nếu có
+    await Terms.updateMany({ isActive: true }, { isActive: false });
+
     const newTerms = new Terms({
       version,
       title,
@@ -83,7 +86,7 @@ exports.createTerms = async (req, res) => {
   }
 };
 
-// Admin: Update 
+// Admin: Update
 exports.updateTerms = async (req, res) => {
   try {
     if (!req.user)
@@ -98,6 +101,9 @@ exports.updateTerms = async (req, res) => {
     const { title, sections, effectiveDate, changesSummary } = req.body;
     const newVersionNum = parseFloat(oldTerms.version.replace("v", "")) + 0.1;
     const newVersion = `v${newVersionNum.toFixed(1)}`;
+
+    // Tắt active của điều khoản hiện tại (oldTerms)
+    await Terms.updateOne({ _id: oldTerms._id }, { isActive: false });
 
     const newTerms = new Terms({
       version: newVersion,
@@ -120,7 +126,51 @@ exports.updateTerms = async (req, res) => {
   }
 };
 
-// Admin: Delete 
+// Admin: Toggle Active/Inactive
+exports.toggleTermsActive = async (req, res) => {
+  try {
+    if (!req.user)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const { id } = req.params;
+    const termsToToggle = await Terms.findById(id);
+
+    if (!termsToToggle)
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy điều khoản" });
+
+    if (termsToToggle.isActive) {
+      await Terms.findByIdAndUpdate(id, { isActive: false });
+      return res.status(200).json({
+        success: true,
+        message: "Đã tắt active thành công",
+        data: { isActive: false },
+      });
+    }
+
+    // Nếu đang inactive, bật active và tắt active của cái hiện tại 
+    const currentActive = await Terms.findOne({ isActive: true });
+    if (currentActive && currentActive._id.toString() !== id) {
+      await Terms.findByIdAndUpdate(currentActive._id, { isActive: false });
+    }
+
+    await Terms.findByIdAndUpdate(id, { isActive: true });
+
+    res.status(200).json({
+      success: true,
+      message: "Đã bật active thành công",
+      data: { isActive: true },
+    });
+  } catch (error) {
+    console.error("Error in toggleTermsActive:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Lỗi toggle: " + error.message });
+  }
+};
+
+// Admin: Delete
 exports.deleteTerms = async (req, res) => {
   try {
     if (!req.user)

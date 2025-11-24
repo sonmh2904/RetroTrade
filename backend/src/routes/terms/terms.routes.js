@@ -7,6 +7,7 @@ const {
   createTerms,
   updateTerms,
   deleteTerms,
+  toggleTermsActive,
 } = require("../../controller/terms/terms.controller");
 
 // Public
@@ -16,6 +17,7 @@ router.get("/active", getActiveTerms);
 router.get("/history", authenticateToken, getTermsHistory);
 router.post("/", authenticateToken, createTerms);
 router.put("/", authenticateToken, updateTerms);
+router.put("/:id/toggle-active", authenticateToken, toggleTermsActive);
 router.delete("/:id", authenticateToken, deleteTerms);
 
 module.exports = router;
