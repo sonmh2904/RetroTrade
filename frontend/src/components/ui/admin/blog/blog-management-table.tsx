@@ -166,7 +166,7 @@ export  function BlogManagementTable() {
       {isDetailOpen && selectedBlogId && (
         <BlogDetail
           blogId={selectedBlogId}
-          isOpen={isDetailOpen}
+          open={isDetailOpen}
           onClose={() => {
             setIsDetailOpen(false);
             setSelectedBlogId(null);
@@ -176,7 +176,7 @@ export  function BlogManagementTable() {
 
       {openAdd && (
         <AddPostDialog
-          isOpen={openAdd}
+          open={openAdd}
           onClose={() => setOpenAdd(false)}
           onSuccess={() => {
             setOpenAdd(false);

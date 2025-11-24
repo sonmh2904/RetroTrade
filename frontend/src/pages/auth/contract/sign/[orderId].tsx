@@ -152,11 +152,11 @@ export default function SignContractPage() {
     fontSize: "14px",
     wordBreak: "break-word" as const,
     hyphens: "auto" as const,
-    whiteSpace: "pre-wrap" as const, 
+    whiteSpace: "pre-wrap" as const,
     maxWidth: "800px",
-    letterSpacing: "0.02em", 
-    overflowWrap: "anywhere" as const, 
-    margin: "0 auto", 
+    letterSpacing: "0.02em",
+    overflowWrap: "anywhere" as const,
+    margin: "0 auto",
   } as React.CSSProperties;
 
   // Get current user from Redux token
@@ -164,6 +164,13 @@ export default function SignContractPage() {
   const currentUser = useMemo(() => decodeToken(token), [token]);
   const currentUserId = currentUser?._id;
   const isOwnerOfOrder = currentUserId === order?.ownerId._id; // Check owner of item
+
+  // Check if current user has already signed
+  const hasSigned = useMemo(() => {
+    return !!contractData?.signatures.find(
+      (sig) => sig.signatureId?.signerUserId === currentUserId
+    );
+  }, [contractData, currentUserId]);
 
   const loadUserSignature = useCallback(async (): Promise<void> => {
     try {
@@ -825,53 +832,19 @@ export default function SignContractPage() {
                 )}
                 Xuất PDF
               </button>
-              {userSignature?.isActive && !userSignature.isExpired && (
-                <>
-                  {userSignature.isUsedInContract ? (
-                    // Case: Signature exists and is used - only button, no checkbox
-                    <button
-                      onClick={() => handleSignContract(true)} // Force use existing
-                      disabled={
-                        loadingAction ||
-                        !contractData.canSign ||
-                        !userSignature.signatureUrl
-                      }
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
-                    >
-                      {loadingAction ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Đang ký...
-                        </>
-                      ) : (
-                        <>
-                          <PenTool className="w-4 h-4" />
-                          Ký bằng chữ ký hiện có
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    // Case: Signature exists but not used - checkbox + dynamic button
-                    <>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={useExistingSignature}
-                          onChange={(e) => {
-                            setUseExistingSignature(e.target.checked);
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-sm text-gray-600">
-                          Sử dụng chữ ký hiện có
-                        </span>
-                      </label>
+              {!hasSigned &&
+                contractData.canSign &&
+                userSignature?.isActive &&
+                !userSignature.isExpired && (
+                  <>
+                    {userSignature.isUsedInContract ? (
+                      // Case: Signature exists and is used - only button, no checkbox
                       <button
-                        onClick={() => handleSignContract()}
+                        onClick={() => handleSignContract(true)} // Force use existing
                         disabled={
                           loadingAction ||
                           !contractData.canSign ||
-                          (useExistingSignature && !userSignature?.signatureUrl)
+                          !userSignature.signatureUrl
                         }
                         className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
                       >
@@ -883,36 +856,75 @@ export default function SignContractPage() {
                         ) : (
                           <>
                             <PenTool className="w-4 h-4" />
-                            {useExistingSignature
-                              ? "Ký bằng chữ ký hiện có"
-                              : "Ký mới"}
+                            Ký bằng chữ ký hiện có
                           </>
                         )}
                       </button>
-                    </>
-                  )}
-                </>
-              )}
-              {/* Case: No signature or expired - only new sign button */}
-              {!userSignature?.isActive && (
-                <button
-                  onClick={() => handleSignContract(false)} // Force new
-                  disabled={loadingAction || !contractData.canSign}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
-                >
-                  {loadingAction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Đang ký...
-                    </>
-                  ) : (
-                    <>
-                      <PenTool className="w-4 h-4" />
-                      Ký mới
-                    </>
-                  )}
-                </button>
-              )}
+                    ) : (
+                      // Case: Signature exists but not used - checkbox + dynamic button
+                      <>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={useExistingSignature}
+                            onChange={(e) => {
+                              setUseExistingSignature(e.target.checked);
+                            }}
+                            className="rounded"
+                          />
+                          <span className="text-sm text-gray-600">
+                            Sử dụng chữ ký hiện có
+                          </span>
+                        </label>
+                        <button
+                          onClick={() => handleSignContract()}
+                          disabled={
+                            loadingAction ||
+                            !contractData.canSign ||
+                            (useExistingSignature &&
+                              !userSignature?.signatureUrl)
+                          }
+                          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                        >
+                          {loadingAction ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Đang ký...
+                            </>
+                          ) : (
+                            <>
+                              <PenTool className="w-4 h-4" />
+                              {useExistingSignature
+                                ? "Ký bằng chữ ký hiện có"
+                                : "Ký mới"}
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              {!hasSigned &&
+                contractData.canSign &&
+                !userSignature?.isActive && (
+                  <button
+                    onClick={() => handleSignContract(false)} // Force new
+                    disabled={loadingAction || !contractData.canSign}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 text-white rounded-xl hover:from-blue-600 hover:to-emerald-600 disabled:opacity-50 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                  >
+                    {loadingAction ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Đang ký...
+                      </>
+                    ) : (
+                      <>
+                        <PenTool className="w-4 h-4" />
+                        Ký mới
+                      </>
+                    )}
+                  </button>
+                )}
             </div>
             {contractData.signaturesCount > 0 && (
               <div className="mt-6 pt-6 border-t border-gray-200">

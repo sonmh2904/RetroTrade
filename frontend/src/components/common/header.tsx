@@ -78,7 +78,7 @@ export function Header() {
       setUserInfo(decodedUser);
 
       // Fetch cart count when user is logged in
-      dispatch(fetchCartItemCount());
+      fetchCartItemCount()(dispatch);
       // Chuyển hướng dựa trên role
       const currentPath = router.pathname;
 
