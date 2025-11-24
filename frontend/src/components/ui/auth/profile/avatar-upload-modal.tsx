@@ -56,7 +56,7 @@ export function AvatarUploadModal({ isOpen, onClose, userProfile, onAvatarUpdate
       const response = await uploadUserAvatar(selectedFile)
       if (response.code === 200) {
         toast.success("Cập nhật avatar thành công!")
-        onAvatarUpdated(response.data.avatarUrl)
+        onAvatarUpdated(response.data?.avatarUrl || "")
         onClose()
       } else {
         toast.error(response.message || "Có lỗi xảy ra khi upload avatar")

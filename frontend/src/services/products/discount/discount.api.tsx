@@ -20,6 +20,7 @@ export type Discount = {
   createdAt: string;
   updatedAt: string;
   isClaimed?: boolean; // Thêm field để track việc user đã claim mã chưa
+  isSpecial?: boolean; // Đánh dấu discount đặc biệt (gán riêng cho user)
 };
 
 export type CreateDiscountRequest = {
@@ -132,12 +133,22 @@ export async function updateDiscount(id: string, payload: UpdateDiscountRequest)
 }
 
 // User-facing APIs
+export type AvailableDiscountsResponse = {
+  status: "success" | "error";
+  message: string;
+  data?: {
+    public: Discount[];
+    special: Discount[];
+  };
+  pagination?: { total: number; page: number; limit: number; totalPages: number };
+};
+
 export async function listAvailableDiscounts(page = 1, limit = 20, ownerId?: string, itemId?: string) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (ownerId) params.set("ownerId", ownerId);
   if (itemId) params.set("itemId", itemId);
   const res = await api.get(`/discounts/public/available?${params.toString()}`);
-  const json: ApiListResponse<Discount> = await res.json();
+  const json: AvailableDiscountsResponse = await res.json();
   return json;
 }
 

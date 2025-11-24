@@ -56,7 +56,7 @@ const CommentDetail: React.FC<CommentDetailProps> = ({
       } else {
         toast.error("Không tìm thấy comment");
       }
-    } catch (err) {
+    } catch {
       toast.error("Không thể tải chi tiết comment");
     } finally {
       setLoading(false);

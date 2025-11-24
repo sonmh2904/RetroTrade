@@ -591,26 +591,55 @@ module.exports.handleVerificationRequest = async (req, res) => {
                     user.documents.push(...documents);
                 }
                 await user.save();
+
+                // Check if both phone and ID are now verified
+                // If phone was already verified, user is now fully verified
+                const isFullyVerified = user.isPhoneConfirmed && user.isIdVerified;
+                if (isFullyVerified) {
+                    console.log(`User ${user._id} is now fully verified (phone and ID both verified)`);
+                }
             }
         }
 
         await request.save();
 
         try {
-            const message = action === 'approved' 
-                ? `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh thành công.`
-                : `Yêu cầu xác minh căn cước công dân của bạn đã bị từ chối. Lý do: ${rejectionReason || 'Không được cung cấp'}`;
+            let message = '';
+            let notificationTitle = '';
+            let notificationType = '';
+            let isFullyVerified = false;
+            
+            if (action === 'approved') {
+                // Check if user is fully verified (both phone and ID)
+                const user = await User.findById(request.userId._id || request.userId);
+                isFullyVerified = user && user.isPhoneConfirmed && user.isIdVerified;
+                
+                if (isFullyVerified) {
+                    message = `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).`;
+                    notificationTitle = "Tài khoản đã được xác minh đầy đủ";
+                    notificationType = 'full_verification_success';
+                } else {
+                    message = `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh thành công.`;
+                    notificationTitle = "Xác minh CCCD đã được duyệt";
+                    notificationType = 'id_card_verification_approved';
+                }
+            } else {
+                message = `Yêu cầu xác minh căn cước công dân của bạn đã bị từ chối. Lý do: ${rejectionReason || 'Không được cung cấp'}`;
+                notificationTitle = "Xác minh CCCD bị từ chối";
+                notificationType = 'id_card_verification_rejected';
+            }
             
             await createNotification(
                 request.userId._id,
-                action === 'approved' ? "Xác minh CCCD đã được duyệt" : "Xác minh CCCD bị từ chối",
-                action === 'approved' ? "Xác minh CCCD đã được duyệt" : "Xác minh CCCD bị từ chối",
+                notificationTitle,
+                notificationTitle,
                 message,
                 {
                     requestId: request._id.toString(),
-                    type: action === 'approved' ? 'id_card_verification_approved' : 'id_card_verification_rejected',
+                    type: notificationType,
                     action: action,
-                    redirectUrl: '/auth/verification-history'
+                    redirectUrl: '/auth/verification-history',
+                    isFullyVerified: isFullyVerified
                 }
             );
         } catch (notificationError) {

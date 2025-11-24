@@ -92,6 +92,14 @@ export interface UserProfile {
     currency: string;
     balance: number;
   };
+  idCardInfo?: {
+    idNumber: string;
+    fullName: string;
+    dateOfBirth: string | Date;
+    address: string;
+    extractedAt?: string | Date;
+    extractionMethod?: 'ocr' | 'manual';
+  };
   lastLoginAt?: string; // ISO string
   createdAt: string; // ISO string
   updatedAt: string; // ISO string

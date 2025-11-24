@@ -48,7 +48,7 @@ interface ComplaintListResponse {
   totalPages: number;
 }
 
-const parseResponse = async <T>(response: Response): Promise<ApiResponse<T>> => {
+const parseResponse = async <T,>(response: Response): Promise<ApiResponse<T>> => {
   const data = await response.json();
   return data;
 };

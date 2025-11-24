@@ -323,14 +323,21 @@ module.exports = {
     try {
       const { ownerId, itemId, page = 1, limit = 20 } = req.query;
       const now = new Date();
-      // Filter: chỉ lấy discount public + active, KHÔNG filter thời gian
-      // Frontend sẽ tự filter để chỉ hiển thị discount có thể sử dụng ngay
-      const filter = {
+      
+      // Filter: chỉ lấy discount đang trong thời gian hiệu lực (startAt <= now <= endAt)
+      const timeFilter = {
+        startAt: { $lte: now },
+        endAt: { $gte: now }
+      };
+      
+      // Filter cho discount công khai: public + active + trong thời gian hiệu lực
+      const publicFilter = {
         active: true,
         isPublic: true,
+        ...timeFilter
       };
-      if (ownerId) filter.ownerId = ownerId;
-      if (itemId) filter.itemId = itemId;
+      if (ownerId) publicFilter.ownerId = ownerId;
+      if (itemId) publicFilter.itemId = itemId;
       const skip = (Number(page) - 1) * Number(limit);
       
       // Lấy user assignments với filter effectiveFrom/effectiveTo
@@ -357,19 +364,19 @@ module.exports = {
           }).select("discountId").lean()
         : Promise.resolve([]);
       
-      // Lấy private discounts từ allowedUsers (discounts từ quy đổi RT Points)
+      // Lấy private discounts từ allowedUsers (discounts từ quy đổi RT Points) - chỉ lấy discount đang trong thời gian hiệu lực
       const privateDiscountsFromAllowedUsers = req.user?._id
         ? Discount.find({
             active: true,
             isPublic: false,
             allowedUsers: req.user._id,
-            // Không filter thời gian - frontend sẽ tự filter
+            ...timeFilter
           }).sort({ createdAt: -1 }).lean()
         : Promise.resolve([]);
       
       const [publicRows, publicTotal, userAssignments, privateFromAllowedUsers] = await Promise.all([
-        Discount.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
-        Discount.countDocuments(filter),
+        Discount.find(publicFilter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+        Discount.countDocuments(publicFilter),
         userAssignmentsQuery,
         privateDiscountsFromAllowedUsers,
       ]);
@@ -385,18 +392,13 @@ module.exports = {
       
       const assignedIds = validAssignments.map(a => a.discountId);
       const assignedIdsSet = new Set(assignedIds.map(id => String(id)));
-      const claimedIds = new Set(validAssignments.map(a => String(a.discountId)));
       
-      // Lấy TẤT CẢ discount được assign (bất kể isPublic) - không paginate để đảm bảo user thấy tất cả discount được assign
-      // KHÔNG filter thời gian - frontend sẽ tự filter để chỉ hiển thị discount có thể sử dụng ngay
+      // Lấy TẤT CẢ discount được assign (bất kể isPublic) - chỉ lấy discount đang trong thời gian hiệu lực
       const allAssignedDiscounts = assignedIds.length
         ? await Discount.find({
             _id: { $in: assignedIds },
             active: true,
-            // Không filter startAt/endAt - lấy tất cả discount active được assign
-            // Không filter isPublic để lấy cả discount công khai được assign
-            // Không filter ownerId/itemId ở đây vì đây là discount được assign cho user
-            // User có quyền sử dụng discount đã được assign, không cần match ownerId/itemId
+            ...timeFilter // Chỉ lấy discount đang trong thời gian hiệu lực
           })
             .sort({ createdAt: -1 })
             .lean()
@@ -419,28 +421,39 @@ module.exports = {
       const assignedPublicIdsSet = new Set(assignedPublicDiscounts.map(d => String(d._id)));
       const publicRowsFiltered = publicRows.filter(row => !assignedPublicIdsSet.has(String(row._id)));
       
-      // Public rows: lấy discount công khai KHÔNG được assign + đánh dấu claimed cho các discount được assign
-      const publicRowsWithClaimStatus = publicRowsFiltered.map(row => ({
+      // Public discounts: discount công khai KHÔNG được assign
+      const publicDiscounts = publicRowsFiltered.map(row => ({
         ...row,
-        isClaimed: claimedIds.has(String(row._id)),
+        isSpecial: false, // Đánh dấu là discount công khai
       }));
       
-      // Thêm các discount công khai được assign vào public rows (với isClaimed: true)
-      const assignedPublicRowsWithClaimStatus = assignedPublicDiscounts.map(row => ({
-        ...row,
-        isClaimed: true, // Đã được assign
-      }));
+      // Special discounts: discount đặc biệt được assign cho user hoặc từ allowedUsers
+      const specialDiscounts = [
+        ...assignedPublicDiscounts.map(row => ({
+          ...row,
+          isSpecial: true, // Đánh dấu là discount đặc biệt
+        })),
+        ...allPrivateDiscounts.map(row => ({
+          ...row,
+          isSpecial: true, // Đánh dấu là discount đặc biệt
+        }))
+      ];
       
-      // Private rows: discount riêng tư được assign hoặc từ allowedUsers
-      const privateRowsWithClaimStatus = allPrivateDiscounts.map(row => ({
-        ...row,
-        isClaimed: true, // Private rows đã được assign hoặc từ allowedUsers nên mặc định là claimed
-      }));
-      
-      // Kết hợp: public (không assign) + public (đã assign) + private (đã assign + từ allowedUsers)
-      const rows = [...publicRowsWithClaimStatus, ...assignedPublicRowsWithClaimStatus, ...privateRowsWithClaimStatus];
-      const total = publicTotal + assignedPublicDiscounts.length + allPrivateDiscounts.length; // approximate
-      return res.json({ status: "success", message: "Thành công", data: rows, pagination: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / Number(limit)) } });
+      // Trả về với 2 mảng riêng biệt
+      return res.json({ 
+        status: "success", 
+        message: "Thành công", 
+        data: {
+          public: publicDiscounts,
+          special: specialDiscounts
+        },
+        pagination: { 
+          total: publicTotal + specialDiscounts.length, 
+          page: Number(page), 
+          limit: Number(limit), 
+          totalPages: Math.ceil((publicTotal + specialDiscounts.length) / Number(limit)) 
+        } 
+      });
     } catch (err) {
       return res.status(500).json({ status: "error", message: "Không thể tải danh sách mã", error: err.message });
     }

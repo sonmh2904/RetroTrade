@@ -60,7 +60,7 @@ export function BambooControlPanel({
 
       {isMaxLevel && (
         <div className="rounded-lg border border-purple-200 bg-purple-50/90 p-3 text-sm text-purple-800">
-          🎊 Cây của bạn đã đạt mức tối đa! Nhấn nút "Trồng lại cây mới" để bắt đầu trồng cây mới và nhận lại phần thưởng.
+          🎊 Cây của bạn đã đạt mức tối đa! Nhấn nút &quot;Trồng lại cây mới&quot; để bắt đầu trồng cây mới và nhận lại phần thưởng.
         </div>
       )}
 

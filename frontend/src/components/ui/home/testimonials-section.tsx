@@ -240,7 +240,7 @@ export function TestimonialsSection() {
                   transition={{ duration: 0.6, delay: index * 0.2 + 0.8 }}
                   viewport={{ once: true }}
                 >
-                  "{testimonial.content}"
+                  &ldquo;{testimonial.content}&rdquo;
                 </motion.p>
               </div>
               {/* Hover accent line at bottom */}

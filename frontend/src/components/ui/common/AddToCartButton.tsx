@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import { useRouter } from "next/navigation"
-import { RootState, AppDispatch } from "@/store/redux_store"
+import { RootState } from "@/store/redux_store"
+import { useAppDispatch } from "@/store/hooks"
 import { addItemToCartAction, fetchCartItemCount } from "@/store/cart/cartActions"
 import { Button } from "@/components/ui/common/button"
 import { ShoppingCart, Loader2 } from "lucide-react"
@@ -28,7 +29,7 @@ export default function AddToCartButton({
   showText = false,
   disabled = false
 }: AddToCartButtonProps) {
-  const dispatch = useDispatch<AppDispatch>()
+  const dispatch = useAppDispatch()
   const router = useRouter()
   const { accessToken } = useSelector((state: RootState) => state.auth)
   const [isLoading, setIsLoading] = useState(false)

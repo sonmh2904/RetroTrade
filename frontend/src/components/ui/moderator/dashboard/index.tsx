@@ -17,7 +17,6 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
-  TrendingUp,
   UserCheck,
   FileCheck
 } from "lucide-react";

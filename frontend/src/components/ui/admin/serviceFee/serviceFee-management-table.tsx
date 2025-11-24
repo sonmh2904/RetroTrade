@@ -30,11 +30,68 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/common/input";
 import { Label } from "@/components/ui/common/label";
 import { Textarea } from "@/components/ui/common/textarea";
-import { Switch } from "@/components/ui/common/switch";
+
+type CurrentServiceFee = {
+  serviceFeeRate: number;
+  description?: string;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+} | null;
+
+type ServiceFeeHistory = {
+  currentServiceFee: {
+    serviceFeeRate: number;
+    description?: string;
+    effectiveFrom: string;
+    effectiveTo?: string;
+  };
+  history: Array<{
+    serviceFeeRate: number;
+    description?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+    changedAt: string;
+    changedBy?: {
+      _id: string;
+      fullName: string;
+      email: string;
+    };
+  }>;
+} | null;
+
+type AllServiceFeeHistory = {
+  timeline: Array<{
+    type: "create" | "update";
+    serviceFeeId: string;
+    serviceFeeRate: number;
+    description?: string;
+    effectiveFrom: string;
+    effectiveTo?: string;
+    isActive?: boolean;
+    createdAt?: string;
+    changedAt?: string;
+    changedBy?: {
+      _id: string;
+      fullName: string;
+      email: string;
+    };
+    serviceFeeInfo: {
+      _id: string;
+      serviceFeeRate: number;
+      description?: string;
+    };
+  }>;
+  totalEvents: number;
+  totalServiceFees: number;
+} | null;
 
 export function ServiceFeeManagementTable() {
   const [serviceFees, setServiceFees] = useState<ServiceFeeSetting[]>([]);
-  const [currentServiceFee, setCurrentServiceFee] = useState<any>(null);
+  const [currentServiceFee, setCurrentServiceFee] = useState<CurrentServiceFee>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -44,8 +101,8 @@ export function ServiceFeeManagementTable() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [isAllHistoryDialogOpen, setIsAllHistoryDialogOpen] = useState(false);
   const [selectedServiceFee, setSelectedServiceFee] = useState<ServiceFeeSetting | null>(null);
-  const [history, setHistory] = useState<any>(null);
-  const [allHistory, setAllHistory] = useState<any>(null);
+  const [history, setHistory] = useState<ServiceFeeHistory>(null);
+  const [allHistory, setAllHistory] = useState<AllServiceFeeHistory>(null);
 
   // Form states
   const [formData, setFormData] = useState<CreateServiceFeeRequest>({
@@ -65,7 +122,7 @@ export function ServiceFeeManagementTable() {
       if (response.success && response.data) {
         setCurrentServiceFee(response.data);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error loading current serviceFee:", err);
     }
   };
@@ -83,8 +140,8 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể tải danh sách phí dịch vụ");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi tải danh sách phí dịch vụ");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi tải danh sách phí dịch vụ");
     } finally {
       setLoading(false);
     }
@@ -106,8 +163,8 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể tạo cấu hình phí dịch vụ");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi tạo cấu hình phí dịch vụ");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi tạo cấu hình phí dịch vụ");
     }
   };
 
@@ -130,8 +187,8 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể cập nhật cấu hình phí dịch vụ");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi cập nhật cấu hình phí dịch vụ");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi cập nhật cấu hình phí dịch vụ");
     }
   };
 
@@ -147,8 +204,8 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể kích hoạt cấu hình phí dịch vụ");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi kích hoạt cấu hình phí dịch vụ");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi kích hoạt cấu hình phí dịch vụ");
     }
   };
 
@@ -164,8 +221,8 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể xóa cấu hình phí dịch vụ");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi xóa cấu hình phí dịch vụ");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi xóa cấu hình phí dịch vụ");
     }
   };
 
@@ -180,8 +237,8 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể tải lịch sử");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi tải lịch sử");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi tải lịch sử");
     }
   };
 
@@ -195,12 +252,12 @@ export function ServiceFeeManagementTable() {
       } else {
         setError(response.message || "Không thể tải lịch sử");
       }
-    } catch (err: any) {
-      setError(err.message || "Lỗi khi tải lịch sử");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi khi tải lịch sử");
     }
   };
 
-  const handleReapplyServiceFee = (event: any) => {
+  const handleReapplyServiceFee = (event: NonNullable<AllServiceFeeHistory>["timeline"][number]) => {
     // Copy thông tin từ event để tạo serviceFee mới
     const now = new Date().toISOString().split("T")[0];
     setFormData({
@@ -706,7 +763,7 @@ export function ServiceFeeManagementTable() {
               {history.history && history.history.length > 0 ? (
                 <div className="space-y-2">
                   <h3 className="font-semibold mb-2 text-gray-900">Lịch sử thay đổi</h3>
-                  {history.history.map((entry: any, index: number) => (
+                  {history.history.map((entry, index: number) => (
                     <div
                       key={index}
                       className="bg-gray-50 rounded-lg p-3 border border-gray-200"
@@ -793,7 +850,7 @@ export function ServiceFeeManagementTable() {
               </div>
               {allHistory.timeline && allHistory.timeline.length > 0 ? (
                 <div className="space-y-3">
-                  {allHistory.timeline.map((event: any, index: number) => (
+                  {allHistory.timeline.map((event, index: number) => (
                     <div
                       key={index}
                       className={`rounded-lg p-4 border ${
@@ -835,8 +892,12 @@ export function ServiceFeeManagementTable() {
                           </div>
                           <p className="text-xs text-gray-500 mt-2">
                             {event.type === "create" 
-                              ? `Tạo lúc: ${new Date(event.createdAt).toLocaleString("vi-VN")}`
-                              : `Thay đổi lúc: ${new Date(event.changedAt).toLocaleString("vi-VN")}`
+                              ? event.createdAt 
+                                ? `Tạo lúc: ${new Date(event.createdAt).toLocaleString("vi-VN")}`
+                                : "Không có thông tin thời gian"
+                              : event.changedAt
+                                ? `Thay đổi lúc: ${new Date(event.changedAt).toLocaleString("vi-VN")}`
+                                : "Không có thông tin thời gian"
                             }
                           </p>
                         </div>

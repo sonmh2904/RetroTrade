@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 
-const stats = [
+interface Stat {
+  number: string
+  label: string
+  icon: string
+  gradient: string
+  hasK?: boolean
+}
+
+const stats: Stat[] = [
   {
     number: "50+",
     label: "Danh mục sản phẩm",
@@ -82,7 +90,7 @@ export function AboutStats() {
     }, 20)
   }
 
-  const getDisplayNumber = (stat: any, index: number) => {
+  const getDisplayNumber = (stat: Stat, index: number) => {
     if (stat.number.includes("%") || stat.number.includes("/")) {
       return stat.number
     }

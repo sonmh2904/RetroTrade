@@ -10,7 +10,6 @@ import { AlertTriangle, Mail, Send, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/router";
 import { submitComplaint } from "@/services/auth/complaint.api";
-import Image from "next/image";
 
 export default function BannedAccountPage() {
   const router = useRouter();
