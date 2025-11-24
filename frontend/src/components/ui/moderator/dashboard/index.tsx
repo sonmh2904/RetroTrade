@@ -19,8 +19,31 @@ import {
   ArrowDownRight,
   TrendingUp,
   UserCheck,
-  FileCheck
+  FileCheck,
+  BarChart3,
+  Home,
+  Settings,
+  Bell,
+  Search,
+  Filter,
+  Download,
+  RefreshCw,
+  Eye,
+  Edit,
+  Trash2,
+  MoreVertical,
+  AlertTriangle
 } from "lucide-react";
+import { ProductsChart } from "./charts/products-chart";
+import { PostsChart } from "./charts/posts-chart";
+import { UsersChart } from "./charts/users-chart";
+import { CommentsChart } from "./charts/comments-chart";
+import { VerificationsChart } from "./charts/verifications-chart";
+import { OwnerRequestsChart } from "./charts/owner-requests-chart";
+import { ComplaintsChart } from "./charts/complaints-chart";
+import { ReportsChart } from "./charts/reports-chart";
+import { PieChart } from "./charts/pie-chart";
+import { chartApi } from "@/services/moderator/chart.api";
 
 interface StatCard {
   id: string;
@@ -31,19 +54,76 @@ interface StatCard {
   icon: React.ElementType;
   bgColor: string;
   iconColor: string;
+  trend?: "up" | "down" | "stable";
+}
+
+interface DashboardData {
+  // Basic stats
+  pendingProducts: { value: string; rawValue: number };
+  approvedProducts: { value: string; rawValue: number };
+  rejectedProducts: { value: string; rawValue: number };
+  totalProducts: { value: string; rawValue: number; change: number; changeType: string };
+  pendingPosts: { value: string; rawValue: number };
+  totalPosts: { value: string; rawValue: number; change: number; changeType: string };
+  newPostsToday: { value: string; rawValue: number };
+  pendingComments: { value: string; rawValue: number };
+  totalComments: { value: string; rawValue: number };
+  newCommentsToday: { value: string; rawValue: number };
+  pendingVerifications: { value: string; rawValue: number };
+  totalVerifications: { value: string; rawValue: number };
+  pendingOwnerRequests: { value: string; rawValue: number };
+  totalOwnerRequests: { value: string; rawValue: number };
+  pendingDisputes: { value: string; rawValue: number };
+  totalDisputes: { value: string; rawValue: number };
+  pendingComplaints: { value: string; rawValue: number };
+  totalComplaints: { value: string; rawValue: number };
+  newUsersToday: { value: string; rawValue: number };
+  newUsersThisMonth: { value: string; rawValue: number };
+  totalUsers: { value: string; rawValue: number; change: number; changeType: string };
+  verifiedUsers: { value: string; rawValue: number };
+  
+  // Time series data
+  timeSeries?: {
+    daily: {
+      products: Array<{ date: string; total: number; pending: number; approved: number; rejected: number }>;
+      posts: Array<{ date: string; total: number; pending: number; active: number }>;
+      users: Array<{ date: string; total: number; verified: number }>;
+      reports: Array<{ date: string; total: number; pending: number; resolved: number }>;
+    };
+    hourly: {
+      products: Array<{ hour: number; count: number }>;
+      users: Array<{ hour: number; count: number }>;
+    };
+  };
+  
+  // Distribution data
+  distribution?: {
+    products: { pending: number; approved: number; rejected: number };
+    posts: { pending: number; active: number };
+    users: { verified: number; unverified: number };
+    disputes: { pending: number; resolved: number };
+  };
 }
 
 const ModeratorDashboard = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [stats, setStats] = useState<StatCard[]>([]);
-  const [, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Chart data states
+  const [productChartData, setProductChartData] = useState<any[]>([]);
+  const [postChartData, setPostChartData] = useState<any[]>([]);
+  const [userChartData, setUserChartData] = useState<any[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
 
   const tabs = [
     {
       id: "overview",
       label: "Tổng quan",
-      icon: Activity,
+      icon: Home,
       color: "text-blue-600",
     },
     {
@@ -64,6 +144,36 @@ const ModeratorDashboard = () => {
       icon: Users,
       color: "text-purple-600",
     },
+    {
+      id: "comments",
+      label: "Bình luận",
+      icon: MessageSquare,
+      color: "text-yellow-600",
+    },
+    {
+      id: "verifications",
+      label: "Xác thực",
+      icon: Shield,
+      color: "text-purple-600",
+    },
+    {
+      id: "owner-requests",
+      label: "Yêu cầu Owner",
+      icon: FileCheck,
+      color: "text-violet-600",
+    },
+    {
+      id: "complaints",
+      label: "Khiếu nại",
+      icon: AlertCircle,
+      color: "text-pink-600",
+    },
+    {
+      id: "reports",
+      label: "Báo cáo",
+      icon: AlertTriangle,
+      color: "text-red-600",
+    },
   ];
 
   useEffect(() => {
@@ -72,59 +182,37 @@ const ModeratorDashboard = () => {
       try {
         const { moderatorDashboardApi } = await import("@/services/moderator/dashboard.api");
         const statsData = await moderatorDashboardApi.getDashboardStats();
+        setDashboardData(statsData);
 
+        // Use the data from the main dashboard API instead of individual calls
         const statsCards: StatCard[] = [
           {
             id: "pendingProducts",
             label: "Sản phẩm chờ duyệt",
             value: statsData.pendingProducts.value,
+            change: statsData.totalProducts.change,
+            changeType: statsData.totalProducts.changeType,
             icon: Clock,
-            bgColor: "bg-amber-50",
-            iconColor: "text-amber-600",
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            iconColor: "text-amber-600"
           },
           {
             id: "pendingPosts",
             label: "Bài viết chờ duyệt",
             value: statsData.pendingPosts.value,
+            change: statsData.totalPosts.change,
+            changeType: statsData.totalPosts.changeType,
             icon: FileText,
-            bgColor: "bg-orange-50",
-            iconColor: "text-orange-600",
+            bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
+            iconColor: "text-orange-600"
           },
           {
             id: "pendingVerifications",
             label: "Yêu cầu xác minh",
             value: statsData.pendingVerifications.value,
             icon: Shield,
-            bgColor: "bg-purple-50",
-            iconColor: "text-purple-600",
-          },
-          {
-            id: "pendingDisputes",
-            label: "Tranh chấp chờ xử lý",
-            value: statsData.pendingDisputes.value,
-            icon: AlertCircle,
-            bgColor: "bg-red-50",
-            iconColor: "text-red-600",
-          },
-          {
-            id: "totalProducts",
-            label: "Tổng sản phẩm",
-            value: statsData.totalProducts.value,
-            change: statsData.totalProducts.change,
-            changeType: statsData.totalProducts.changeType,
-            icon: Package,
-            bgColor: "bg-blue-50",
-            iconColor: "text-blue-600",
-          },
-          {
-            id: "totalPosts",
-            label: "Tổng bài viết",
-            value: statsData.totalPosts.value,
-            change: statsData.totalPosts.change,
-            changeType: statsData.totalPosts.changeType,
-            icon: FileText,
-            bgColor: "bg-green-50",
-            iconColor: "text-green-600",
+            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+            iconColor: "text-purple-600"
           },
           {
             id: "totalUsers",
@@ -133,86 +221,47 @@ const ModeratorDashboard = () => {
             change: statsData.totalUsers.change,
             changeType: statsData.totalUsers.changeType,
             icon: Users,
-            bgColor: "bg-indigo-50",
-            iconColor: "text-indigo-600",
-          },
-          {
-            id: "verifiedUsers",
-            label: "Người dùng đã xác thực",
-            value: statsData.verifiedUsers.value,
-            icon: UserCheck,
-            bgColor: "bg-teal-50",
-            iconColor: "text-teal-600",
-          },
-          {
-            id: "approvedProducts",
-            label: "Sản phẩm đã duyệt",
-            value: statsData.approvedProducts.value,
-            icon: CheckCircle,
-            bgColor: "bg-emerald-50",
-            iconColor: "text-emerald-600",
-          },
-          {
-            id: "rejectedProducts",
-            label: "Sản phẩm bị từ chối",
-            value: statsData.rejectedProducts.value,
-            icon: XCircle,
-            bgColor: "bg-rose-50",
-            iconColor: "text-rose-600",
-          },
-          {
-            id: "newUsersToday",
-            label: "Người dùng mới hôm nay",
-            value: statsData.newUsersToday.value,
-            icon: Users,
-            bgColor: "bg-cyan-50",
-            iconColor: "text-cyan-600",
-          },
-          {
-            id: "newPostsToday",
-            label: "Bài viết mới hôm nay",
-            value: statsData.newPostsToday.value,
-            icon: FileText,
-            bgColor: "bg-lime-50",
-            iconColor: "text-lime-600",
+            bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+            iconColor: "text-blue-600"
           },
           {
             id: "pendingComments",
             label: "Bình luận chờ duyệt",
             value: statsData.pendingComments.value,
             icon: MessageSquare,
-            bgColor: "bg-yellow-50",
-            iconColor: "text-yellow-600",
+            bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
+            iconColor: "text-yellow-600"
           },
           {
             id: "pendingOwnerRequests",
             label: "Yêu cầu Owner chờ duyệt",
             value: statsData.pendingOwnerRequests.value,
             icon: FileCheck,
-            bgColor: "bg-violet-50",
-            iconColor: "text-violet-600",
+            bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
+            iconColor: "text-violet-600"
           },
           {
             id: "pendingComplaints",
             label: "Khiếu nại chờ xử lý",
             value: statsData.pendingComplaints.value,
             icon: AlertCircle,
-            bgColor: "bg-pink-50",
-            iconColor: "text-pink-600",
+            bgColor: "bg-gradient-to-r from-pink-50 to-rose-50",
+            iconColor: "text-pink-600"
           },
           {
-            id: "totalDisputes",
-            label: "Tổng tranh chấp",
+            id: "totalReports",
+            label: "Tổng báo cáo",
             value: statsData.totalDisputes.value,
             icon: AlertCircle,
-            bgColor: "bg-slate-50",
-            iconColor: "text-slate-600",
-          },
+            bgColor: "bg-gradient-to-r from-red-50 to-orange-50",
+            iconColor: "text-red-600"
+          }
         ];
         setStats(statsCards);
       } catch (error) {
         console.error("Error fetching data:", error);
         setStats([]);
+        setDashboardData(null);
       } finally {
         setLoading(false);
       }
@@ -221,269 +270,416 @@ const ModeratorDashboard = () => {
     fetchData();
   }, []);
 
-  const handleStatClick = (statId: string) => {
-    // Map stat IDs to moderator tabs and sub-tabs
-    const statToNavigationMap: Record<string, { tab: string; subTab?: string }> = {
-      // Products - navigate to productManagement tab
-      pendingProducts: { tab: "productManagement", subTab: "products" },
-      approvedProducts: { tab: "productManagement", subTab: "products" },
-      rejectedProducts: { tab: "productManagement", subTab: "products" },
-      totalProducts: { tab: "productManagement", subTab: "products" },
-      
-      // Posts - navigate to blog tab with posts sub-tab
-      pendingPosts: { tab: "blog", subTab: "posts" },
-      totalPosts: { tab: "blog", subTab: "posts" },
-      newPostsToday: { tab: "blog", subTab: "posts" },
-      
-      // Comments - navigate to blog tab with comments sub-tab
-      pendingComments: { tab: "blog", subTab: "comments" },
-      
-      // Verifications - navigate to verification tab
-      pendingVerifications: { tab: "verification" },
-      totalVerifications: { tab: "verification" },
-      
-      // Owner Requests - navigate to requests tab
-      pendingOwnerRequests: { tab: "requests" },
-      totalOwnerRequests: { tab: "requests" },
-      
-      // Disputes - navigate to dispute tab
-      pendingDisputes: { tab: "dispute" },
-      totalDisputes: { tab: "dispute" },
-      
-      // Complaints - navigate to dispute tab (or could be separate)
-      pendingComplaints: { tab: "dispute" },
-      totalComplaints: { tab: "dispute" },
-      
-      // Users - stay in dashboard overview
-      totalUsers: { tab: "dashboard" },
-      verifiedUsers: { tab: "dashboard" },
-      newUsersToday: { tab: "dashboard" },
+  // Fetch chart data
+  useEffect(() => {
+    const fetchChartData = async () => {
+      setChartLoading(true);
+      try {
+        const { chartApi } = await import("@/services/moderator/chart.api");
+        
+        const [productsData, postsData, usersData] = await Promise.all([
+          chartApi.getProductChartData(),
+          chartApi.getPostChartData(),
+          chartApi.getUserChartData()
+        ]);
+        
+        setProductChartData(productsData);
+        setPostChartData(postsData);
+        setUserChartData(usersData);
+      } catch (error) {
+        console.error("Error fetching chart data:", error);
+        setProductChartData([]);
+        setPostChartData([]);
+        setUserChartData([]);
+      } finally {
+        setChartLoading(false);
+      }
     };
 
-    const navigation = statToNavigationMap[statId];
-    if (navigation) {
-      // Build URL with tab and optional subTab
-      let url = `/moderator?tab=${navigation.tab}`;
-      if (navigation.subTab) {
-        url += `&${navigation.tab === "blog" ? "blogTab" : navigation.tab === "productManagement" ? "productTab" : ""}=${navigation.subTab}`;
-      }
-      
-      // Navigate to moderator page with appropriate tab
-      router.push(url);
-    } else {
-      // Fallback: switch to internal tab if it exists
-      const statToTabMap: Record<string, string> = {
-        pendingProducts: "products",
-        approvedProducts: "products",
-        rejectedProducts: "products",
-        totalProducts: "products",
-        pendingPosts: "posts",
-        totalPosts: "posts",
-        newPostsToday: "posts",
-        totalUsers: "users",
-        verifiedUsers: "users",
-        newUsersToday: "users",
-      };
+    fetchChartData();
+  }, []);
 
-      const tabId = statToTabMap[statId];
-      if (tabId) {
-        setActiveTab(tabId);
-        setTimeout(() => {
-          const dashboardElement = document.getElementById("dashboard-content");
-          if (dashboardElement) {
-            dashboardElement.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
-        }, 100);
-      }
+  const handleStatClick = (statId: string) => {
+    // Navigate to relevant tab based on stat
+    switch (statId) {
+      case "pendingProducts":
+      case "totalProducts":
+        setActiveTab("products");
+        break;
+      case "pendingPosts":
+      case "totalPosts":
+        setActiveTab("posts");
+        break;
+      case "pendingVerifications":
+        setActiveTab("verifications");
+        break;
+      case "totalUsers":
+        setActiveTab("users");
+        break;
+      case "pendingComments":
+        setActiveTab("comments");
+        break;
+      case "pendingOwnerRequests":
+        setActiveTab("owner-requests");
+        break;
+      case "pendingComplaints":
+        setActiveTab("complaints");
+        break;
+      case "totalReports":
+        setActiveTab("reports");
+        break;
+      default:
+        break;
     }
   };
 
-  const activeTabData = tabs.find(tab => tab.id === activeTab);
+  const activeTabData = tabs.find((tab) => tab.id === activeTab);
 
   return (
-    <div className="space-y-8 pb-8">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 p-8 shadow-2xl">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
-        <div className="relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-white/20 p-3 backdrop-blur-sm">
-              <LineChart className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold text-white drop-shadow-lg">
-                Dashboard Moderator
-              </h1>
-              <p className="mt-2 text-purple-100">
-                Tổng quan và quản lý nội dung hệ thống
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      
 
-      {/* Tabs */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm" id="dashboard-content">
-        <nav className="flex space-x-1 overflow-x-auto p-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
+      {/* Main Content */}
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Stats Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-8">
+          {stats.map((stat, index) => {
+            const Icon = stat.icon;
+            const isClickable = true;
             return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  group relative flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200
-                  ${isActive
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }
-                `}
+              <div
+                key={stat.id}
+                className={`relative overflow-hidden rounded-xl border-2 bg-white p-4 sm:p-6 shadow-sm transition-all duration-300 hover:scale-105 hover:shadow-xl cursor-pointer ${
+                  isClickable ? 'hover:border-blue-400' : 'hover:border-gray-300'
+                }`}
+                onClick={() => isClickable && handleStatClick(stat.id)}
+                style={{
+                  animationDelay: `${index * 50}ms`,
+                }}
               >
-                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
-                <span>{tab.label}</span>
-                {isActive && (
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/20 to-transparent"></div>
-                )}
-              </button>
+                {/* Gradient overlay */}
+                <div className={`absolute inset-0 ${stat.bgColor} opacity-50`}></div>
+                
+                {/* Content */}
+                <div className="relative z-10">
+                  {/* Icon */}
+                  <div className={`mb-3 sm:mb-4 inline-flex p-2 sm:p-3 rounded-lg ${stat.bgColor}`}>
+                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.iconColor}`} />
+                  </div>
+                  
+                  {/* Label */}
+                  <h3 className="mb-1 sm:mb-2 text-xs sm:text-sm font-medium text-gray-600">
+                    {stat.label}
+                  </h3>
+                  
+                  {/* Value */}
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                  
+                  {/* Change indicator */}
+                  {stat.change !== undefined && (
+                    <div className="flex items-center mt-2 text-sm">
+                      {stat.changeType === "increase" ? (
+                        <ArrowUpRight className="w-4 h-4 text-green-500 mr-1" />
+                      ) : (
+                        <ArrowDownRight className="w-4 h-4 text-red-500 mr-1" />
+                      )}
+                      <span className={`font-medium ${
+                        stat.changeType === "increase" ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {Math.abs(stat.change)}%
+                      </span>
+                      <span className="text-gray-500 ml-1">so với tháng trước</span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Hover effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 transition-opacity duration-300 hover:opacity-100"></div>
+              </div>
             );
           })}
-        </nav>
-      </div>
+        </div>
 
-      {/* Active Tab Content */}
-      {activeTabData && (
-        <div className="mt-6">
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              <div className="rounded-xl bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm">
-                <h2 className="mb-2 text-xl font-bold text-gray-900">Tổng quan thống kê</h2>
-                <p className="mb-6 text-sm text-gray-600">
-                  Bấm vào các thẻ thống kê để xem chi tiết
-                </p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {stats.map((stat, index) => {
-                    const Icon = stat.icon;
-                    // All stats are clickable, especially pending ones
-                    const isPending = stat.id.includes("pending");
-                    const isClickable = true; // All cards are clickable now
-                    return (
-                      <div
-                        key={stat.id}
-                        className={`
-                          group relative overflow-hidden rounded-xl border-2 bg-white p-6
-                          shadow-sm transition-all duration-300 hover:scale-105 hover:shadow-xl
-                          ${isClickable ? 'cursor-pointer' : 'cursor-default'}
-                          ${isPending 
-                            ? 'border-amber-300 hover:border-amber-500 bg-gradient-to-br from-amber-50 to-white' 
-                            : 'border-gray-200 hover:border-indigo-400'
-                          }
-                        `}
-                        onClick={() => isClickable && handleStatClick(stat.id)}
-                        style={{
-                          animationDelay: `${index * 50}ms`,
-                        }}
-                      >
-                        {/* Gradient overlay on hover */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
-                        
-                        {/* Decorative corner */}
-                        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-50"></div>
-                        
-                        <div className="relative z-10">
-                          {/* Icon with gradient background */}
-                          <div className="mb-4 flex items-center justify-between">
-                            <div className={`
-                              relative rounded-xl p-3 shadow-lg transition-transform duration-300
-                              group-hover:scale-110 group-hover:rotate-3
-                              ${stat.bgColor}
-                            `}>
-                              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/50 to-transparent"></div>
-                              <Icon className={`relative z-10 w-6 h-6 ${stat.iconColor}`} />
-                            </div>
-                            {isClickable && (
-                              <div className="rounded-full bg-indigo-100 p-1.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                                <ArrowUpRight className="w-4 h-4 text-indigo-600" />
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Label */}
-                          <h3 className="mb-2 text-sm font-semibold text-gray-600 transition-colors group-hover:text-gray-900">
-                            {stat.label}
-                          </h3>
-                          
-                          {/* Value */}
-                          <p className="mb-3 text-3xl font-bold text-gray-900 transition-colors">
-                            {stat.value}
-                          </p>
-                          
-                          {/* Change indicator */}
-                          {stat.change !== undefined && (
-                            <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-2 py-1">
-                              {stat.changeType === "increase" ? (
-                                <ArrowUpRight className="w-4 h-4 text-green-600" />
-                              ) : (
-                                <ArrowDownRight className="w-4 h-4 text-red-600" />
-                              )}
-                              <span
-                                className={`text-xs font-semibold ${
-                                  stat.changeType === "increase"
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }`}
-                              >
-                                {Math.abs(stat.change)}%
-                              </span>
-                              <span className="text-xs text-gray-500">so với tháng trước</span>
-                            </div>
-                          )}
+        {/* Quick Navigation */}
+        <div className="mb-8">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 border-b">
+              <CardTitle className="text-lg font-semibold text-gray-900">
+                Điều hướng nhanh
+              </CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Nhấp vào để xem chi tiết từng loại dữ liệu
+              </p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-6">
+                {tabs.filter(tab => tab.id !== "overview").map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                        activeTab === tab.id
+                          ? "border-blue-500 bg-blue-50 shadow-md"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <Icon className={`w-8 h-8 mb-2 ${tab.color}`} />
+                      <span className="text-sm font-medium text-gray-900">{tab.label}</span>
+                      <span className="text-xs text-gray-500 mt-1">Xem chi tiết</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tab Content */}
+        {activeTabData && (
+          <div className="space-y-6">
+            {activeTab === "overview" && (
+              <div className="space-y-6">
+                {/* Navigation only - overview content removed */}
+              </div>
+            )}
+            
+            {activeTab === "products" && (
+              <div className="space-y-6">
+                <ProductsChart 
+                  data={productChartData} 
+                  loading={chartLoading}
+                  statsData={dashboardData}
+                />
+                
+                {/* Product Status Distribution */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Phân bố trạng thái sản phẩm
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      <PieChart
+                        data={[
+                          { label: "Chờ duyệt", value: dashboardData?.distribution?.products.pending || 0, color: "#f59e0b" },
+                          { label: "Đã duyệt", value: dashboardData?.distribution?.products.approved || 0, color: "#10b981" },
+                          { label: "Bị từ chối", value: dashboardData?.distribution?.products.rejected || 0, color: "#ef4444" }
+                        ]}
+                        loading={!dashboardData} title={""}                      />
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Thống kê nhanh
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-amber-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-amber-600" />
+                          <span className="text-sm font-medium">Chờ duyệt</span>
                         </div>
+                        <span className="font-bold text-amber-600">{dashboardData?.pendingProducts.value || '0'}</span>
                       </div>
-                    );
-                  })}
+                      <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-emerald-600" />
+                          <span className="text-sm font-medium">Đã duyệt</span>
+                        </div>
+                        <span className="font-bold text-emerald-600">{dashboardData?.approvedProducts.value || '0'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                          <span className="text-sm font-medium">Bị từ chối</span>
+                        </div>
+                        <span className="font-bold text-red-600">{dashboardData?.rejectedProducts.value || '0'}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-            </div>
-          )}
-          {activeTab === "products" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Thống kê Sản phẩm</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  Biểu đồ và phân tích sản phẩm sẽ được hiển thị tại đây.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-          {activeTab === "posts" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Thống kê Bài viết</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  Biểu đồ và phân tích bài viết sẽ được hiển thị tại đây.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-          {activeTab === "users" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Thống kê Người dùng</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  Biểu đồ và phân tích người dùng sẽ được hiển thị tại đây.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
+            )}
+            
+            {activeTab === "posts" && (
+              <div className="space-y-6">
+                <PostsChart 
+                  data={postChartData} 
+                  loading={chartLoading}
+                  statsData={dashboardData}
+                />
+                
+                {/* Post Status Distribution */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Phân bố trạng thái bài viết
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      <PieChart
+                        data={[
+                          { label: "Chờ duyệt", value: dashboardData?.distribution?.posts.pending || 0, color: "#f59e0b" },
+                          { label: "Đã kích hoạt", value: dashboardData?.distribution?.posts.active || 0, color: "#10b981" }
+                        ]}
+                        loading={!dashboardData} title={""}                      />
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Thống kê nhanh
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-orange-600" />
+                          <span className="text-sm font-medium">Chờ duyệt</span>
+                        </div>
+                        <span className="font-bold text-orange-600">{dashboardData?.pendingPosts.value || '0'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-lime-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-lime-600" />
+                          <span className="text-sm font-medium">Mới hôm nay</span>
+                        </div>
+                        <span className="font-bold text-lime-600">{dashboardData?.newPostsToday.value || '0'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-yellow-600" />
+                          <span className="text-sm font-medium">Bình luận chờ duyệt</span>
+                        </div>
+                        <span className="font-bold text-yellow-600">{dashboardData?.pendingComments.value || '0'}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === "users" && (
+              <div className="space-y-6">
+                <UsersChart 
+                  data={userChartData} 
+                  loading={chartLoading}
+                  statsData={dashboardData}
+                />
+                
+                {/* User Status Distribution */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Phân bố trạng thái người dùng
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      <PieChart
+                        data={[
+                          { label: "Đã xác thực", value: dashboardData?.distribution?.users.verified || 0, color: "#10b981" },
+                          { label: "Chưa xác thực", value: dashboardData?.distribution?.users.unverified || 0, color: "#6b7280" }
+                        ]}
+                        loading={!dashboardData} title={""}                      />
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b">
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Thống kê nhanh
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm font-medium">Tổng người dùng</span>
+                        </div>
+                        <span className="font-bold text-blue-600">{dashboardData?.totalUsers.value || '0'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="w-4 h-4 text-emerald-600" />
+                          <span className="text-sm font-medium">Đã xác thực</span>
+                        </div>
+                        <span className="font-bold text-emerald-600">{dashboardData?.verifiedUsers.value || '0'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm font-medium">Yêu cầu xác minh</span>
+                        </div>
+                        <span className="font-bold text-purple-600">{dashboardData?.pendingVerifications.value || '0'}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "comments" && (
+              <div className="space-y-6">
+                <CommentsChart 
+                  data={[]} 
+                  loading={false}
+                  statsData={dashboardData}
+                />
+              </div>
+            )}
+
+            {activeTab === "verifications" && (
+              <div className="space-y-6">
+                <VerificationsChart 
+                  data={[]} 
+                  loading={false}
+                  statsData={dashboardData}
+                />
+              </div>
+            )}
+
+            {activeTab === "owner-requests" && (
+              <div className="space-y-6">
+                <OwnerRequestsChart 
+                  data={[]} 
+                  loading={false}
+                  statsData={dashboardData}
+                />
+              </div>
+            )}
+
+            {activeTab === "complaints" && (
+              <div className="space-y-6">
+                <ComplaintsChart 
+                  data={[]} 
+                  loading={false}
+                  statsData={dashboardData}
+                />
+              </div>
+            )}
+
+            {activeTab === "reports" && (
+              <div className="space-y-6">
+                <ReportsChart 
+                  data={[]} 
+                  loading={false}
+                  statsData={dashboardData}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
