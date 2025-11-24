@@ -3,14 +3,12 @@ const User = require("../../models/User.model");
 const { uploadToCloudinary } = require('../../middleware/upload.middleware');
 const { createNotification } = require("../../middleware/createNotification");
 
-// User gửi yêu cầu xác minh
 module.exports.createVerificationRequest = async (req, res) => {
     try {
         const userId = req.user._id;
         let idCardInfo = null;
         let reason = null;
         
-        // Parse idCardInfo from form data if provided
         if (req.body.idCardInfo) {
             try {
                 idCardInfo = typeof req.body.idCardInfo === 'string' 
@@ -21,11 +19,9 @@ module.exports.createVerificationRequest = async (req, res) => {
             }
         }
         
-        // Get reason from form data
         reason = req.body.reason || null;
         const files = req.files || [];
 
-        // Kiểm tra xem user đã có yêu cầu pending chưa
         const existingRequest = await VerificationRequest.findOne({
             userId: userId,
             status: { $in: ['Pending', 'In Progress'] }
@@ -38,9 +34,14 @@ module.exports.createVerificationRequest = async (req, res) => {
             });
         }
 
-        // Upload ảnh lên Cloudinary nếu có
         let uploadedFiles = [];
         if (files && files.length > 0) {
+            if (files.length !== 2) {
+                return res.status(400).json({
+                    code: 400,
+                    message: "Vui lòng upload đủ 2 ảnh: mặt trước căn cước công dân và mặt sau căn cước công dân"
+                });
+            }
             try {
                 uploadedFiles = await uploadToCloudinary(files, "retrotrade/verification-requests/");
             } catch (uploadError) {
@@ -53,8 +54,7 @@ module.exports.createVerificationRequest = async (req, res) => {
             }
         }
 
-        // Tạo documents array
-        const documentTypes = ['selfie', 'idCardFront', 'idCardBack'];
+        const documentTypes = ['idCardFront', 'idCardBack'];
         const documents = uploadedFiles.map((file, index) => {
             return {
                 documentType: documentTypes[index] || 'document',
@@ -63,50 +63,103 @@ module.exports.createVerificationRequest = async (req, res) => {
             };
         });
 
-        // Tạo verification request
+        const hasValidIdCardInfo = idCardInfo && (
+            idCardInfo.idNumber || 
+            idCardInfo.fullName || 
+            idCardInfo.dateOfBirth || 
+            idCardInfo.address
+        );
+
+        const shouldAutoReject = !hasValidIdCardInfo;
+
         const verificationRequest = new VerificationRequest({
             userId: userId,
             idCardInfo: idCardInfo ? {
-                idNumber: idCardInfo.idNumber,
-                fullName: idCardInfo.fullName,
+                idNumber: idCardInfo.idNumber || null,
+                fullName: idCardInfo.fullName || null,
                 dateOfBirth: idCardInfo.dateOfBirth ? new Date(idCardInfo.dateOfBirth) : null,
-                address: idCardInfo.address
+                address: idCardInfo.address || null
             } : null,
             documents: documents,
             reason: reason || null,
-            status: 'Pending'
+            status: shouldAutoReject ? 'Rejected' : 'Pending',
+            rejectionReason: shouldAutoReject 
+                ? 'Hệ thống không thể đọc được thông tin từ ảnh căn cước công dân. Vui lòng chụp lại ảnh rõ nét hơn hoặc đảm bảo ảnh không bị mờ, không bị che khuất thông tin.'
+                : null,
+            handledAt: shouldAutoReject ? new Date() : null
         });
 
         await verificationRequest.save();
-
-        // Populate user info
         await verificationRequest.populate('userId', 'fullName email phone');
 
-        // Gửi notification cho tất cả moderators
-        try {
-            const moderators = await User.find({ role: 'moderator', isDeleted: false });
-            for (const moderator of moderators) {
+        if (shouldAutoReject) {
+            try {
                 await createNotification(
-                    moderator._id,
-                    "New Verification Request",
-                    "Yêu cầu xác minh mới",
-                    `Có yêu cầu xác minh mới từ ${req.user.fullName || req.user.email}. Vui lòng xử lý.`,
+                    userId,
+                    "Xác minh CCCD bị từ chối",
+                    "Xác minh CCCD bị từ chối",
+                    `Yêu cầu xác minh căn cước công dân của bạn đã bị từ chối tự động. Lý do: Hệ thống không thể đọc được thông tin từ ảnh. Vui lòng chụp lại ảnh rõ nét hơn.`,
                     {
                         requestId: verificationRequest._id.toString(),
-                        userId: userId.toString(),
-                        type: 'verification_request'
+                        type: 'id_card_verification_rejected',
+                        redirectUrl: '/auth/verification-history'
                     }
                 );
+            } catch (notificationError) {
+                console.error("Error creating rejection notification:", notificationError);
             }
-        } catch (notificationError) {
-            console.error("Error creating notifications:", notificationError);
-        }
 
-        return res.json({
-            code: 200,
-            message: "Yêu cầu xác minh đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.",
-            data: verificationRequest
-        });
+            return res.json({
+                code: 200,
+                message: "Yêu cầu xác minh đã bị từ chối tự động do không thể đọc được thông tin từ ảnh. Vui lòng chụp lại ảnh rõ nét hơn.",
+                data: {
+                    ...verificationRequest.toObject(),
+                    autoRejected: true,
+                    rejectionReason: verificationRequest.rejectionReason
+                }
+            });
+        } else {
+            try {
+                const moderators = await User.find({ role: 'moderator', isDeleted: false });
+                for (const moderator of moderators) {
+                    await createNotification(
+                        moderator._id,
+                        "Yêu cầu xác minh CCCD mới",
+                        "Yêu cầu xác minh CCCD mới",
+                        `Có yêu cầu xác minh căn cước công dân mới từ ${req.user.fullName || req.user.email}. Vui lòng xử lý.`,
+                        {
+                            requestId: verificationRequest._id.toString(),
+                            userId: userId.toString(),
+                            type: 'id_card_verification_request'
+                        }
+                    );
+                }
+            } catch (notificationError) {
+                console.error("Error creating notifications:", notificationError);
+            }
+
+            try {
+                await createNotification(
+                    userId,
+                    "Đã gửi yêu cầu xác minh CCCD",
+                    "Yêu cầu xác minh CCCD đã được gửi",
+                    `Yêu cầu xác minh căn cước công dân của bạn đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.`,
+                    {
+                        requestId: verificationRequest._id.toString(),
+                        type: 'id_card_verification_submitted',
+                        redirectUrl: '/auth/verification-history'
+                    }
+                );
+            } catch (notificationError) {
+                console.error("Error creating user notification:", notificationError);
+            }
+
+            return res.json({
+                code: 200,
+                message: "Yêu cầu xác minh đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.",
+                data: verificationRequest
+            });
+        }
     } catch (error) {
         console.error('Error creating verification request:', error);
         return res.status(500).json({
@@ -117,7 +170,6 @@ module.exports.createVerificationRequest = async (req, res) => {
     }
 };
 
-// User xem yêu cầu của mình
 module.exports.getMyVerificationRequests = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -148,7 +200,44 @@ module.exports.getMyVerificationRequests = async (req, res) => {
     }
 };
 
-// Moderator xem tất cả yêu cầu
+module.exports.getMyVerificationRequestById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user._id;
+
+        const request = await VerificationRequest.findById(id)
+            .populate('assignedTo', 'fullName email')
+            .populate('handledBy', 'fullName email');
+
+        if (!request) {
+            return res.status(404).json({
+                code: 404,
+                message: "Không tìm thấy yêu cầu xác minh"
+            });
+        }
+
+        if (request.userId.toString() !== userId.toString()) {
+            return res.status(403).json({
+                code: 403,
+                message: "Bạn không có quyền xem yêu cầu này"
+            });
+        }
+
+        return res.json({
+            code: 200,
+            message: "Lấy thông tin yêu cầu xác minh thành công",
+            data: request
+        });
+    } catch (error) {
+        console.error('Error getting verification request:', error);
+        return res.status(500).json({
+            code: 500,
+            message: "Lỗi server khi lấy thông tin yêu cầu xác minh.",
+            error: error.message
+        });
+    }
+};
+
 module.exports.getAllVerificationRequests = async (req, res) => {
     try {
         const { status, assignedTo } = req.query;
@@ -183,7 +272,6 @@ module.exports.getAllVerificationRequests = async (req, res) => {
     }
 };
 
-// Moderator xem chi tiết yêu cầu
 module.exports.getVerificationRequestById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -215,7 +303,6 @@ module.exports.getVerificationRequestById = async (req, res) => {
     }
 };
 
-// Moderator nhận yêu cầu (assign)
 module.exports.assignVerificationRequest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -241,16 +328,16 @@ module.exports.assignVerificationRequest = async (req, res) => {
         request.assignedAt = new Date();
         await request.save();
 
-        // Gửi notification cho user
         try {
             await createNotification(
                 request.userId._id || request.userId,
-                "Verification Request Assigned",
-                "Yêu cầu xác minh đang được xử lý",
-                `Yêu cầu xác minh của bạn đang được moderator xử lý. Chúng tôi sẽ thông báo kết quả sớm nhất.`,
+                "Yêu cầu xác minh CCCD đang được xử lý",
+                "Yêu cầu xác minh CCCD đang được xử lý",
+                `Yêu cầu xác minh căn cước công dân của bạn đang được moderator xử lý. Chúng tôi sẽ thông báo kết quả sớm nhất.`,
                 {
                     requestId: request._id.toString(),
-                    type: 'verification_request_assigned'
+                    type: 'id_card_verification_assigned',
+                    redirectUrl: '/auth/verification-history'
                 }
             );
         } catch (notificationError) {
@@ -272,7 +359,6 @@ module.exports.assignVerificationRequest = async (req, res) => {
     }
 };
 
-// Moderator xử lý yêu cầu (approve/reject)
 module.exports.handleVerificationRequest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -286,7 +372,6 @@ module.exports.handleVerificationRequest = async (req, res) => {
             });
         }
 
-        // Validate idCardInfo when approving
         if (action === 'approved') {
             if (!idCardInfo) {
                 return res.status(400).json({
@@ -337,7 +422,6 @@ module.exports.handleVerificationRequest = async (req, res) => {
             });
         }
 
-        // Kiểm tra xem moderator có quyền xử lý không (phải là người được assign hoặc chưa được assign)
         if (request.assignedTo && request.assignedTo.toString() !== moderatorId.toString()) {
             return res.status(403).json({
                 code: 403,
@@ -352,7 +436,6 @@ module.exports.handleVerificationRequest = async (req, res) => {
         request.moderatorNotes = moderatorNotes || null;
         request.rejectionReason = action === 'rejected' ? (rejectionReason || null) : null;
 
-        // Nếu approve, cập nhật idCardInfo từ moderator input
         if (action === 'approved' && idCardInfo) {
             request.idCardInfo = {
                 idNumber: idCardInfo.idNumber.trim(),
@@ -364,7 +447,6 @@ module.exports.handleVerificationRequest = async (req, res) => {
 
         await request.save();
 
-        // Nếu approve, cập nhật user
         if (action === 'approved') {
             const user = await User.findById(request.userId._id || request.userId);
             if (user) {
@@ -379,12 +461,10 @@ module.exports.handleVerificationRequest = async (req, res) => {
                         extractionMethod: 'manual'
                     };
                 }
-                // Thêm documents vào user
                 if (request.documents && request.documents.length > 0) {
-                    const documentTypes = ['selfie', 'idCardFront', 'idCardBack'];
                     const documents = request.documents.map((doc, index) => {
                         return {
-                            documentType: documentTypes[index] || 'document',
+                            documentType: doc.documentType || 'document',
                             documentNumber: `DOC-${Date.now()}-${index}`,
                             fileUrl: doc.fileUrl,
                             status: 'approved',
@@ -400,21 +480,21 @@ module.exports.handleVerificationRequest = async (req, res) => {
 
         await request.save();
 
-        // Gửi notification cho user
         try {
             const message = action === 'approved' 
-                ? `Yêu cầu xác minh của bạn đã được duyệt. Tài khoản của bạn đã được xác minh thành công.`
-                : `Yêu cầu xác minh của bạn đã bị từ chối. Lý do: ${rejectionReason || 'Không được cung cấp'}`;
+                ? `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh thành công.`
+                : `Yêu cầu xác minh căn cước công dân của bạn đã bị từ chối. Lý do: ${rejectionReason || 'Không được cung cấp'}`;
             
             await createNotification(
                 request.userId._id,
-                action === 'approved' ? "Verification Approved" : "Verification Rejected",
-                action === 'approved' ? "Xác minh đã được duyệt" : "Xác minh bị từ chối",
+                action === 'approved' ? "Xác minh CCCD đã được duyệt" : "Xác minh CCCD bị từ chối",
+                action === 'approved' ? "Xác minh CCCD đã được duyệt" : "Xác minh CCCD bị từ chối",
                 message,
                 {
                     requestId: request._id.toString(),
-                    type: 'verification_request_handled',
-                    action: action
+                    type: action === 'approved' ? 'id_card_verification_approved' : 'id_card_verification_rejected',
+                    action: action,
+                    redirectUrl: '/auth/verification-history'
                 }
             );
         } catch (notificationError) {
@@ -437,4 +517,3 @@ module.exports.handleVerificationRequest = async (req, res) => {
         });
     }
 };
-

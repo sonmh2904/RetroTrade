@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getPostById, updatePost } from "@/services/auth/blog.api";
+import { getBlogDetail, updatePost } from "@/services/auth/blog.api";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,7 @@ export default function EditBlogForm({ blogId, isOpen, onClose, onSuccess }: Edi
   const fetchBlog = async () => {
     try {
       setFetching(true);
-      const blog = await getPostById(blogId);
+      const blog = await getBlogDetail(blogId);
       setFormData({
         title: blog.title || "",
         content: blog.content || "",
@@ -54,19 +54,28 @@ export default function EditBlogForm({ blogId, isOpen, onClose, onSuccess }: Edi
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      await updatePost(blogId, formData);
-      toast.success("Cập nhật bài viết thành công!");
-      onSuccess();
-    } catch (error) {
-      toast.error("Không thể cập nhật bài viết!");
-    } finally {
-      setLoading(false);
-    }
-  };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  try {
+    setLoading(true);
+
+    const data = new FormData();
+    data.append("title", formData.title);
+    data.append("excerpt", formData.excerpt);
+    data.append("content", formData.content);
+
+    await updatePost(blogId, data);
+
+    toast.success("Cập nhật bài viết thành công!");
+    onSuccess();
+  } catch (error) {
+    toast.error("Không thể cập nhật bài viết!");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleClose = () => {
     setFormData({ title: "", content: "", excerpt: "" });

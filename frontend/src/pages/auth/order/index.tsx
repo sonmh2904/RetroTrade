@@ -48,6 +48,7 @@ import PopupModal from "@/components/ui/common/PopupModal";
 import { useAppDispatch } from "@/store/hooks";
 import { AddressSelector } from "@/components/ui/auth/address/address-selector";
 import RentalDatePicker from "@/components/ui/common/RentalDatePicker";
+import { CheckoutPhoneInput, validateVietnamesePhone } from "@/components/ui/auth/checkout-phone-input";
 
 const calculateRentalDays = (item: CartItem): number => {
   if (!item.rentalStartDate || !item.rentalEndDate) return 0;
@@ -138,7 +139,6 @@ export default function Checkout() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     null
   );
-  const [useDefaultPhone, setUseDefaultPhone] = useState(true);
   const [defaultPhone, setDefaultPhone] = useState<string>("");
   const [confirmPopup, setConfirmPopup] = useState<{
     isOpen: boolean;
@@ -302,21 +302,6 @@ useEffect(() => {
     }
   }, [selectedAddressId, shipping.fullName, accessToken]);
 
-  // Update phone when useDefaultPhone changes
-  useEffect(() => {
-    if (useDefaultPhone && defaultPhone) {
-      setShipping((prev) => ({
-        ...prev,
-        phone: defaultPhone,
-      }));
-    } else if (!useDefaultPhone) {
-      // Clear phone when switching to custom input
-      setShipping((prev) => ({
-        ...prev,
-        phone: "",
-      }));
-    }
-  }, [useDefaultPhone, defaultPhone]);
 
   useEffect(() => {
     const loadUserInfo = async () => {
@@ -336,13 +321,6 @@ useEffect(() => {
           const phone =
             profileResponse.user?.phone || profileResponse.data?.phone || "";
           setDefaultPhone(phone);
-          // Only set to shipping if useDefaultPhone is true
-          if (useDefaultPhone) {
-            setShipping((prev) => ({
-              ...prev,
-              phone: phone,
-            }));
-          }
         }
       } catch (error) {
         console.error("Error loading user info:", error);
@@ -352,7 +330,7 @@ useEffect(() => {
     if (accessToken) {
       loadUserInfo();
     }
-  }, [accessToken, useDefaultPhone]);
+  }, [accessToken]);
 
   useEffect(() => {
     if (!hasInitializedSelection) return;
@@ -485,6 +463,7 @@ useEffect(() => {
     }
   };
 
+
   const handleToggleItemSelection = (itemId: string) => {
     setSelectedItemIds((prev) =>
       prev.includes(itemId)
@@ -540,22 +519,11 @@ useEffect(() => {
       let baseAmountForDiscount = rentalTotal;
       let isPrivateDiscountWithPublic = false;
 
-      console.log("Validating discount:", {
-        code: codeToApply.toUpperCase(),
-        baseAmount: baseAmountForDiscount,
-        rentalTotal,
-        depositTotal,
-        publicDiscountAmount,
-        selectedItemsCount: selectedCartItems.length,
-      });
-
       // Validate lần đầu để kiểm tra mã có hợp lệ không
       const response = await validateDiscount({
         code: codeToApply.toUpperCase(),
         baseAmount: baseAmountForDiscount,
       });
-
-      console.log("Validation response:", response);
 
       if (response.status === "success" && response.data) {
         const discount = response.data.discount;
@@ -568,14 +536,6 @@ useEffect(() => {
             0,
             rentalTotal - publicDiscountAmount
           );
-          console.log(
-            "Private discount with public discount exists, revalidating with remaining rental:",
-            {
-              originalRental: rentalTotal,
-              publicDiscountAmount,
-              remainingRental: baseAmountForDiscount,
-            }
-          );
         }
 
         // Tính lại discount amount để đảm bảo chính xác
@@ -585,36 +545,6 @@ useEffect(() => {
           baseAmountForDiscount,
           discount.maxDiscountAmount
         );
-
-        // Sử dụng amount từ backend, nhưng log để debug
-        console.log("Discount calculation:", {
-          code: discount.code,
-          type: discount.type,
-          value: discount.value,
-          baseAmount: baseAmountForDiscount,
-          maxDiscountAmount: discount.maxDiscountAmount || 0,
-          backendAmount: amount,
-          calculatedAmount: calculatedAmount,
-          match: Math.abs(amount - calculatedAmount) < 0.01,
-        });
-
-        console.log("Applying discount:", {
-          code: discount.code,
-          isPublic: discount.isPublic,
-          type: discount.type,
-          value: discount.value,
-          maxDiscountAmount: discount.maxDiscountAmount,
-          minOrderAmount: discount.minOrderAmount,
-          amount: amount,
-          rentalTotal: rentalTotal,
-          depositTotal: depositTotal,
-          baseAmountForDiscount: rentalTotal, // Chỉ tính trên tiền thuê
-          expectedAmount:
-            discount.type === "percent"
-              ? (rentalTotal * discount.value) / 100
-              : discount.value,
-          discount: discount,
-        });
 
         // Kiểm tra loại discount (public hay private)
         if (discount.isPublic) {
@@ -634,7 +564,6 @@ useEffect(() => {
           }
           setPublicDiscount(discount);
           setPublicDiscountAmount(amount);
-          console.log("Set public discount amount:", amount);
 
           // Nếu đã có mã private, tính lại mã private với baseAmount mới (chỉ trên tiền thuê còn lại)
           if (privateDiscount) {
@@ -685,16 +614,6 @@ useEffect(() => {
               ) {
                 // Sử dụng amount từ revalidate (tính trên tiền thuê còn lại)
                 amount = revalidateResponse.data.amount;
-                console.log(
-                  "Private discount revalidated with remaining rental:",
-                  {
-                    code: discount.code,
-                    baseAmountForDiscount,
-                    amount,
-                    publicDiscountAmount,
-                    originalRental: rentalTotal,
-                  }
-                );
               } else {
                 // Nếu revalidate thất bại, hiển thị lý do cụ thể
                 const errorMsg =
@@ -1316,6 +1235,13 @@ const processPayment = async () => {
       return;
     }
 
+    // Validate số điện thoại trước khi submit
+    const phoneValidationError = validateVietnamesePhone(shipping.phone);
+    if (phoneValidationError) {
+      toast.error(phoneValidationError);
+      return;
+    }
+
     if (
       !shipping.fullName ||
       !shipping.street ||
@@ -1908,74 +1834,34 @@ const processPayment = async () => {
                   <span>Địa chỉ nhận hàng</span>
                 </h2>
 
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="space-y-4">
+                  {/* Labels row */}
+                  <div className="grid sm:grid-cols-2 gap-4">
                     <label className="text-sm font-semibold text-gray-700">
                       Họ và tên <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      placeholder="Nhập họ và tên"
-                      className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition shadow-sm hover:border-gray-300"
-                      value={shipping.fullName}
-                      onChange={(e) =>
-                        setShipping({ ...shipping, fullName: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700">
                       Số điện thoại <span className="text-red-500">*</span>
                     </label>
+                  </div>
 
-                    {/* Phone Options */}
-                    <div className="flex gap-4 mb-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="phoneOption"
-                          checked={useDefaultPhone}
-                          onChange={() => setUseDefaultPhone(true)}
-                          className="w-4 h-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          Dùng số mặc định
-                          {defaultPhone && (
-                            <span className="ml-2 text-emerald-600 font-medium">
-                              ({defaultPhone})
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="phoneOption"
-                          checked={!useDefaultPhone}
-                          onChange={() => setUseDefaultPhone(false)}
-                          className="w-4 h-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          Nhập số mới
-                        </span>
-                      </label>
-                    </div>
-
-                    {/* Phone Input */}
-                    {useDefaultPhone ? (
-                      <div className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-base text-gray-700">
-                        {defaultPhone || "Đang tải số điện thoại..."}
-                      </div>
-                    ) : (
+                  {/* Inputs row */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
                       <input
-                        type="tel"
-                        placeholder="Nhập số điện thoại mới"
+                        placeholder="Nhập họ và tên"
                         className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition shadow-sm hover:border-gray-300"
-                        value={shipping.phone}
+                        value={shipping.fullName}
                         onChange={(e) =>
-                          setShipping({ ...shipping, phone: e.target.value })
+                          setShipping({ ...shipping, fullName: e.target.value })
                         }
                       />
-                    )}
+                    </div>
+                    <CheckoutPhoneInput
+                      value={shipping.phone}
+                      onChange={(phone) => setShipping({ ...shipping, phone })}
+                      defaultPhone={defaultPhone}
+                    />
                   </div>
                 </div>
 
@@ -2691,7 +2577,6 @@ const processPayment = async () => {
         <PopupModal
           isOpen={isErrorModalOpen}
           onClose={() => {
-            console.log("Đóng modal lỗi ví không đủ tiền");
             setIsErrorModalOpen(false);
           }}
           type="error"

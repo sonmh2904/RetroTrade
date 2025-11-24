@@ -1,6 +1,8 @@
 
 const Wallet = require("../../models/Wallet.model");
 const WalletTransaction = require("../../models/WalletTransaction.model");
+const Notification = require("../../models/Notification.model");
+const AuditLog = require("../../models/AuditLog.model");
 require("dotenv").config();
 
 
@@ -177,6 +179,36 @@ const handlePayOSWebhook = async (req, res) => {
     transaction.note = (transaction.note || "") + "Nạp Tiền";
     await transaction.save();
 
+    // BỔ SUNG: Notification nạp tiền thành công
+    await Notification.create({
+      user: wallet.userId,
+      notificationType: "Wallet Deposit Success",
+      title: "Thành công nạp tiền vào ví",
+      body: `Bạn vừa nạp thành công ${amount.toLocaleString()} vào ví. Số dư mới: ${wallet.balance.toLocaleString()} VND.`,
+      metaData: JSON.stringify({ amount, orderCode, balance: wallet.balance }),
+      isRead: false
+    });
+
+    // BỔ SUNG: Log cập nhật ví
+    await AuditLog.create({
+      TableName: "Wallet",
+      PrimaryKeyValue: wallet._id.toString(),
+      Operation: "UPDATE",
+      ChangedByUserId: wallet.userId,
+      ChangedAt: new Date(),
+      ChangeSummary: `Nạp tiền: +${amount} VND (orderCode: ${orderCode}), số dư mới ${wallet.balance} VND`
+    });
+
+    // BỔ SUNG: Log tạo transaction nạp tiền
+    await AuditLog.create({
+      TableName: "WalletTransaction",
+      PrimaryKeyValue: transaction._id.toString(),
+      Operation: "INSERT",
+      ChangedByUserId: wallet.userId,
+      ChangedAt: new Date(),
+      ChangeSummary: `Tạo transaction nạp tiền: ${amount} VND (orderCode: ${orderCode})`
+    });
+
     console.log("Nạp tiền thành công:", transaction.orderCode, "wallet:", wallet._id, "newBalance:", wallet.balance);
     return res.status(200).json({ message: "Nạp tiền thành công và đã cộng vào ví." });
   } catch (error) {
@@ -184,7 +216,7 @@ const handlePayOSWebhook = async (req, res) => {
     return res.status(500).json({ message: "Lỗi xử lý webhook PayOS", error: error.message });
   }
 };
-// người dùng rút tiền từ ví
+// người dùng  tạo yêu cầu rút tiền từ ví
 const withdrawFromWallet = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -193,11 +225,9 @@ const withdrawFromWallet = async (req, res) => {
     const { amount, note, bankAccountId } = req.body;
 
     const n = Number(amount);
-    if (!amount || isNaN(n) || n <= 0 || !Number.isInteger(n)) {
-      return res.status(400).json({ message: "Số tiền không hợp lệ!" });
+    if (!amount || isNaN(n) || n < 2000 || !Number.isInteger(n)) {
+      return res.status(400).json({ message: "Số tiền tối thiểu phải từ 2.000 VNĐ!" });
     }
-
-
 
     if (!bankAccountId)
       return res.status(400).json({ message: "Vui lòng chọn tài khoản ngân hàng!" });
@@ -228,6 +258,26 @@ const withdrawFromWallet = async (req, res) => {
       bankAccountId,
       status: "pending", // Chờ admin duyệt
       createdAt: new Date(),
+    });
+
+    //  Notification tạo lệnh rút tiền
+    await Notification.create({
+      user: wallet.userId,
+      notificationType: "Wallet Withdraw Requested",
+      title: "Yêu cầu rút tiền",
+      body: `Bạn vừa yêu cầu rút ${Math.abs(amount).toLocaleString()} VND. Vui lòng chờ admin duyệt.`,
+      metaData: JSON.stringify({ amount, orderCode, bankAccountId }),
+      isRead: false
+    });
+
+    //  Log tạo transaction rút tiền
+    await AuditLog.create({
+      TableName: "WalletTransaction",
+      PrimaryKeyValue: tx._id.toString(),
+      Operation: "INSERT",
+      ChangedByUserId: wallet.userId,
+      ChangedAt: new Date(),
+      ChangeSummary: `Tạo transaction rút tiền: ${amount} VND (orderCode: ${orderCode})`
     });
 
     return res.status(201).json({
@@ -311,7 +361,4 @@ module.exports = {
   withdrawFromWallet,
   getRecentWalletTransactions,
   getWalletTransactions
-
-
-
 };

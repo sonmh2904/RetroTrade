@@ -3,6 +3,8 @@ const Wallet = require("../../models/Wallet.model");
 const WalletTransaction = require("../../models/WalletTransaction.model");
 const User = require("../../models/User.model");
 const Order = require("../../models/Order/Order.model");
+const Notification = require("../../models/Notification.model");
+const AuditLog = require("../../models/AuditLog.model");
 
 // Hàm xử lý logic hoàn tiền theo orderId, có nhận session tùy chọn
 async function refundOrder(orderId, session = null) {
@@ -70,7 +72,7 @@ async function refundOrder(orderId, session = null) {
                 amount: -ownerReceive,
                 orderId: order._id,
                 orderCode: orderCode + "adminowner",
-                note: "Trả tiền thuê cho chủ đồ",
+                note: "Trả tiền thuê cho chủ đồ" + order.itemSnapshot?.title || "Sản phẩm",
                 status: "completed",
             },
         ], { session, ordered: true });
@@ -82,7 +84,7 @@ async function refundOrder(orderId, session = null) {
                 amount: depositAmount,
                 orderId: order._id,
                 orderCode: orderCode + "renter",
-                note: "Nhận lại tiền cọc",
+                note: `Nhận lại tiền cọc đơn: ${ order.itemSnapshot?.title || "Sản phẩm"}`,
                 status: "completed",
             },
         ], { session, ordered: true });
@@ -94,7 +96,7 @@ async function refundOrder(orderId, session = null) {
                 amount: ownerReceive,
                 orderId: order._id,
                 orderCode: orderCode + "owner",
-                note: "Nhận tiền cho thuê",
+                note: "Nhận tiền cho thuê" + order.itemSnapshot?.title || "Sản phẩm",
                 status: "completed",
             },
         ], { session, ordered: true });
@@ -103,6 +105,100 @@ async function refundOrder(orderId, session = null) {
         order.isRefunded = true;
         order.refundedAt = new Date();
         await order.save({ session });
+
+        // Thông báo cho người thuê: nhận lại tiền cọc
+        await Notification.create({
+            user: renterId,
+            notificationType: "Refund Deposit Completed",
+            title: "Hoàn tiền cọc thành công",
+            body: `Đơn hàng của bạn đã được hoàn trả ${depositAmount.toLocaleString()} VND tiền cọc.`,
+            metaData: JSON.stringify({
+                orderId: order._id,
+                orderCode,
+                amount: depositAmount,
+                isRefunded: true
+            }),
+            isRead: false
+        });
+
+        // Thông báo cho chủ đồ: nhận tiền thuê
+        await Notification.create({
+            user: ownerId,
+            notificationType: "Owner Payment Completed",
+            title: "Nhận tiền cho thuê thành công",
+            body: `Bạn đã nhận ${ownerReceive.toLocaleString()} VND cho đơn hàng ${orderCode}.`,
+            metaData: JSON.stringify({
+                orderId: order._id,
+                orderCode,
+                amount: ownerReceive,
+                isRefunded: true
+            }),
+            isRead: false
+        });
+
+        // Audit log: update hết số dư ví
+        await AuditLog.create([
+            {
+                TableName: "Wallet",
+                PrimaryKeyValue: adminWallet._id.toString(),
+                Operation: "UPDATE",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Trừ tổng ${totalOut} VND để hoàn thành refund đơn hàng ${orderCode}`
+            },
+            {
+                TableName: "Wallet",
+                PrimaryKeyValue: renterWallet._id.toString(),
+                Operation: "UPDATE",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Cộng lại tiền cọc ${depositAmount} VND cho thuê từ đơn hàng ${orderCode}`
+            },
+            {
+                TableName: "Wallet",
+                PrimaryKeyValue: ownerWallet._id.toString(),
+                Operation: "UPDATE",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Cộng tiền thuê ${ownerReceive} VND từ đơn hàng ${orderCode}`
+            }
+        ], { session, ordered: true });
+
+        // Audit log cho từng transaction
+        await AuditLog.create([
+            {
+                TableName: "WalletTransaction",
+                PrimaryKeyValue: adminTxs[0]._id.toString(),
+                Operation: "INSERT",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Transaction admin hoàn tiền cọc cho người thuê [order ${orderCode}]`
+            },
+            {
+                TableName: "WalletTransaction",
+                PrimaryKeyValue: adminTxs[1]._id.toString(),
+                Operation: "INSERT",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Transaction admin trả tiền cho chủ đồ [order ${orderCode}]`
+            },
+            {
+                TableName: "WalletTransaction",
+                PrimaryKeyValue: renterTxs[0]._id.toString(),
+                Operation: "INSERT",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Transaction người thuê nhận lại tiền cọc [order ${orderCode}]`
+            },
+            {
+                TableName: "WalletTransaction",
+                PrimaryKeyValue: ownerTxs[0]._id.toString(),
+                Operation: "INSERT",
+                ChangedByUserId: adminUser._id,
+                ChangedAt: new Date(),
+                ChangeSummary: `Transaction chủ đồ nhận tiền thuê [order ${orderCode}]`
+            }
+        ], { session, ordered: true });
 
         if (ownSession) {
             await session.commitTransaction();

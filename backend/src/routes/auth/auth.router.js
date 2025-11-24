@@ -28,13 +28,17 @@ router.post('/phone/confirm-firebase', authenticateToken, verifyController.confi
 router.post('/phone/send-otp-firebase', authenticateToken, verifyController.sendOtpViaFirebase);
 router.post('/phone/verify-otp-firebase', authenticateToken, verifyController.verifyOtpViaFirebase);
 
-// ID card verification using OCR with file upload (3 images: selfie, idCardFront, idCardBack)
-router.post('/verify-face', authenticateToken, upload.array('images', 3), verifyController.verifyFaceImages);
+// ID card OCR preview (1 image: idCardFront) - only extracts info, doesn't create request
+router.post('/verify-face/preview-ocr', authenticateToken, upload.single('image'), verifyController.previewIdCardOcr);
+
+// ID card verification using OCR with file upload (2 images: idCardFront, idCardBack)
+router.post('/verify-face', authenticateToken, upload.array('images', 2), verifyController.verifyFaceImages);
 
 // Verification request routes
 const verificationRequestController = require("../../controller/auth/verificationRequest.controller");
-router.post('/verification-request', authenticateToken, upload.array('images', 3), verificationRequestController.createVerificationRequest);
+router.post('/verification-request', authenticateToken, upload.array('images', 2), verificationRequestController.createVerificationRequest);
 router.get('/verification-request/my', authenticateToken, verificationRequestController.getMyVerificationRequests);
+router.get('/verification-request/:id', authenticateToken, verificationRequestController.getMyVerificationRequestById);
 
 // Profile routes (bao gồm avatar)
 router.use('/profile', profileRouter);

@@ -78,8 +78,7 @@ export function Header() {
       setUserInfo(decodedUser);
 
       // Fetch cart count when user is logged in
-      dispatch(fetchCartItemCount());
-
+      fetchCartItemCount()(dispatch);
       // Chuyển hướng dựa trên role
       const currentPath = router.pathname;
 
@@ -397,6 +396,7 @@ export function Header() {
                     <span>Danh sách yêu thích</span>
                   </DropdownMenuItem>
 
+
                   <DropdownMenuItem
                     className="cursor-pointer group"
                     onClick={handleGoToMyOrders}
@@ -406,9 +406,9 @@ export function Header() {
                   </DropdownMenuItem>
 
                  
-                  {(userInfo?.role === "renter" ||
-                    userInfo?.role === "owner" ||
-                    userInfo?.role === "moderator") && (
+                 
+                  {(userInfo?.role === "renter" || userInfo?.role === "owner") && (
+
                     <DropdownMenuItem
                       className="cursor-pointer group"
                       onClick={() => router.push("/wallet")}

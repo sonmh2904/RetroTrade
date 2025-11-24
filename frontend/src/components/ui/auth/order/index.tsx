@@ -4,7 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSelector } from "react-redux";
 import { decodeToken } from '@/utils/jwtHelper';
-import { listOrders, renterReturn } from "@/services/auth/order.api";
+import {
+  listOrders,
+  renterReturn,
+  cancelOrder,
+} from "@/services/auth/order.api";
 import type { Order } from "@/services/auth/order.api";
 import { RootState } from "@/store/redux_store";
 import { Button } from "@/components/ui/common/button";
@@ -53,6 +57,10 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; 
+  const [openCancelConfirm, setOpenCancelConfirm] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
@@ -78,6 +86,39 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
     };
     fetchOrders();
   }, []);
+  const handleRenterCancel = async () => {
+    if (!cancelTarget) return;
+    if (!rejectReason.trim()) {
+       return toast.error("Vui lòng nhập lý do hủy đơn");
+     }
+
+    try {
+      setProcessing(cancelTarget._id);
+
+      const res = await cancelOrder(cancelTarget._id, rejectReason.trim());
+
+      if (res.code === 200) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o._id === cancelTarget._id ? { ...o, orderStatus: "cancelled" } : o
+          )
+        );
+
+        toast.success("Đã hủy đơn thành công");
+      } else {
+        toast.error(res.message || "Không thể hủy đơn");
+      }
+    } catch (err) {
+      console.error("Cancel error:", err);
+      toast.error("Lỗi khi hủy đơn");
+    } finally {
+      setProcessing(null);
+      setCancelTarget(null);
+      setOpenCancelConfirm(false);
+      setRejectReason("");
+    }
+  };
+
 
   const handleConfirmReturn = async () => {
     if (!selectedOrder) return;
@@ -264,25 +305,29 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
         <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600" />
-            <span className="font-semibold text-gray-700">Lọc theo trạng thái:</span>
+            <span className="font-semibold text-gray-700">
+              Lọc theo trạng thái:
+            </span>
           </div>
           <div className="flex flex-wrap gap-3">
             {statusTabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setSelectedStatus(tab.key)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${selectedStatus === tab.key
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  selectedStatus === tab.key
                     ? "bg-emerald-600 text-white shadow-md"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
+                }`}
               >
                 {tab.label}
                 {tab.count > 0 && (
                   <span
-                    className={`ml-2 px-2 py-0.5 rounded-full text-xs ${selectedStatus === tab.key
+                    className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                      selectedStatus === tab.key
                         ? "bg-white/20 text-white"
                         : "bg-emerald-600 text-white"
-                      }`}
+                    }`}
                   >
                     {tab.count}
                   </span>
@@ -307,7 +352,10 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
               <EmptyDescription className="text-gray-600">
                 {selectedStatus === "all"
                   ? "Bạn chưa có đơn hàng nào. Hãy khám phá các sản phẩm để thuê ngay!"
-                  : `Không có đơn hàng nào ở trạng thái "${statusTabs.find((t) => t.key === selectedStatus)?.label || ""}"`}
+                  : `Không có đơn hàng nào ở trạng thái "${
+                      statusTabs.find((t) => t.key === selectedStatus)?.label ||
+                      ""
+                    }"`}
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -478,6 +526,21 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                                 </Button>
                               </Link>
                             )}
+                            {/* Nút Huy hàng */}
+                            {order.orderStatus === "pending" && (
+                              <Button
+                                variant="destructive"
+                                className="bg-white text-red-600 border border-red-600 hover:bg-red-600 hover:text-white transition"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setCancelTarget(order);
+                                  setOpenCancelConfirm(true);
+                                }}
+                              >
+                                Hủy đơn
+                              </Button>
+                            )}
 
                             {/* Nút Trả hàng (giữ nguyên) */}
                             {canReturn && (
@@ -514,7 +577,6 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                                   onClick={() => {
                                     // Điều hướng đến trang thanh toán của đơn hàng
                                     window.location.href = `/auth/my-orders/${order._id}?tab=payment`;
-                      
                                   }}
                                 >
                                   <svg
@@ -571,7 +633,9 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                     size="sm"
                     variant="outline"
                     className="text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
-                    onClick={() => handlePageChange(paginationState.currentPage - 1)}
+                    onClick={() =>
+                      handlePageChange(paginationState.currentPage - 1)
+                    }
                     disabled={!paginationState.hasPrevPage}
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" />
@@ -579,11 +643,19 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                   </Button>
 
                   {/* Page Numbers */}
-                  {generatePageNumbers(paginationState.currentPage, paginationState.totalPages, 5).map((pageNum) => (
+                  {generatePageNumbers(
+                    paginationState.currentPage,
+                    paginationState.totalPages,
+                    5
+                  ).map((pageNum) => (
                     <Button
                       key={pageNum}
                       size="sm"
-                      variant={pageNum === paginationState.currentPage ? "default" : "outline"}
+                      variant={
+                        pageNum === paginationState.currentPage
+                          ? "default"
+                          : "outline"
+                      }
                       className={
                         pageNum === paginationState.currentPage
                           ? "bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600"
@@ -600,7 +672,9 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                     size="sm"
                     variant="outline"
                     className="text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
-                    onClick={() => handlePageChange(paginationState.currentPage + 1)}
+                    onClick={() =>
+                      handlePageChange(paginationState.currentPage + 1)
+                    }
                     disabled={!paginationState.hasNextPage}
                   >
                     Sau
@@ -623,7 +697,8 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
             </DialogHeader>
             <div className="space-y-4">
               <p className="text-gray-700">
-                Bạn có chắc chắn muốn xác nhận đã trả hàng cho đơn hàng này không?
+                Bạn có chắc chắn muốn xác nhận đã trả hàng cho đơn hàng này
+                không?
               </p>
               {selectedOrder && (
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
@@ -661,6 +736,44 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                     Xác nhận
                   </>
                 )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={openCancelConfirm} onOpenChange={setOpenCancelConfirm}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Hủy đơn hàng</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <p>Bạn có chắc chắn muốn hủy đơn này không?</p>
+
+              <input
+                className="w-full border rounded px-3 py-2 mt-2"
+                placeholder="Nhập lý do hủy đơn..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpenCancelConfirm(false);
+                  setRejectReason("");
+                }}
+              >
+                Đóng
+              </Button>
+
+              <Button
+                variant="destructive"
+                onClick={handleRenterCancel}
+                disabled={processing !== null}
+              >
+                Xác nhận hủy
               </Button>
             </DialogFooter>
           </DialogContent>

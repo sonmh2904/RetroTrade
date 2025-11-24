@@ -2,6 +2,9 @@ const Wallet = require("../../models/Wallet.model");
 const WalletTransaction = require("../../models/WalletTransaction.model");
 const User = require("../../models/User.model");
 const Order = require("../../models/Order/Order.model");
+const Notification = require("../../models/Notification.model");
+const AuditLog = require("../../models/AuditLog.model");
+
 
 // view danh sách yêu cầu rút tiền
 const getWithdrawalRequests = async (req, res) => {
@@ -59,6 +62,41 @@ const reviewWithdrawalRequest = async (req, res) => {
       transaction.reviewedAt = new Date();
       await transaction.save();
 
+      let userId;
+      if (transaction.walletId && typeof transaction.walletId === 'object' && transaction.walletId.userId) {
+        userId = transaction.walletId.userId;
+      } else {
+        // Nếu chỉ có là ObjectId, truy vấn lại ví để lấy user
+        const wallet = await Wallet.findById(transaction.walletId);
+        userId = wallet ? wallet.userId : undefined;
+      }
+
+      // Notification cho user: duyệt rút tiền
+      if (userId) {
+        await Notification.create({
+          user: userId,
+          notificationType: "Wallet Withdraw Approved",
+          title: "Yêu cầu rút tiền đã được duyệt",
+          body: `Admin đã duyệt yêu cầu rút ${Math.abs(transaction.amount).toLocaleString()} VND của bạn.`,
+          metaData: JSON.stringify({
+            transactionId: transaction._id,
+            amount: Math.abs(transaction.amount),
+            adminNote: transaction.adminNote
+          }),
+          isRead: false
+        });
+      }
+
+      // Audit log cho admin
+      await AuditLog.create({
+        TableName: "WalletTransaction",
+        PrimaryKeyValue: transaction._id.toString(),
+        Operation: "UPDATE",
+        ChangedByUserId: req.user._id, // admin thực hiện
+        ChangedAt: new Date(),
+        ChangeSummary: `Admin duyệt yêu cầu rút tiền (ID: ${transaction._id}, amount: ${Math.abs(transaction.amount)} VND)`
+      });
+
       return res.status(200).json({
         message: "Đã duyệt yêu cầu rút tiền ",
         transaction,
@@ -69,6 +107,40 @@ const reviewWithdrawalRequest = async (req, res) => {
       transaction.reviewedBy = req.user._id;
       transaction.reviewedAt = new Date();
       await transaction.save();
+
+      let userId;
+      if (transaction.walletId && typeof transaction.walletId === 'object' && transaction.walletId.userId) {
+        userId = transaction.walletId.userId;
+      } else {
+        const wallet = await Wallet.findById(transaction.walletId);
+        userId = wallet ? wallet.userId : undefined;
+      }
+
+      // Notification cho user: bị từ chối
+      if (userId) {
+        await Notification.create({
+          user: userId,
+          notificationType: "Wallet Withdraw Rejected",
+          title: "Yêu cầu rút tiền bị từ chối",
+          body: `Yêu cầu rút ${Math.abs(transaction.amount).toLocaleString()} VND của bạn đã bị từ chối. ${adminNote ? "Lý do: " + adminNote : ""}`,
+          metaData: JSON.stringify({
+            transactionId: transaction._id,
+            amount: Math.abs(transaction.amount),
+            adminNote: transaction.adminNote
+          }),
+          isRead: false
+        });
+      }
+
+      // Audit log cho admin
+      await AuditLog.create({
+        TableName: "WalletTransaction",
+        PrimaryKeyValue: transaction._id.toString(),
+        Operation: "UPDATE",
+        ChangedByUserId: req.user._id,
+        ChangedAt: new Date(),
+        ChangeSummary: `Admin từ chối yêu cầu rút tiền (ID: ${transaction._id}, amount: ${Math.abs(transaction.amount)} VND, lý do: ${adminNote})`
+      });
 
       return res.status(200).json({
         message: "Đã từ chối yêu cầu rút tiền",
@@ -108,14 +180,52 @@ const completeWithdrawal = async (req, res) => {
     if (wallet.balance < transaction.amount) {
       return res.status(400).json({ message: "Số dư ví không đủ" });
     }
-    wallet.balance -= transaction.amount;
+    wallet.balance -= Math.abs(transaction.amount);
     wallet.updatedAt = new Date();
+    transaction.completedAt = new Date();
     await wallet.save();
 
     transaction.status = 'completed';
     transaction.balanceAfter = wallet.balance;
     transaction.adminNote = (transaction.adminNote || '') + ' | Đã chuyển tiền: ' + (adminNote || '');
     await transaction.save();
+    // Lấy userId từ wallet (vì transaction đã có walletId)
+    const userId = wallet.userId;
+
+    // Thông báo hoàn thành rút tiền cho user
+    await Notification.create({
+      user: userId,
+      notificationType: "Wallet Withdraw Complete",
+      title: "Rút tiền thành công",
+      body: `Yêu cầu rút ${Math.abs(transaction.amount).toLocaleString()} VND của bạn đã hoàn tất, vui lòng kiểm tra tài khoản ngân hàng.`,
+      metaData: JSON.stringify({
+        transactionId: transaction._id,
+        amount: Math.abs(transaction.amount),
+        balance: wallet.balance,
+        adminNote: transaction.adminNote
+      }),
+      isRead: false
+    });
+
+    // Log kiểm toán thay đổi ví
+    await AuditLog.create({
+      TableName: "Wallet",
+      PrimaryKeyValue: wallet._id.toString(),
+      Operation: "UPDATE",
+      ChangedByUserId: req.user._id, // admin
+      ChangedAt: new Date(),
+      ChangeSummary: `Hoàn thành rút tiền ${Math.abs(transaction.amount)} VND, số dư mới: ${wallet.balance}.`
+    });
+
+    // Log kiểm toán cập nhật transaction
+    await AuditLog.create({
+      TableName: "WalletTransaction",
+      PrimaryKeyValue: transaction._id.toString(),
+      Operation: "UPDATE",
+      ChangedByUserId: req.user._id,
+      ChangedAt: new Date(),
+      ChangeSummary: `Transaction rút tiền chuyển sang trạng thái completed.`
+    });
 
     return res.status(200).json({
       message: " hoàn thành chuyển tiền",
@@ -195,7 +305,7 @@ const getAllRefundsForAdmin = async (req, res) => {
       .populate("itemId", "DepositAmount Title")                   // Lấy thông tin tiền cọc và tên sản phẩm từ bảng Item
       .sort({ completedAt: -1 });
 
-      const data = orders.map(order => {
+    const data = orders.map(order => {
       const totalAmount = order.totalAmount ?? 0;                // Tổng tiền đã thanh toán (cọc + phí + thuê)
       const serviceFee = order.serviceFee ?? 0;                  // Phí dịch vụ
       const depositAmount = order.itemId?.DepositAmount ?? 0;    // Tiền cọc lấy từ Item trả cho người thuê 
@@ -214,7 +324,7 @@ const getAllRefundsForAdmin = async (req, res) => {
         ownerRole: order.ownerId?.role || "Chủ đơn",
         itemTitle: order.itemId?.Title || "Không rõ",              // Tên sản phẩm lấy từ Item
         totalAmount,                                                // Tổng tiền thanh toán
-        refundedAmount : depositAmount,                             // Tiền hoàn trả cho người thuê (tiền cọc)
+        refundedAmount: depositAmount,                             // Tiền hoàn trả cho người thuê (tiền cọc)
         ownerReceive,                                               // Tiền chủ nhận được sau khi trừ cọc và phí
         isRefunded: order.isRefunded,
         refundedAt: order.refundedAt,

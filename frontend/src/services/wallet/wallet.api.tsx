@@ -237,7 +237,7 @@ export const completeWithdrawal = async (transactionId: string, adminNote: strin
 // API admin xem tất cả giao dịch ví
 export const getAllWalletTransactions = async () => {
   try {
-    const res = await instance.get("/wallet/transactions");  // route backend
+    const res = await instance.get("/wallet/transactions");  
     return await parseFetchResponse(res);
   } catch (error) {
     console.error("[wallet.api] getAllWalletTransactions error:", error);
@@ -258,7 +258,7 @@ export const getAdminWallet = async () => {
 // API admin lấy danh sách đơn hàng hoàn tiền trạng thái completed
 export const getAdminRefundOrders = async () => {
   try {
-    const res = await instance.get("/wallet/admin/refunds"); // giống router backend bạn tạo
+    const res = await instance.get("/wallet/admin/refunds"); 
     return await parseFetchResponse(res);
   } catch (error) {
     console.error("[wallet.api] getAdminRefundOrders error:", error);

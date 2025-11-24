@@ -1,32 +1,50 @@
 "use client"
 
-import { motion } from "framer-motion" 
+import { motion, Variants, AnimatePresence } from "framer-motion"
+import { ShoppingBag, Leaf, Users, ShieldCheck, Clock, Heart, ArrowRight } from "lucide-react"
+import { useState } from "react"
 
 const features = [
   {
-    title: "Cho thuê đồ cũ",
-    description: "Tiết kiệm chi phí tối đa khi thuê các sản phẩm chất lượng với mức giá hợp lý. Bảo vệ môi trường bằng cách tái sử dụng đồ dùng.",
-    icon: "📦",
-    color: "from-blue-500 to-indigo-600",
-    hoverColor: "hover:from-blue-600 hover:to-indigo-700"
+    title: "Tiết kiệm chi phí",
+    description: "Thuê đồ với giá chỉ bằng 30% so với mua mới, giúp bạn tiết kiệm đáng kể ngân sách cho các sự kiện và nhu cầu sử dụng ngắn hạn.",
+    icon: <ShoppingBag className="w-8 h-8" />,
+    color: "from-orange-500 to-amber-500"
   },
   {
-    title: "Mua bán đồ cũ",
-    description: "Giao dịch nhanh chóng, an toàn với hệ thống đánh giá minh bạch. Tìm kiếm đồ cũ chất lượng với mức giá phải chăng.",
-    icon: "💰",
-    color: "from-emerald-500 to-teal-600",
-    hoverColor: "hover:from-emerald-600 hover:to-teal-700"
+    title: "Bảo vệ môi trường",
+    description: "Góp phần giảm thiểu rác thải và bảo vệ tài nguyên thiên nhiên thông qua việc tái sử dụng đồ dùng một cách thông minh.",
+    icon: <Leaf className="w-8 h-8" />,
+    color: "from-green-500 to-emerald-500"
   },
   {
-    title: "Chia sẻ cộng đồng",
-    description: "Kết nối với cộng đồng cùng đam mê bảo vệ môi trường. Chia sẻ kinh nghiệm và câu chuyện tái chế, tái sử dụng.",
-    icon: "💬",
-    color: "from-amber-500 to-orange-600",
-    hoverColor: "hover:from-amber-600 hover:to-orange-700"
-  },
+    title: "Đa dạng lựa chọn",
+    description: "Kho đồ đa dạng, phong phú với nhiều phong cách khác nhau, đáp ứng mọi nhu cầu và sở thích của bạn.",
+    icon: <Users className="w-8 h-8" />,
+    color: "from-blue-500 to-indigo-500"
+  }
 ]
 
-import { Variants } from 'framer-motion';
+const benefits = [
+  {
+    title: "Chất lượng đảm bảo",
+    description: "Tất cả sản phẩm đều được kiểm tra kỹ lưỡng trước khi cho thuê.",
+    icon: <ShieldCheck className="w-6 h-6" />,
+    color: "text-amber-600"
+  },
+  {
+    title: "Tiết kiệm thời gian",
+    description: "Đặt hàng nhanh chóng, giao nhận tận nơi, tiện lợi.",
+    icon: <Clock className="w-6 h-6" />,
+    color: "text-blue-600"
+  },
+  {
+    title: "Hỗ trợ 24/7",
+    description: "Đội ngũ chăm sóc khách hàng luôn sẵn sàng hỗ trợ bạn.",
+    icon: <Heart className="w-6 h-6" />,
+    color: "text-rose-600"
+  }
+]
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -34,113 +52,188 @@ const containerVariants: Variants = {
     opacity: 1,
     transition: {
       staggerChildren: 0.2,
-      delayChildren: 0.1,
+      delayChildren: 0.3,
     },
-  },
+  }
 }
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 50 },
-  visible: (i: number = 0) => ({
+  hidden: { 
+    opacity: 0, 
+    y: 30,
+    scale: 0.95
+  },
+  visible: {
     opacity: 1,
     y: 0,
+    scale: 1,
     transition: {
       duration: 0.6,
-      ease: "easeOut",
-      delay: i * 0.1,
-    },
-  }),
-  hover: { 
-    scale: 1.05, 
-    rotate: 1,
-    transition: { duration: 0.2 }
+      ease: [0.4, 0, 0.2, 1]
+    }
   },
+  hover: {
+    y: -5,
+    transition: {
+      duration: 0.3,
+      ease: "easeOut"
+    }
+  }
+}
+
+const benefitItemVariants: Variants = {
+  hidden: { 
+    opacity: 0, 
+    x: -20 
+  },
+  visible: (i: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: {
+      delay: i * 0.15,
+      duration: 0.5,
+      ease: [0.4, 0, 0.2, 1]
+    }
+  })
 }
 
 export function FeaturesSection() {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+
   return (
-    <section className="relative z-10 py-24 px-4 bg-gradient-to-br from-indigo-50 via-white to-purple-50 overflow-hidden">
-      {/* Pattern background */}
-      <div className="absolute inset-0 opacity-10">
-        <div 
-          className="absolute inset-0"
-          style={{
-            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%239C92AC\' fill-opacity=\'0.1\' fill-rule=\'evenodd\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/svg%3E")',
-            backgroundSize: '30px',
+    <section className="relative py-20 px-4 bg-white overflow-hidden">
+      {/* Animated background elements */}
+      <motion.div 
+        className="absolute inset-0 bg-[url('/patterns/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]"
+        initial={{ opacity: 0 }}
+        animate={{ 
+          opacity: 0.03,
+          transition: { duration: 1 }
+        }}
+      />
+      
+      <div className="container mx-auto relative z-10">
+        {/* Section Header */}
+        <motion.div 
+          className="text-center mb-16"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ 
+            opacity: 1, 
+            y: 0,
+            transition: { 
+              duration: 0.8,
+              ease: [0.4, 0, 0.2, 1]
+            }
           }}
-        />
-      </div>
-      <div className="container mx-auto relative">
-        <div className="text-center mb-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+          viewport={{ once: true, margin: "0px 0px -100px 0px" }}
+        >
+          <motion.span 
+            className="inline-block px-4 py-2 rounded-full bg-amber-100 text-amber-800 text-sm font-medium mb-4"
+            initial={{ scale: 0.9, opacity: 0 }}
+            whileInView={{ 
+              scale: 1, 
+              opacity: 1,
+              transition: { 
+                delay: 0.2,
+                duration: 0.6
+              }
+            }}
             viewport={{ once: true }}
-            className="inline-block mb-4 px-4 py-2 rounded-full bg-indigo-100 text-indigo-700 text-sm font-medium"
           >
-            VÌ MỘT TƯƠNG LAI XANH
-          </motion.div>
+            TẠI SAO CHỌN CHÚNG TÔI?
+          </motion.span>
+          
           <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
+            initial={{ y: 20, opacity: 0 }}
+            whileInView={{ 
+              y: 0, 
+              opacity: 1,
+              transition: { 
+                delay: 0.3,
+                duration: 0.8
+              }
+            }}
             viewport={{ once: true }}
-            className="text-4xl md:text-5xl font-bold text-center mb-4 text-gray-900 relative"
           >
-            Giải Pháp <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Xanh</span>
+            Giải pháp <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500">
+              thông minh
+            </span> cho cuộc sống hiện đại
           </motion.h2>
+          
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-lg text-gray-600 max-w-3xl mx-auto"
+            initial={{ y: 10, opacity: 0 }}
+            whileInView={{ 
+              y: 0, 
+              opacity: 1,
+              transition: { 
+                delay: 0.4,
+                duration: 0.8
+              }
+            }}
             viewport={{ once: true }}
-            className="text-lg md:text-xl text-center text-gray-600 max-w-3xl mx-auto"
           >
-            Khám phá những tính năng giúp bạn dễ dàng tái sử dụng, tiết kiệm chi phí và cùng chung tay bảo vệ môi trường.
+            RetroTrade mang đến những trải nghiệm thuê đồ tiện lợi, tiết kiệm và thân thiện với môi trường
           </motion.p>
-        </div>
-        <motion.div
+        </motion.div>
+
+        {/* Features Grid */}
+        <motion.div 
+          className="grid md:grid-cols-3 gap-8 mb-20"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true }}
-          className="grid md:grid-cols-3 gap-8"
+          viewport={{ once: true, margin: "0px 0px -100px 0px" }}
         >
           {features.map((feature, index) => (
             <motion.div
               key={index}
-              custom={index}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
               variants={itemVariants}
               whileHover="hover"
-              className={`group relative bg-white/90 backdrop-blur-sm border border-white/20 p-8 rounded-3xl transition-all duration-300 shadow-xl hover:shadow-2xl overflow-hidden ${feature.hoverColor}`}
+              onHoverStart={() => setHoveredIndex(index)}
+              onHoverEnd={() => setHoveredIndex(null)}
+              className="group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden"
             >
-              {/* Gradient overlay on hover */}
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 opacity-0 group-hover:opacity-100 transition-all duration-300" />
-              <div className="relative z-10">
-                <motion.div 
-                  className={`text-6xl mb-6 mx-auto w-16 h-16 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-lg transition-all duration-300`}
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
-                  {feature.icon}
-                </motion.div>
-                <h3 className="text-2xl font-bold mb-4 text-gray-900 group-hover:text-white transition-colors duration-300 text-center relative z-10">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-600 group-hover:text-white/90 leading-relaxed text-center transition-colors duration-300 mb-6 relative z-10">
-                  {feature.description}
-                </p>
-              </div>
-              {/* Decorative elements */}
-              <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-white/20 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="absolute -top-4 -left-4 w-16 h-16 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-300"></div>
+              {/* Animated background on hover */}
+              <motion.div 
+                className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5`}
+                initial={{ opacity: 0 }}
+                animate={{ 
+                  opacity: hoveredIndex === index ? 0.05 : 0,
+                  transition: { duration: 0.3 }
+                }}
+              />
+              
+              <motion.div 
+                className={`w-16 h-16 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-white mb-6 transition-all duration-300 group-hover:scale-110`}
+                whileHover={{ 
+                  rotate: 5,
+                  transition: { type: "spring", stiffness: 300 }
+                }}
+              >
+                {feature.icon}
+              </motion.div>
+              
+              <h3 className="text-2xl font-bold text-gray-900 mb-3 relative">
+                {feature.title}
+                <motion.span 
+                  className="absolute left-0 -bottom-1 h-0.5 bg-gradient-to-r from-orange-500 to-amber-500"
+                  initial={{ width: 0 }}
+                  whileInView={{ 
+                    width: "100%",
+                    transition: { delay: 0.5 + (index * 0.1), duration: 0.8 }
+                  }}
+                  viewport={{ once: true }}
+                />
+              </h3>
+              
+              <p className="text-gray-600 leading-relaxed mb-6">{feature.description}</p>
+              
             </motion.div>
           ))}
         </motion.div>
+
       </div>
     </section>
   )

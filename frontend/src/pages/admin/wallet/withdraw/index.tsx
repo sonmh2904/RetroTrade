@@ -55,6 +55,13 @@ export default function WithdrawPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [localMessage, setLocalMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  // Modal xác nhận thao tác
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    action: "approve" | "reject" | "complete" | null;
+    transactionId: string | null;
+  } | null>(null);
+
   useEffect(() => {
     fetchRequests();
   }, []);
@@ -84,7 +91,6 @@ export default function WithdrawPage() {
       const res = await reviewWithdrawalRequest(transactionId, action, "");
       fetchRequests();
       showMessage(res.message || "Đã xử lý", "success");
-
     } catch (err: any) {
       showMessage(err?.response?.data?.message || "Lỗi khi xử lý yêu cầu", "error");
     } finally {
@@ -124,12 +130,12 @@ export default function WithdrawPage() {
     );
   });
 
-  const totalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
+  const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const paginatedRequests = filteredRequests.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
-
+  const totalPages = Math.ceil(filteredRequests.length / pageSize);
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
@@ -184,8 +190,90 @@ export default function WithdrawPage() {
     <div className="p-8 bg-gray-50 min-h-screen">
       {/* Local message/toast */}
       {localMessage && (
-        <div className={`fixed top-6 right-6 z-50 px-6 py-3 rounded-lg shadow-lg transition bg-white border ${localMessage.type === "success" ? "border-green-400 text-green-700 bg-green-50" : "border-red-400 text-red-700 bg-red-50"}`}>
-          {localMessage.text}
+        <div className="fixed top-6 right-6 z-50">
+          <div className={`flex items-center gap-2 px-5 py-3 rounded-lg shadow border transition
+      ${localMessage.type === "success"
+          ? "bg-green-50 border-green-300 text-green-700"
+          : "bg-red-50 border-red-300 text-red-700"
+        }`}
+            style={{ minWidth: 320, maxWidth: 400 }}
+          >
+            <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full
+        ${localMessage.type === "success"
+            ? "bg-green-100 text-green-600"
+            : "bg-red-100 text-red-600"
+          }`}
+            >
+              {localMessage.type === "success"
+                ? (
+                  <svg width={18} height={18} viewBox="0 0 20 20">
+                    <circle cx="10" cy="10" r="9" fill="currentColor" opacity=".18" />
+                    <path d="M8.5 13l4-4-1.5-1.5-2.5 2.5-1-1-1 1.1L8.5 13z" fill="currentColor" />
+                  </svg>
+                )
+                : (
+                  <svg width={18} height={18} viewBox="0 0 20 20">
+                    <circle cx="10" cy="10" r="9" fill="currentColor" opacity=".18" />
+                    <path d="M13 7l-6 6M7 7l6 6" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                )
+              }
+            </span>
+            <span className="font-semibold">{localMessage.text}</span>
+            <button
+              onClick={() => setLocalMessage(null)}
+              className="ml-2 text-xl font-bold rounded-full bg-transparent text-gray-400 hover:text-gray-600 transition"
+              aria-label="Đóng"
+            >×</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal xác nhận thao tác */}
+      {confirmModal?.open && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-2xl px-7 py-7 w-[350px] animate-slideUp">
+            <div className="text-xl font-bold text-center text-gray-800 mb-3">
+              Xác nhận thao tác
+            </div>
+            <div className="text-center text-gray-700 mb-6">
+              Bạn có chắc muốn
+              {confirmModal.action === "approve" && " duyệt yêu cầu rút tiền này?"}
+              {confirmModal.action === "reject" && " từ chối yêu cầu rút tiền này?"}
+              {confirmModal.action === "complete" && " chuyển trạng thái hoàn thành cho giao dịch này?"}
+            </div>
+            <div className="flex gap-3 justify-center mt-2">
+              <Button
+                variant="outline"
+                className="px-4"
+                onClick={() => setConfirmModal(null)}
+              >Hủy</Button>
+              <Button
+                className={
+                  confirmModal.action === "approve" ? "bg-green-600 hover:bg-green-700 text-white px-5" :
+                    confirmModal.action === "reject" ? "bg-red-600 hover:bg-red-700 text-white px-5" :
+                      "bg-blue-700 hover:bg-blue-800 text-white px-5"
+                }
+                onClick={async () => {
+                  setProcessingId(confirmModal.transactionId!);
+                  setConfirmModal(null);
+                  if (confirmModal.action === "approve" || confirmModal.action === "reject") {
+                    await handleReview(confirmModal.transactionId!, confirmModal.action as "approve" | "reject");
+                  }
+                  if (confirmModal.action === "complete") {
+                    await handleComplete(confirmModal.transactionId!);
+                  }
+                  setProcessingId(null);
+                }}
+              >Xác nhận</Button>
+            </div>
+          </div>
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+            .animate-fadeIn { animation: fadeIn 0.25s ease-in; }
+            .animate-slideUp { animation: slideUp 0.32s cubic-bezier(.6,.4,.3,1.1); }
+          `}</style>
         </div>
       )}
 
@@ -242,11 +330,11 @@ export default function WithdrawPage() {
               <thead>
                 <tr className="bg-gray-50 border-b text-gray-600">
                   <th className="p-3 text-left">Người dùng</th>
-                  <th className="p-3 text-right">Số dư ví</th>
                   <th className="p-3 text-right">Số tiền rút</th>
                   <th className="p-3 text-left">Ngân hàng / Số TK</th>
                   <th className="p-3 text-left">Ghi chú</th>
                   <th className="p-3 text-center">Tạo - Duyệt</th>
+                  <th className="p-3 text-center">Hoàn thành</th>
                   <th className="p-3 text-center">Trạng thái</th>
                   <th className="p-3 text-center">Thao tác</th>
                 </tr>
@@ -262,11 +350,19 @@ export default function WithdrawPage() {
                   paginatedRequests.map((req) => (
                     <tr key={req._id} className="border-b hover:bg-blue-50 transition-colors duration-150">
                       <td className="p-3">{req.walletId?.userId?.fullName || "Không rõ"}</td>
-                      <td className="p-3 text-right">{req.walletId?.balance?.toLocaleString()} ₫</td>
                       <td className="p-3 text-right font-medium text-blue-700">{req.amount?.toLocaleString()} ₫</td>
                       <td className="p-3">{renderBankInfo(req)}</td>
                       <td className="p-3 text-gray-600">{req.note || "—"}</td>
                       <td className="p-3 text-center">{renderDateInfo(req)}</td>
+                      <td className="p-3 text-center">
+                        {req.status === "completed" && req.completedAt ? (
+                          <span className="inline-block bg-green-100 px-2 py-1 rounded text-green-700 text-xs font-medium">
+                            {formatDatetime(req.completedAt)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="p-3 text-center">
                         <span className={getStatusBadge(req.status)}>{STATUS_LABEL_VN[req.status] || req.status}</span>
                       </td>
@@ -276,7 +372,7 @@ export default function WithdrawPage() {
                             <Button
                               size="sm"
                               className="bg-green-600 hover:bg-green-700 text-white"
-                              onClick={() => handleReview(req._id, "approve")}
+                              onClick={() => setConfirmModal({ open: true, action: "approve", transactionId: req._id })}
                               disabled={processingId === req._id}
                             >
                               Duyệt
@@ -284,7 +380,7 @@ export default function WithdrawPage() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => handleReview(req._id, "reject")}
+                              onClick={() => setConfirmModal({ open: true, action: "reject", transactionId: req._id })}
                               disabled={processingId === req._id}
                             >
                               Từ chối
@@ -295,7 +391,7 @@ export default function WithdrawPage() {
                           <Button
                             size="sm"
                             className="bg-blue-700 hover:bg-blue-800 text-white"
-                            onClick={() => handleComplete(req._id)}
+                            onClick={() => setConfirmModal({ open: true, action: "complete", transactionId: req._id })}
                             disabled={processingId === req._id}
                           >
                             Hoàn thành
@@ -312,14 +408,46 @@ export default function WithdrawPage() {
             </table>
           )}
           {totalPages > 1 && (
-            <div className="mt-6 flex justify-center items-center gap-3">
-              <Button variant="outline" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>Trước</Button>
-              <span className="text-gray-600">
-                Trang <span className="font-semibold">{currentPage}</span> / {totalPages}
+            <div className="flex items-center justify-between bg-blue-50 px-4 py-2 rounded-xl mt-4">
+              <span className="text-gray-700 text-sm">
+                Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredRequests.length)} của {filteredRequests.length} kết quả
               </span>
-              <Button variant="outline" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>Sau</Button>
+              <div className="flex items-center gap-1">
+                <button
+                  className="px-3 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100"
+                  disabled={currentPage === 1}
+                  onClick={() => goToPage(currentPage - 1)}
+                >
+                  &lt;
+                </button>
+                <span className="px-4 py-1 bg-white rounded font-semibold border border-gray-300">
+                  Trang {currentPage} / {totalPages}
+                </span>
+                <button
+                  className="px-3 py-1 rounded bg-white border border-gray-300 hover:bg-gray-100"
+                  disabled={currentPage === totalPages}
+                  onClick={() => goToPage(currentPage + 1)}
+                >
+                  &gt;
+                </button>
+                {/* Dropdown chọn số dòng/trang */}
+                <select
+                  className="ml-2 px-2 py-1 rounded border border-gray-300 bg-white font-medium"
+                  value={pageSize}
+                  onChange={e => {
+                    setCurrentPage(1);
+                    setPageSize(parseInt(e.target.value));
+                  }}
+                >
+                  <option value={10}>10 / trang</option>
+                  <option value={15}>15 / trang</option>
+                  <option value={25}>25 / trang</option>
+                  <option value={50}>50 / trang</option>
+                </select>
+              </div>
             </div>
           )}
+
         </CardContent>
       </Card>
     </div>

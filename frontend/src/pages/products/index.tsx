@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   getAllItems,
-  getAllCategories,
+  getAllPublicCategories,
   getFeaturedItems,
   getSearchTags,
   addToFavorites,
@@ -43,6 +43,7 @@ const logout = () => ({ type: "auth/logout" });
 interface Category {
   _id: string;
   name: string;
+  slug?: string;
   parentCategoryId?: string | null;
   isActive?: boolean;
   level?: number;
@@ -150,7 +151,8 @@ export default function ProductPage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [maxPrice, setMaxPrice] = useState(5000000);
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPrice, setMaxPrice] = useState(Number.MAX_SAFE_INTEGER);
   const [featuredItems, setFeaturedItems] = useState<Product[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
@@ -170,15 +172,49 @@ export default function ProductPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [showCustomPrice, setShowCustomPrice] = useState(false);
+  const [priceRange, setPriceRange] = useState({ from: 0, to: 0 });
+  const [selectedPriceRange, setSelectedPriceRange] = useState<string | null>(
+    null
+  );
   const itemsPerPage = 9;
 
-  // Initialize currentPage from URL
+  // Helper function to find category by path
+  const findCategoryByPath = (path: string): Category | undefined => {
+    const pathParts = path.split('/').filter(part => part);
+    if (pathParts.length === 0) return undefined;
+    
+    // Find category with matching slug (last part of path)
+    const targetSlug = pathParts[pathParts.length - 1];
+    const candidateCategories = categories.filter(c => c.slug === targetSlug);
+    
+    // Find the one that matches the full path
+    for (const candidate of candidateCategories) {
+      const candidatePath = buildCategoryPath(candidate._id);
+      if (candidatePath === path) {
+        return candidate;
+      }
+    }
+    
+    return undefined;
+  };
+
+  // Initialize currentPage and category from URL
   useEffect(() => {
     const p = Number(searchParams?.get("page") || "");
     if (Number.isFinite(p) && p >= 1) {
       setCurrentPage(p);
     }
-  }, [searchParams]);
+    
+    // Handle category from URL (full path support)
+    const categoryPath = searchParams?.get("category");
+    if (categoryPath && categories.length > 0) {
+      const category = findCategoryByPath(categoryPath);
+      if (category) {
+        setSelectedCategory(category._id);
+      }
+    }
+  }, [searchParams, categories]);
   const updatePageInUrl = (page: number) => {
     try {
       const sp = new URLSearchParams(searchParams?.toString() || "");
@@ -344,26 +380,49 @@ export default function ProductPage() {
         setError(null);
         const [itemData, cateData, featuredRes, tagsRes] = await Promise.all([
           getAllItems(),
-          getAllCategories(),
+          getAllPublicCategories(),
           getFeaturedItems({ page: 1, limit: 12 }),
           getSearchTags(),
         ]);
         const normalizedItems = normalizeItems(
           itemData?.data?.items || itemData?.items || []
         );
+        console.log('DEBUG - Products loaded:', normalizedItems.length);
+        console.log('DEBUG - Sample product:', normalizedItems[0]);
+        
         const normalizedCates = cateData?.data || cateData || [];
-        const processedCates: Category[] = (normalizedCates as any[]).map(
-          (c: any) => ({
-            _id: toIdString(c._id || c.id),
-            name: c.name,
-            parentCategoryId:
-              c.parentCategoryId === "" || c.parentCategoryId == null
+        console.log('DEBUG - Categories loaded:', normalizedCates.length);
+        
+        // Flatten the nested category structure
+        const flattenCategories = (categories: any[]): Category[] => {
+          const result: Category[] = [];
+          
+          const processCategory = (category: any) => {
+            const processed: Category = {
+              _id: toIdString(category._id),
+              name: category.name,
+              slug: category.slug || category.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+              parentCategoryId: category.parentCategoryId === "" || category.parentCategoryId == null
                 ? null
-                : toIdString(c.parentCategoryId),
-            isActive: c.isActive,
-            level: typeof c.level === "number" ? c.level : undefined,
-          })
-        );
+                : toIdString(category.parentCategoryId),
+              isActive: category.isActive,
+              level: typeof category.level === "number" ? category.level : undefined,
+            };
+            result.push(processed);
+            
+            // Process children recursively
+            if (category.children && Array.isArray(category.children)) {
+              category.children.forEach(processCategory);
+            }
+          };
+          
+          categories.forEach(processCategory);
+          return result;
+        };
+        
+        const processedCates = flattenCategories(normalizedCates);
+        console.log('DEBUG - Flattened categories:', processedCates.length);
+        console.log('DEBUG - Sample category:', processedCates[0]);
         setAllItems(normalizedItems);
         setItems(normalizedItems);
         setCategories(processedCates);
@@ -415,6 +474,7 @@ export default function ProductPage() {
           const errorData = await res.json().catch(() => ({}));
           const errorMsg =
             errorData.message || `Lỗi tải danh sách yêu thích: ${res.status}`;
+
           if (res.status === 401 || res.status === 403) {
             dispatch(logout());
             router.push("/auth/login");
@@ -440,24 +500,73 @@ export default function ProductPage() {
     router,
   ]);
 
+  // Reset all filters
+  const resetAllFilters = () => {
+    setSelectedCategory(null);
+    setMinPrice(0);
+    setMaxPrice(Number.MAX_SAFE_INTEGER);
+    setSelectedPriceRange(null);
+    setSelectedProvince("");
+    setSelectedTagIds(new Set());
+    setSearch("");
+    setShowCustomPrice(false);
+    setPriceRange({ from: 0, to: 0 });
+  };
+
+  // Helper functions for categories
+  const getChildren = (parentId: string | null) =>
+    categories.filter((c) => (c.parentCategoryId ?? null) === parentId);
+
+  const getRootCategories = () =>
+    categories.filter((c) => (c.level ?? 0) === 0);
+
+  const getDescendantIds = (categoryId: string): string[] => {
+    const direct = getChildren(categoryId);
+    const all: string[] = [];
+    for (const c of direct) {
+      all.push(c._id);
+      all.push(...getDescendantIds(c._id));
+    }
+    return all;
+  };
+
   // Filter items
   useEffect(() => {
     let filtered = [...allItems];
+    console.log('DEBUG - Filter start - Total items:', filtered.length);
+    console.log('DEBUG - Selected category:', selectedCategory);
 
     if (selectedCategory) {
       const selected = categories.find((c) => c._id === selectedCategory);
       if (selected) {
+        console.log('DEBUG - Selected category found:', selected.name);
         // For all category levels, get all descendant IDs
+        const descendantIds = getDescendantIds(selectedCategory);
+        console.log('DEBUG - Descendant IDs:', descendantIds);
         const allowed = new Set([
           selectedCategory,
-          ...getDescendantIds(selectedCategory),
+          ...descendantIds,
         ]);
+        console.log('DEBUG - Allowed category IDs:', Array.from(allowed));
         filtered = filtered.filter(
-          (item) => item.category && allowed.has(item.category._id)
+          (item) => {
+            const hasCategory = item.category && allowed.has(item.category._id);
+            if (!hasCategory && item.category) {
+              console.log('DEBUG - Item category not in allowed:', item.category._id, item.category.name);
+            }
+            return hasCategory;
+          }
         );
+        console.log('DEBUG - Items after category filter:', filtered.length);
+      } else {
+        console.log('DEBUG - Selected category not found!');
       }
     }
-    filtered = filtered.filter((item) => item.basePrice <= maxPrice);
+    // Apply price filtering based on min and max price
+    filtered = filtered.filter((item) => {
+      const price = item.basePrice || 0;
+      return price >= minPrice && price <= maxPrice;
+    });
     if (search) {
       filtered = filtered.filter((p) =>
         p.title.toLowerCase().includes(search.toLowerCase())
@@ -477,10 +586,12 @@ export default function ProductPage() {
       });
     }
 
+    console.log('DEBUG - Final filtered items:', filtered.length);
     setItems(filtered);
     setCurrentPage(1);
   }, [
     selectedCategory,
+    minPrice,
     maxPrice,
     search,
     selectedTagIds,
@@ -510,24 +621,51 @@ export default function ProductPage() {
     return items.slice(start, end);
   }, [items, currentPage]);
 
-  const handleCategorySelect = (categoryId: string) => {
-    setSelectedCategory((prev) => (prev === categoryId ? null : categoryId));
+  // Helper function to build category path
+  const buildCategoryPath = (categoryId: string): string => {
+    const category = categories.find(c => c._id === categoryId);
+    if (!category) return '';
+    
+    const path: string[] = [];
+    let currentCategory: Category | undefined = category;
+    
+    // Build path from root to current category
+    while (currentCategory) {
+      path.unshift(currentCategory.slug || '');
+      if (currentCategory.parentCategoryId) {
+        currentCategory = categories.find(c => c._id === currentCategory!.parentCategoryId);
+      } else {
+        currentCategory = undefined;
+      }
+    }
+    
+    return path.filter(slug => slug).join('/');
   };
 
-  const getChildren = (parentId: string | null) =>
-    categories.filter((c) => (c.parentCategoryId ?? null) === parentId);
-
-  const getRootCategories = () =>
-    categories.filter((c) => (c.level ?? 0) === 0);
-
-  const getDescendantIds = (categoryId: string): string[] => {
-    const direct = getChildren(categoryId);
-    const all: string[] = [];
-    for (const c of direct) {
-      all.push(c._id);
-      all.push(...getDescendantIds(c._id));
+  const handleCategorySelect = (categoryId: string) => {
+    const newSelectedCategory = categoryId === '' ? null : (selectedCategory === categoryId ? null : categoryId);
+    setSelectedCategory(newSelectedCategory);
+    
+    // Update URL with full category path
+    if (newSelectedCategory) {
+      const categoryPath = buildCategoryPath(newSelectedCategory);
+      if (categoryPath) {
+        // Manually construct URL to avoid encoding slashes
+        const otherParams = new URLSearchParams(searchParams?.toString() || "");
+        otherParams.delete("category"); // Remove category from other params
+        
+        const otherParamsString = otherParams.toString();
+        const newUrl = `${pathname}/${categoryPath}${otherParamsString ? '&' + otherParamsString : ''}`;
+        window.history.replaceState({}, '', newUrl);
+      }
+    } else {
+      // Remove category from URL
+      const sp = new URLSearchParams(searchParams?.toString() || "");
+      sp.delete("category");
+      const qs = sp.toString();
+      const newUrl = qs ? `${pathname}?${qs}` : pathname;
+      window.history.replaceState({}, '', newUrl);
     }
-    return all;
   };
 
   const renderChildTree = (parentId: string, level = 0) => {
@@ -730,16 +868,28 @@ export default function ProductPage() {
           {/* Sidebar */}
           <aside className="w-72 hidden lg:block">
             <div className="bg-white shadow rounded-2xl p-4 sticky top-6">
-              <h3 className="font-semibold mb-4">Bộ lọc</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold">Bộ lọc</h3>
+                {(selectedCategory || minPrice > 0 || maxPrice < Number.MAX_SAFE_INTEGER || 
+                  selectedProvince || selectedTagIds.size > 0) && (
+                  <button
+                    onClick={resetAllFilters}
+                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    <X size={14} />
+                    <span>Xóa lọc</span>
+                  </button>
+                )}
+              </div>
               {/* Categories */}
               <div className="space-y-3 mb-6">
                 <h4 className="font-medium text-gray-700">Danh mục</h4>
-                <div className="flex items-center gap-2 px-2 py-2 rounded hover:bg-gray-50">
+                <div className="flex items-center gap-2 flex-1 min-w-[260px]">
                   <input
                     type="radio"
                     name="category"
                     checked={selectedCategory === null}
-                    onChange={() => setSelectedCategory(null)}
+                    onChange={() => handleCategorySelect('')}
                     className="border-gray-300"
                   />
                   <span className="text-sm text-gray-700 font-medium">
@@ -780,24 +930,165 @@ export default function ProductPage() {
               </div>
               {/* Price */}
               <div className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-2">
-                  Giá thuê (VND)
+                <h4 className="font-medium text-gray-700 mb-3">
+                  Giá thuê
                 </h4>
-                <input
-                  type="range"
-                  min={0}
-                  max={5000000}
-                  step={50000}
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(Number(e.target.value))}
-                  className="w-full accent-blue-600"
-                />
-                <div className="flex justify-between text-xs text-gray-600 mt-1">
-                  <span>0</span>
-                  <span>5.000.000</span>
-                </div>
-                <div className="text-right text-sm text-gray-700 mt-1">
-                  Tối đa: {new Intl.NumberFormat("vi-VN").format(maxPrice)}đ
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={!selectedPriceRange}
+                      onChange={() => {
+                        setSelectedPriceRange(null);
+                        setMinPrice(0);
+                        setMaxPrice(Number.MAX_SAFE_INTEGER);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Tất cả</span>
+                  </label>
+                  {/* <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '0'}
+                      onChange={() => {
+                        setSelectedPriceRange('0');
+                        setMinPrice(0);
+                        setMaxPrice(0);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Sản phẩm 0đ</span>
+                  </label> */}
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '100000'}
+                      onChange={() => {
+                        setSelectedPriceRange('100000');
+                        setMinPrice(0);
+                        setMaxPrice(100000);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Dưới 100.000đ</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '100000-200000'}
+                      onChange={() => {
+                        setSelectedPriceRange('100000-200000');
+                        setMinPrice(100000);
+                        setMaxPrice(200000);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>100.000đ - 200.000đ</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '200000-500000'}
+                      onChange={() => {
+                        setSelectedPriceRange('200000-500000');
+                        setMinPrice(200000);
+                        setMaxPrice(500000);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>200.000đ - 500.000đ</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="price"
+                      checked={selectedPriceRange === '500000'}
+                      onChange={() => {
+                        setSelectedPriceRange('500000');
+                        setMinPrice(500000);
+                        setMaxPrice(Number.MAX_SAFE_INTEGER);
+                      }}
+                      className="border-gray-300"
+                    />
+                    <span>Trên 500.000đ</span>
+                  </label>
+                  
+                  <div className="pt-2">
+                    <div 
+                      className="flex items-center gap-2 text-sm text-blue-600 cursor-pointer"
+                      onClick={() => setShowCustomPrice(!showCustomPrice)}
+                    >
+                      <span>Chọn khoảng giá</span>
+                      <span>{showCustomPrice ? '−' : '+'}</span>
+                    </div>
+                    
+                    {showCustomPrice && (
+                      <div className="mt-2 space-y-2 pl-4 border-l-2 border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700 w-8">Từ</span>
+                          <input
+                            type="text"
+                            value={priceRange.from === 0 ? '' : priceRange.from}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setPriceRange(prev => ({
+                                ...prev,
+                                from: value ? parseInt(value) : 0
+                              }));
+                            }}
+                            placeholder="0"
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">đ</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700 w-8">Đến</span>
+                          <input
+                            type="text"
+                            value={priceRange.to === 0 ? '' : priceRange.to}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setPriceRange(prev => ({
+                                ...prev,
+                                to: value ? parseInt(value) : 0
+                              }));
+                            }}
+                            placeholder="0"
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">đ</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (priceRange.from >= priceRange.to) {
+                              toast.error('Giá bắt đầu phải nhỏ hơn giá kết thúc');
+                              return;
+                            }
+                            setSelectedPriceRange('custom');
+                            setMinPrice(priceRange.from);
+                            setMaxPrice(priceRange.to);
+                          }}
+                          disabled={priceRange.from >= priceRange.to || priceRange.from === 0 || priceRange.to === 0}
+                          className={`w-full py-1 text-sm rounded ${
+                            priceRange.from >= priceRange.to || priceRange.from === 0 || priceRange.to === 0
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : 'bg-blue-500 text-white hover:bg-blue-600'
+                          }`}
+                        >
+                          Áp dụng
+                        </button>
+                        {priceRange.from > 0 && priceRange.to > 0 && priceRange.from >= priceRange.to && (
+                          <p className="text-xs text-red-500 mt-1">Giá bắt đầu phải nhỏ hơn giá kết thúc</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               {/* Province */}
@@ -813,28 +1104,18 @@ export default function ProductPage() {
                     </button>
                   )}
                 </div>
-                <div className="space-y-2">
-                  {(showAllProvinces ? vietnamProvinces : vietnamProvinces.slice(0, 6)).map((p) => (
-                    <label key={p} className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="radio"
-                        name="province"
-                        checked={selectedProvince === p}
-                        onChange={() => setSelectedProvince(p)}
-                        className="accent-blue-600"
-                      />
-                      <span>{p}</span>
-                    </label>
+                <select
+                  value={selectedProvince}
+                  onChange={(e) => setSelectedProvince(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Tất cả tỉnh thành</option>
+                  {vietnamProvinces.map((province) => (
+                    <option key={province} value={province}>
+                      {province}
+                    </option>
                   ))}
-                  {vietnamProvinces.length > 6 && (
-                    <button
-                      onClick={() => setShowAllProvinces((v) => !v)}
-                      className="text-xs text-blue-500 hover:underline"
-                    >
-                      {showAllProvinces ? "Thu gọn" : "Xem thêm"}
-                    </button>
-                  )}
-                </div>
+                </select>
               </div>
               {/* Tags */}
               <div className="mb-6">
@@ -870,31 +1151,12 @@ export default function ProductPage() {
             </div>
           </aside>
 
-          {/* Main Content */}
           <main
             className={`flex-1 transition-all duration-500 ease-out ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
               }`}
           >
-            <div className="flex justify-between items-center mb-6">
+            <div className="mb-6">
               <h1 className="text-3xl font-bold">Sản phẩm cho thuê</h1>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => router.push("/products/myfavorite")}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 text-sm"
-                  disabled={!isAuthenticated}
-                >
-                  <Bookmark className="w-4 h-4 text-yellow-300" />
-                  <span>Danh sách yêu thích</span>
-                </button>
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="text-blue-500 hover:underline"
-                  >
-                    <X size={20} />
-                  </button>
-                )}
-              </div>
             </div>
             <div className="mb-6">
               <div className="flex items-center gap-3 flex-wrap">

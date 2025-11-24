@@ -1258,7 +1258,69 @@ const getRatingByOwnerId = async (req, res) => {
 };
 
 
+/**
+ * Get all active categories in a hierarchical structure
+ * @route GET /api/public/categories
+ * @returns {Object} Hierarchical categories
+ */
+const getAllPublicCategories = async (req, res) => {
+  try {
+    // Fetch all active categories
+    const categories = await Categories.find({ isActive: true })
+      .select('name slug description parentCategoryId level path')
+      .sort({ level: 1, name: 1 })
+      .lean();
+
+    // If no categories found
+    if (!categories || categories.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No categories found',
+        data: []
+      });
+    }
+
+    // Create a map of categories by ID for quick lookup
+    const categoryMap = new Map();
+    const rootCategories = [];
+
+    // First pass: Create map entries and find root categories
+    categories.forEach(category => {
+      category.children = [];
+      categoryMap.set(category._id.toString(), category);
+      
+      if (!category.parentCategoryId) {
+        rootCategories.push(category);
+      }
+    });
+
+    // Second pass: Build the hierarchy
+    categories.forEach(category => {
+      if (category.parentCategoryId) {
+        const parent = categoryMap.get(category.parentCategoryId.toString());
+        if (parent) {
+          parent.children.push(category);
+        }
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Categories retrieved successfully',
+      data: rootCategories
+    });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
+  getAllPublicCategories,
   listAllItems,
   getProductByProductId,
   searchProduct,

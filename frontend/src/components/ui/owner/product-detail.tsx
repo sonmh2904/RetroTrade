@@ -25,6 +25,7 @@ import {
   deleteProduct,
 } from "../../../services/products/product.api";
 import { toast } from "sonner";
+import RatingSection from "@/components/ui/products/rating";
 
 interface Image {
   _id?: string;
@@ -231,24 +232,8 @@ const ProductDetail: React.FC = () => {
     );
   };
 
-  const renderStars = (rating: number) => {
-    return (
-      <div className="flex items-center gap-0.5">
-        {[...Array(5)].map((_, i) => (
-          <Star
-            key={i}
-            size={16}
-            className={`${
-              i < rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
-            }`}
-          />
-        ))}
-      </div>
-    );
-  };
-
   if (!isAuthenticated) {
-    return null; 
+    return null;
   }
 
   if (loading) {
@@ -287,12 +272,6 @@ const ProductDetail: React.FC = () => {
     product.Tags?.map((t: ProductTag) => t.Tag?.name || t.name || "").filter(
       Boolean
     ) || [];
-  const reviews = product.Reviews || []; 
-
-  const averageRating =
-    reviews.length > 0
-      ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
-      : 0;
 
   const hasRejectReason = product.StatusId === 3 && product.rejectReason;
   const rejectReason = product.rejectReason ?? "";
@@ -460,9 +439,8 @@ const ProductDetail: React.FC = () => {
                         size={16}
                         className="text-yellow-400 fill-yellow-400"
                       />
-                      <span>
-                        {averageRating.toFixed(1)} ({reviews.length})
-                      </span>
+                      <span> - </span>{" "}
+                      {/* Average rating sẽ được tính từ RatingSection */}
                     </div>
                   </div>
                 </div>
@@ -618,81 +596,13 @@ const ProductDetail: React.FC = () => {
             </div>
           )}
 
-          {/* Reviews Section */}
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden mt-6">
-            <div className="border-b px-6 py-4 flex items-center gap-2">
-              <Star size={20} className="text-yellow-600" />
-              <h3 className="text-lg font-semibold text-gray-900">
-                Phản hồi và đánh giá từ khách hàng
-              </h3>
-            </div>
-            <div className="p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex items-center gap-1">
-                  {renderStars(Math.round(averageRating))}
-                </div>
-                <span className="text-xl font-bold text-gray-900">
-                  {averageRating.toFixed(1)}
-                </span>
-                <span className="text-sm text-gray-600">
-                  ({reviews.length} đánh giá)
-                </span>
-              </div>
-              {reviews.length === 0 ? (
-                <div className="text-center py-8">
-                  <Star size={48} className="mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-500">
-                    Chưa có đánh giá nào cho sản phẩm này.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {reviews.map((review: Review) => (
-                    <div
-                      key={review._id}
-                      className="flex gap-4 p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                          {review.userAvatar ? (
-                            <Image
-                              src={review.userAvatar}
-                              alt={review.userName}
-                              width={40}
-                              height={40}
-                              className="rounded-full"
-                            />
-                          ) : (
-                            <span className="text-sm font-medium text-gray-600">
-                              {review.userName.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900">
-                            {review.userName}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {renderStars(review.rating)}
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-2">
-                          {review.comment}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(review.createdAt).toLocaleDateString(
-                            "vi-VN"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Rating Section - Chỉ hiển thị đánh giá (không form) */}
+          {product && (
+            <RatingSection
+              itemId={product._id}
+              orders={[]} // Truyền mảng rỗng để canReview = false, chỉ hiển thị
+            />
+          )}
         </div>
       </div>
 
