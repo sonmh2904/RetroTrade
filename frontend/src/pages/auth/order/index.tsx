@@ -1836,18 +1836,18 @@ useEffect(() => {
                 </h2>
 
                 <div className="space-y-4">
-                  {/* Labels row */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <label className="text-sm font-semibold text-gray-700">
+                  {/* Labels row - luôn trên cùng một hàng */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">
                       Họ và tên <span className="text-red-500">*</span>
                     </label>
-                    <label className="text-sm font-semibold text-gray-700">
+                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">
                       Số điện thoại <span className="text-red-500">*</span>
                     </label>
                   </div>
 
                   {/* Inputs row */}
-                  <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <input
                         placeholder="Nhập họ và tên"
@@ -1858,11 +1858,13 @@ useEffect(() => {
                         }
                       />
                     </div>
-                    <CheckoutPhoneInput
-                      value={shipping.phone}
-                      onChange={(phone) => setShipping({ ...shipping, phone })}
-                      defaultPhone={defaultPhone}
-                    />
+                    <div>
+                      <CheckoutPhoneInput
+                        value={shipping.phone}
+                        onChange={(phone) => setShipping({ ...shipping, phone })}
+                        defaultPhone={defaultPhone}
+                      />
+                    </div>
                   </div>
                 </div>
 

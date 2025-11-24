@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 interface CheckoutPhoneInputProps {
   value: string;
@@ -54,6 +54,7 @@ export function CheckoutPhoneInput({
 }: CheckoutPhoneInputProps) {
   const [useDefaultPhone, setUseDefaultPhone] = useState(true);
   const [phoneError, setPhoneError] = useState<string>("");
+  const prevUseDefaultPhoneRef = useRef<boolean>(true);
 
   // Xử lý thay đổi số điện thoại
   const handlePhoneChange = (inputValue: string) => {
@@ -76,20 +77,39 @@ export function CheckoutPhoneInput({
     }
   };
 
-  // Update phone when useDefaultPhone changes
+  // Update phone when useDefaultPhone changes (chỉ khi thực sự thay đổi)
   useEffect(() => {
-    if (useDefaultPhone && defaultPhone) {
+    const prevUseDefaultPhone = prevUseDefaultPhoneRef.current;
+    
+    // Chỉ xử lý khi useDefaultPhone thực sự thay đổi
+    if (useDefaultPhone !== prevUseDefaultPhone) {
+      if (useDefaultPhone && defaultPhone) {
+        // Chuyển sang dùng số mặc định
+        onChange(defaultPhone);
+        setPhoneError("");
+        const error = validateVietnamesePhone(defaultPhone);
+        onValidationChange?.(!error, error);
+      } else if (!useDefaultPhone && prevUseDefaultPhone) {
+        // Chuyển sang nhập số mới - chỉ clear khi chuyển từ default sang custom
+        onChange("");
+        setPhoneError("");
+        onValidationChange?.(false, "");
+      }
+      prevUseDefaultPhoneRef.current = useDefaultPhone;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useDefaultPhone, defaultPhone]);
+
+  // Sync với defaultPhone khi đang dùng default
+  useEffect(() => {
+    if (useDefaultPhone && defaultPhone && value !== defaultPhone) {
       onChange(defaultPhone);
       setPhoneError("");
       const error = validateVietnamesePhone(defaultPhone);
       onValidationChange?.(!error, error);
-    } else if (!useDefaultPhone) {
-      // Clear phone when switching to custom input
-      onChange("");
-      setPhoneError("");
-      onValidationChange?.(false, "");
     }
-  }, [useDefaultPhone, defaultPhone, onChange, onValidationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPhone, useDefaultPhone]);
 
   // Validate on blur
   const handleBlur = () => {
