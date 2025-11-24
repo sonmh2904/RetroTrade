@@ -18,6 +18,7 @@ router.post('/forgot-password', userAuthController.forgotPassword);
 router.post('/refresh-token', userAuthController.refreshToken);
 router.post('/login-with-google', userAuthController.loginWithGoogle);
 router.post('/login-with-facebook', userAuthController.loginWithFacebook);
+router.get('/facebook/callback', userAuthController.handleFacebookCallback);
 
 // Complaint route (public - for banned users)
 router.post('/complaint', complaintController.submitComplaint);
