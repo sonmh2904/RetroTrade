@@ -3,13 +3,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar"
 import { Button } from "@/components/ui/common/button"
 import { Input } from "@/components/ui/common/input"
-// import { Label } from "@/components/ui/common/label"
-// import { Star } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/common/dialog"
+import { Phone, Edit2 } from "lucide-react"
 import type { UserProfile, ProfileApiResponse } from "@iService"
 import { useEffect, useState } from "react"
 import { getUserProfile, updateUserProfile } from "@/services/auth/auth.api"
 import { toast } from "sonner"
 import { AvatarUploadModal } from "@/components/ui/auth/profile/avatar-upload-modal"
+import { PhoneVerification } from "@/components/ui/auth/verify/PhoneVerification"
 
 interface ProfileHeaderProps {
   userProfile: UserProfile;
@@ -19,6 +20,7 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ userProfile }: ProfileHeaderProps) {
   const [isAvatarOpen, setIsAvatarOpen] = useState(false)
+  const [showChangePhoneModal, setShowChangePhoneModal] = useState(false)
   const [fullName, setFullName] = useState(userProfile.fullName)
   const [displayName, setDisplayName] = useState(userProfile.displayName || userProfile.fullName)
   const [bio, setBio] = useState(userProfile.bio || "")
@@ -96,9 +98,23 @@ export function ProfileHeader({ userProfile }: ProfileHeaderProps) {
                     </div>
                   </div>
                   <div className="grid grid-cols-12 items-center gap-4">
-                    <div className="col-span-12 sm:col-span-4 text-sm text-gray-600">Số điện thoại</div>
+                    <div className="col-span-12 sm:col-span-4 text-sm text-gray-600 flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Số điện thoại
+                    </div>
                     <div className="col-span-12 sm:col-span-8">
-                      <div className="px-3 py-2 rounded-md border bg-gray-50 text-gray-800 max-w-xl">{phone || '—'}</div>
+                      <div className="flex items-center gap-2 max-w-xl">
+                        <div className="flex-1 px-3 py-2 rounded-md border bg-gray-50 text-gray-800">{phone || '—'}</div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowChangePhoneModal(true)}
+                          className="h-9 px-3 text-xs hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+                        >
+                          <Edit2 className="w-3 h-3 mr-1" />
+                          Đổi số
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-12 items-start gap-4">
@@ -133,6 +149,35 @@ export function ProfileHeader({ userProfile }: ProfileHeaderProps) {
           userProfile={userProfile}
           onAvatarUpdated={() => { }}
         />
+
+        {/* Change Phone Number Modal */}
+        <Dialog open={showChangePhoneModal} onOpenChange={setShowChangePhoneModal}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Đổi số điện thoại</DialogTitle>
+            </DialogHeader>
+            <div className="mt-4">
+              <PhoneVerification
+                onSuccess={(newPhone) => {
+                  toast.success(`Số điện thoại đã được cập nhật thành công: ${newPhone}`);
+                  setPhone(newPhone);
+                  setShowChangePhoneModal(false);
+                  // Refresh user profile
+                  getUserProfile().then(async (res) => {
+                    const json: ProfileApiResponse = await res.json();
+                    const u = (json.user as UserProfile) || (json.data as UserProfile);
+                    if (json.code === 200 && u) {
+                      setPhone(u.phone || "");
+                    }
+                  }).catch(() => {});
+                }}
+                onCancel={() => setShowChangePhoneModal(false)}
+                title="Đổi số điện thoại"
+                description="Nhập số điện thoại mới và mã OTP để xác minh"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
 
       </>
       )

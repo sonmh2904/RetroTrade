@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getPostById, updatePost } from "@/services/auth/blog.api";
+import { getBlogDetail, updatePost } from "@/services/auth/blog.api";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,7 @@ export default function EditBlogForm({ blogId, isOpen, onClose, onSuccess }: Edi
   const fetchBlog = async () => {
     try {
       setFetching(true);
-      const blog = await getPostById(blogId);
+      const blog = await getBlogDetail(blogId);
       setFormData({
         title: blog.title || "",
         content: blog.content || "",

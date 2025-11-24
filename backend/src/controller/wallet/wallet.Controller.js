@@ -225,11 +225,9 @@ const withdrawFromWallet = async (req, res) => {
     const { amount, note, bankAccountId } = req.body;
 
     const n = Number(amount);
-    if (!amount || isNaN(n) || n <= 0 || !Number.isInteger(n)) {
-      return res.status(400).json({ message: "Số tiền không hợp lệ!" });
+    if (!amount || isNaN(n) || n < 2000 || !Number.isInteger(n)) {
+      return res.status(400).json({ message: "Số tiền tối thiểu phải từ 2.000 VNĐ!" });
     }
-
-
 
     if (!bankAccountId)
       return res.status(400).json({ message: "Vui lòng chọn tài khoản ngân hàng!" });
@@ -363,7 +361,4 @@ module.exports = {
   withdrawFromWallet,
   getRecentWalletTransactions,
   getWalletTransactions
-
-
-
 };

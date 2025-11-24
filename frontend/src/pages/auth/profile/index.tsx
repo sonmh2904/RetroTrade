@@ -17,6 +17,7 @@ import { LoyaltyManagement } from '@/components/ui/auth/profile/loyalty-manageme
 import { UserDisputes } from '@/components/ui/auth/profile/user-disputes';
 import { UserDetails } from '@/components/ui/auth/profile/user-details';
 import { ownerRequestApi } from '@/services/auth/ownerRequest.api';
+import { Button } from '@/components/ui/common/button';
 import dynamic from 'next/dynamic';
 
 
@@ -293,7 +294,7 @@ export default function ProfilePage() {
             {/* Sidebar */}
             <aside className="lg:col-span-3">
               <ProfileSidebar
-                active={(activeMenu || 'settings') as MenuKey}
+                active={activeMenu}
                 onChange={handleMenuChange}
                 user={{ 
                   fullName: normalizedUserProfile.fullName, 
@@ -385,8 +386,18 @@ export default function ProfilePage() {
 
               {activeMenu === 'security' && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 pt-6 scroll-mt-24">
-                  <div className="mb-4 flex items-center gap-3">
+                  <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Xác minh tài khoản</h3>
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push('/auth/verification-history')}
+                      className="flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Xem lịch sử xác minh
+                    </Button>
                   </div>
                   <AccountVerification />
                 </div>

@@ -54,12 +54,13 @@ export default function VerificationScript() {
       id: 3,
       icon: Camera,
       title: "Tải ảnh xác minh",
-      description: "Tải lên 3 ảnh: cá nhân + mặt trước/sau CCCD",
+      description: "Tải lên 2 ảnh: mặt trước và mặt sau CCCD",
       details: [
-        "Ảnh cá nhân: nhìn thẳng, không đeo kính râm",
-        "Ảnh CCCD: rõ nét, đầy đủ thông tin",
+        "Mặt trước CCCD: rõ nét, đầy đủ thông tin",
+        "Mặt sau CCCD: rõ nét, đầy đủ thông tin",
         "Định dạng: JPG, JPEG, PNG (tối đa 5MB)",
-        "Đảm bảo ảnh không bị mờ hoặc tối"
+        "Đảm bảo ảnh không bị mờ hoặc tối",
+        "Hệ thống sẽ tự động đọc thông tin từ ảnh"
       ],
       color: "purple",
       estimatedTime: "3-5 phút"
