@@ -187,9 +187,9 @@ export const chartApi = {
   },
 
   // Chart data functions
-  getProductChartData: async (): Promise<ProductChartData[]> => {
+  getProductChartData: async (filter: '30days' | 'all' = '30days'): Promise<ProductChartData[]> => {
     try {
-      const response = await instance.get(`/moderator/dashboard/products/chart`);
+      const response = await instance.get(`/moderator/dashboard/products/chart?filter=${filter}`);
       const data = await response.json();
       return data.data || data || [];
     } catch (error) {
@@ -198,9 +198,9 @@ export const chartApi = {
     }
   },
 
-  getPostChartData: async (): Promise<PostChartData[]> => {
+  getPostChartData: async (filter: '30days' | 'all' = '30days'): Promise<PostChartData[]> => {
     try {
-      const response = await instance.get(`/moderator/dashboard/posts/chart`);
+      const response = await instance.get(`/moderator/dashboard/posts/chart?filter=${filter}`);
       const data = await response.json();
       return data.data || data || [];
     } catch (error) {
@@ -209,9 +209,9 @@ export const chartApi = {
     }
   },
 
-  getUserChartData: async (): Promise<UserChartData[]> => {
+  getUserChartData: async (filter: '30days' | 'all' = '30days'): Promise<UserChartData[]> => {
     try {
-      const response = await instance.get(`/moderator/dashboard/users/chart`);
+      const response = await instance.get(`/moderator/dashboard/users/chart?filter=${filter}`);
       const data = await response.json();
       return data.data || data || [];
     } catch (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
 import {
@@ -118,6 +118,11 @@ const ModeratorDashboard = () => {
   const [postChartData, setPostChartData] = useState<any[]>([]);
   const [userChartData, setUserChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  
+  // Filter states for charts
+  const [productFilter, setProductFilter] = useState<'30days' | 'all'>('30days');
+  const [postFilter, setPostFilter] = useState<'30days' | 'all'>('30days');
+  const [userFilter, setUserFilter] = useState<'30days' | 'all'>('30days');
 
   const tabs = [
     {
@@ -271,33 +276,50 @@ const ModeratorDashboard = () => {
   }, []);
 
   // Fetch chart data
-  useEffect(() => {
-    const fetchChartData = async () => {
-      setChartLoading(true);
-      try {
-        const { chartApi } = await import("@/services/moderator/chart.api");
-        
-        const [productsData, postsData, usersData] = await Promise.all([
-          chartApi.getProductChartData(),
-          chartApi.getPostChartData(),
-          chartApi.getUserChartData()
-        ]);
-        
-        setProductChartData(productsData);
-        setPostChartData(postsData);
-        setUserChartData(usersData);
-      } catch (error) {
-        console.error("Error fetching chart data:", error);
-        setProductChartData([]);
-        setPostChartData([]);
-        setUserChartData([]);
-      } finally {
-        setChartLoading(false);
-      }
-    };
+  const fetchChartData = useCallback(async (productFilterValue?: '30days' | 'all', postFilterValue?: '30days' | 'all', userFilterValue?: '30days' | 'all') => {
+    setChartLoading(true);
+    try {
+      const { chartApi } = await import("@/services/moderator/chart.api");
+      
+      const [productsData, postsData, usersData] = await Promise.all([
+        chartApi.getProductChartData(productFilterValue || productFilter),
+        chartApi.getPostChartData(postFilterValue || postFilter),
+        chartApi.getUserChartData(userFilterValue || userFilter)
+      ]);
+      
+      setProductChartData(productsData);
+      setPostChartData(postsData);
+      setUserChartData(usersData);
+    } catch (error) {
+      console.error("Error fetching chart data:", error);
+      setProductChartData([]);
+      setPostChartData([]);
+      setUserChartData([]);
+    } finally {
+      setChartLoading(false);
+    }
+  }, [productFilter, postFilter, userFilter]);
 
+  // Initial fetch and refetch when filters change
+  useEffect(() => {
     fetchChartData();
-  }, []);
+  }, [fetchChartData]);
+
+  // Filter handlers
+  const handleProductFilterChange = (newFilter: '30days' | 'all') => {
+    setProductFilter(newFilter);
+    fetchChartData(newFilter, postFilter, userFilter);
+  };
+
+  const handlePostFilterChange = (newFilter: '30days' | 'all') => {
+    setPostFilter(newFilter);
+    fetchChartData(productFilter, newFilter, userFilter);
+  };
+
+  const handleUserFilterChange = (newFilter: '30days' | 'all') => {
+    setUserFilter(newFilter);
+    fetchChartData(productFilter, postFilter, newFilter);
+  };
 
   const handleStatClick = (statId: string) => {
     // Navigate to relevant tab based on stat
@@ -453,6 +475,8 @@ const ModeratorDashboard = () => {
                   data={productChartData} 
                   loading={chartLoading}
                   statsData={dashboardData}
+                  filter={productFilter}
+                  onFilterChange={handleProductFilterChange}
                 />
                 
                 {/* Product Status Distribution */}
@@ -514,6 +538,8 @@ const ModeratorDashboard = () => {
                   data={postChartData} 
                   loading={chartLoading}
                   statsData={dashboardData}
+                  filter={postFilter}
+                  onFilterChange={handlePostFilterChange}
                 />
                 
                 {/* Post Status Distribution */}
@@ -574,6 +600,8 @@ const ModeratorDashboard = () => {
                   data={userChartData} 
                   loading={chartLoading}
                   statsData={dashboardData}
+                  filter={userFilter}
+                  onFilterChange={handleUserFilterChange}
                 />
                 
                 {/* User Status Distribution */}

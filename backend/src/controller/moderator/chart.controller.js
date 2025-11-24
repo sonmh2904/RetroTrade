@@ -436,14 +436,21 @@ exports.getReportStats = async (req, res) => {
 exports.getProductStatsByDate = async (req, res) => {
     try {
         const now = new Date();
-        const daysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
+        const { filter = '30days' } = req.query; // Default to 30days
+        
+        let matchCondition = {
+            IsDeleted: { $ne: true }
+        };
+        
+        // Only add date filter if not 'all'
+        if (filter !== 'all') {
+            const daysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            matchCondition.CreatedAt = { $gte: daysAgo };
+        }
 
         const dailyStats = await Item.aggregate([
             {
-                $match: {
-                    CreatedAt: { $gte: daysAgo },
-                    IsDeleted: { $ne: true }
-                }
+                $match: matchCondition
             },
             {
                 $group: {
@@ -476,9 +483,18 @@ exports.getProductStatsByDate = async (req, res) => {
             }
         ]);
 
+        // For 'all' filter, get the earliest date for range calculation
+        let startDate;
+        if (filter === 'all') {
+            const earliestProduct = await Item.findOne({ IsDeleted: { $ne: true } }).sort({ CreatedAt: 1 });
+            startDate = earliestProduct ? new Date(earliestProduct.CreatedAt) : new Date();
+        } else {
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        }
+
         // Fill missing dates with zero counts
         const filledStats = [];
-        const currentDate = new Date(daysAgo);
+        const currentDate = new Date(startDate);
         
         while (currentDate <= now) {
             const dateStr = currentDate.toISOString().split('T')[0];
@@ -509,13 +525,19 @@ exports.getProductStatsByDate = async (req, res) => {
 exports.getPostStatsByDate = async (req, res) => {
     try {
         const now = new Date();
-        const daysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
+        const { filter = '30days' } = req.query; // Default to 30days
+        
+        let matchCondition = {};
+        
+        // Only add date filter if not 'all'
+        if (filter !== 'all') {
+            const daysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            matchCondition.createdAt = { $gte: daysAgo };
+        }
 
         const dailyStats = await Post.aggregate([
             {
-                $match: {
-                    createdAt: { $gte: daysAgo }
-                }
+                $match: matchCondition
             },
             {
                 $group: {
@@ -543,9 +565,18 @@ exports.getPostStatsByDate = async (req, res) => {
             }
         ]);
 
+        // For 'all' filter, get the earliest date for range calculation
+        let startDate;
+        if (filter === 'all') {
+            const earliestPost = await Post.findOne().sort({ createdAt: 1 });
+            startDate = earliestPost ? new Date(earliestPost.createdAt) : new Date();
+        } else {
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        }
+
         // Fill missing dates with zero counts
         const filledStats = [];
-        const currentDate = new Date(daysAgo);
+        const currentDate = new Date(startDate);
         
         while (currentDate <= now) {
             const dateStr = currentDate.toISOString().split('T')[0];
@@ -575,13 +606,19 @@ exports.getPostStatsByDate = async (req, res) => {
 exports.getUserStatsByDate = async (req, res) => {
     try {
         const now = new Date();
-        const daysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
+        const { filter = '30days' } = req.query; // Default to 30days
+        
+        let matchCondition = {};
+        
+        // Only add date filter if not 'all'
+        if (filter !== 'all') {
+            const daysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            matchCondition.createdAt = { $gte: daysAgo };
+        }
 
         const dailyStats = await User.aggregate([
             {
-                $match: {
-                    createdAt: { $gte: daysAgo }
-                }
+                $match: matchCondition
             },
             {
                 $group: {
@@ -604,9 +641,18 @@ exports.getUserStatsByDate = async (req, res) => {
             }
         ]);
 
+        // For 'all' filter, get the earliest date for range calculation
+        let startDate;
+        if (filter === 'all') {
+            const earliestUser = await User.findOne().sort({ createdAt: 1 });
+            startDate = earliestUser ? new Date(earliestUser.createdAt) : new Date();
+        } else {
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        }
+
         // Fill missing dates with zero counts
         const filledStats = [];
-        const currentDate = new Date(daysAgo);
+        const currentDate = new Date(startDate);
         
         while (currentDate <= now) {
             const dateStr = currentDate.toISOString().split('T')[0];

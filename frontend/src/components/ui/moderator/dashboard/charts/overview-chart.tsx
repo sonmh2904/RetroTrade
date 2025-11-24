@@ -55,159 +55,53 @@ export function OverviewChart({ data, loading = false }: OverviewChartProps) {
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <div className="h-[400px] flex items-center justify-center text-gray-500">
+          <div className="h-[200px] flex items-center justify-center text-gray-500">
             Không có dữ liệu
           </div>
         ) : (
-          <div className="h-[400px] space-y-4">
-            <div className="h-full flex flex-col">
-              <div className="flex-1 relative pb-12 overflow-hidden">
-                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {/* Grid lines */}
-                  {[...Array(5)].map((_, i) => (
-                    <line
-                      key={`grid-${i}`}
-                      x1="0"
-                      y1={i * 25}
-                      x2="100"
-                      y2={i * 25}
-                      stroke="#e5e7eb"
-                      strokeWidth="0.2"
-                    />
-                  ))}
-                  
-                  {/* Products line */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.products || 0) / maxValue * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.products / maxValue) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#3b82f6"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-                  
-                  {/* Posts line */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.posts || 0) / maxValue * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.posts / maxValue) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-                  
-                  {/* Users line */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.users || 0) / maxValue * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.users / maxValue) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#8b5cf6"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-                  
-                  {/* Reports line */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.reports || 0) / maxValue * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.reports / maxValue) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#ef4444"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                    strokeDasharray="3,2"
-                  />
-                  
-                  {/* Data points */}
-                  {data.map((item, index) => {
-                    const x = (index / (data.length - 1 || 1)) * 100;
-                    return (
-                      <g key={index}>
-                        {/* Products */}
-                        <circle
-                          cx={x}
-                          cy={100 - (item.products / maxValue) * 100}
-                          r="1.2"
-                          fill="#3b82f6"
-                          className="transition-all duration-300 hover:r-1.5"
-                        />
-                        {/* Posts */}
-                        <circle
-                          cx={x}
-                          cy={100 - (item.posts / maxValue) * 100}
-                          r="1.2"
-                          fill="#10b981"
-                          className="transition-all duration-300 hover:r-1.5"
-                        />
-                        {/* Users */}
-                        <circle
-                          cx={x}
-                          cy={100 - (item.users / maxValue) * 100}
-                          r="1.2"
-                          fill="#8b5cf6"
-                          className="transition-all duration-300 hover:r-1.5"
-                        />
-                        {/* Reports */}
-                        <circle
-                          cx={x}
-                          cy={100 - (item.reports / maxValue) * 100}
-                          r="1.2"
-                          fill="#ef4444"
-                          className="transition-all duration-300 hover:r-1.5"
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
-                
-                {/* X-axis labels */}
-                <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-gray-600 px-1">
-                  {data.map((item, index) => (
-                    <span key={index} className="text-center">
-                      {formatDate(item.date)}
-                    </span>
-                  ))}
-                </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <Activity className="w-5 h-5 text-blue-600" />
+                <span className="text-xs text-blue-600">Tổng</span>
               </div>
-              
-              {/* Legend */}
-              <div className="flex justify-center gap-6 mt-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                  <span className="text-xs text-gray-600">Sản phẩm</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-emerald-500 rounded"></div>
-                  <span className="text-xs text-gray-600">Bài viết</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-purple-500 rounded"></div>
-                  <span className="text-xs text-gray-600">Người dùng</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded"></div>
-                  <span className="text-xs text-gray-600">Báo cáo</span>
-                </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {data.reduce((sum, item) => sum + item.products + item.posts + item.users + item.reports, 0)}
               </div>
+              <div className="text-sm text-gray-600">Tổng hoạt động</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between mb-2">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+                <span className="text-xs text-green-600">Trung bình</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {Math.round(data.reduce((sum, item) => sum + item.products + item.posts + item.users + item.reports, 0) / data.length)}
+              </div>
+              <div className="text-sm text-gray-600">Hoạt động/ngày</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-5 h-5 bg-purple-500 rounded"></div>
+                <span className="text-xs text-purple-600">Đỉnh</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {Math.max(...data.map(item => item.products + item.posts + item.users + item.reports))}
+              </div>
+              <div className="text-sm text-gray-600">Cao nhất</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-orange-50 to-red-50 p-4 rounded-lg border border-orange-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-5 h-5 bg-red-500 rounded"></div>
+                <span className="text-xs text-orange-600">Báo cáo</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {data.reduce((sum, item) => sum + item.reports, 0)}
+              </div>
+              <div className="text-sm text-gray-600">Tổng báo cáo</div>
             </div>
           </div>
         )}
