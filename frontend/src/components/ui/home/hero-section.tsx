@@ -81,7 +81,7 @@ const slideVariants: Variants = {
     },
   },
 };
-// Ảnh preview bên phải (fade + pop)
+// Ảnh preview bên phải 
 const previewItem = {
   hidden: { opacity: 0, y: 25, scale: 0.9 },
   show: {
@@ -126,7 +126,6 @@ export function HeroSection() {
         }}
       />
       
-      {/* Dark overlay for better text readability */}
       <div className="absolute inset-0 bg-black/40 z-10" />
 
       <div className="relative z-20 h-full flex items-center justify-center">
@@ -150,11 +149,11 @@ export function HeroSection() {
                     backgroundPosition: 'center',
                   }}
                 >
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent"></div>
+                  
                   <div className="relative z-10 h-full w-full p-8 flex flex-col md:flex-row items-center">
                     <div className="w-full md:w-1/2 flex items-center">
                       <div className="max-w-md relative">
-                        {/* Text shadow container for better readability */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent rounded-lg -m-2 -z-10"></div>
                         
                         <motion.h1 
                           className="text-4xl md:text-5xl font-bold mb-6 text-white drop-shadow-lg font-['Be_Vietnam_Pro',sans-serif]"
