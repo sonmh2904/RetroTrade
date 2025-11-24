@@ -3,6 +3,7 @@ const VerificationRequest = require("../../models/VerificationRequest.model");
 const { getAdmin } = require("../../config/firebase");
 const { uploadToCloudinary } = require('../../middleware/upload.middleware');
 const { createNotification } = require("../../middleware/createNotification");
+const { encryptObject, decryptObject } = require("../../utils/cryptoHelper");
 
 let Tesseract;
 let tesseractLoaded = false;
@@ -982,14 +983,35 @@ module.exports.verifyFaceImages = async (req, res) => {
 
         const shouldAutoReject = !hasValidIdCardInfo;
 
+        // Mã hóa idCardInfo nếu có
+        let idCardInfoEncrypted = null;
+        if (extractedIdCardInfo && hasValidIdCardInfo) {
+            try {
+                const idCardData = {
+                    idNumber: extractedIdCardInfo.idNumber || null,
+                    fullName: extractedIdCardInfo.fullName || null,
+                    dateOfBirth: extractedIdCardInfo.dateOfBirth ? new Date(extractedIdCardInfo.dateOfBirth).toISOString() : null,
+                    address: extractedIdCardInfo.address || null
+                };
+                const { iv, encryptedData } = encryptObject(idCardData);
+                idCardInfoEncrypted = {
+                    encryptedData: Buffer.from(encryptedData, "hex"),
+                    iv: iv
+                };
+            } catch (encryptError) {
+                console.error('Error encrypting idCardInfo:', encryptError);
+                return res.status(500).json({
+                    code: 500,
+                    message: "Lỗi khi mã hóa thông tin căn cước công dân",
+                    error: encryptError.message
+                });
+            }
+        }
+
         const verificationRequest = new VerificationRequest({
             userId: userId,
-            idCardInfo: extractedIdCardInfo ? {
-                idNumber: extractedIdCardInfo.idNumber || null,
-                fullName: extractedIdCardInfo.fullName || null,
-                dateOfBirth: extractedIdCardInfo.dateOfBirth ? new Date(extractedIdCardInfo.dateOfBirth) : null,
-                address: extractedIdCardInfo.address || null
-            } : null,
+            idCardInfo: null, // Không lưu dữ liệu gốc
+            idCardInfoEncrypted: idCardInfoEncrypted,
             documents: documents,
             reason: req.body.reason || null,
             status: shouldAutoReject ? 'Rejected' : 'Pending',
@@ -1055,16 +1077,27 @@ module.exports.verifyFaceImages = async (req, res) => {
             }
         }
 
+        // Giải mã idCardInfo để trả về (chỉ để hiển thị, không lưu vào DB)
+        let decryptedIdCardInfo = null;
+        if (verificationRequest.idCardInfoEncrypted && verificationRequest.idCardInfoEncrypted.encryptedData && verificationRequest.idCardInfoEncrypted.iv) {
+            try {
+                const encryptedHex = verificationRequest.idCardInfoEncrypted.encryptedData.toString("hex");
+                decryptedIdCardInfo = decryptObject(encryptedHex, verificationRequest.idCardInfoEncrypted.iv);
+            } catch (decryptError) {
+                console.error('Error decrypting idCardInfo for response:', decryptError);
+            }
+        }
+
         const responseData = {
             requestId: verificationRequest._id,
             userId: userId,
             status: verificationRequest.status,
             documents: verificationRequest.documents || [],
-            idCardInfo: verificationRequest.idCardInfo ? {
-                idNumber: verificationRequest.idCardInfo.idNumber || null,
-                fullName: verificationRequest.idCardInfo.fullName || null,
-                dateOfBirth: verificationRequest.idCardInfo.dateOfBirth ? verificationRequest.idCardInfo.dateOfBirth.toISOString() : null,
-                address: verificationRequest.idCardInfo.address || null,
+            idCardInfo: decryptedIdCardInfo ? {
+                idNumber: decryptedIdCardInfo.idNumber || null,
+                fullName: decryptedIdCardInfo.fullName || null,
+                dateOfBirth: decryptedIdCardInfo.dateOfBirth || null,
+                address: decryptedIdCardInfo.address || null,
                 extractionMethod: 'ocr_user_confirmed'
             } : null,
             extractedIdCardInfo: extractedIdCardInfo ? {
