@@ -93,7 +93,7 @@ const payment = async (req, res) => {
             }], { session });
 
             order.paymentStatus = "paid";
-            order.orderStatus = "confirmed";
+            // order.orderStatus = "confirmed";
             order.lifecycle.confirmedAt = new Date();
             await order.save({ session });
 
