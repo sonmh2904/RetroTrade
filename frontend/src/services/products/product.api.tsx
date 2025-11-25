@@ -1,175 +1,305 @@
 import instance from "../customizeAPI";
+import api from "../customizeAPI";
 
-export interface Category {
-  _id: string;
-  Name: string;
-  Slug?: string;
-  Description?: string;
-  ParentCategoryId?: string | null;
-  children?: Category[];
-}
-
-export interface Condition {
-  ConditionId: number;
-  ConditionName: string;
-}
-
-export interface PriceUnit {
-  UnitId: number;
-  UnitName: string;
-}
-
-export interface Tag {
-  _id: string;
-  name: string;
-}
-
-export interface Owner {
-  _id: string;
-  userGuid?: string;
-  FullName?: string;
-  DisplayName?: string;
-  AvatarUrl?: string;
-}
-
-export interface ItemImage {
-  ImageId: string;
-  Url: string;
-  IsPrimary: boolean;
-  Ordinal: number;
-}
-
-export interface ProductTag {
-  ItemTagId: string;
-  TagId: string;
-  Tag: Tag;
-}
-
-export interface Product {
-  _id: string;
-  ItemGuid?: string;
-  Title: string;
-  ShortDescription?: string;
-  Description?: string;
-  BasePrice: number;
-  DepositAmount: number;
-  Currency: string;
-  Quantity: number;
-  AvailableQuantity: number;
-  MinRentalDuration?: number;
-  MaxRentalDuration?: number;
-  ViewCount: number;
-  FavoriteCount: number;
-  RentCount: number;
-  IsHighlighted: boolean;
-  IsTrending: boolean;
-  Address?: string;
-  City?: string;
-  District?: string;
-  CreatedAt: string;
-  UpdatedAt: string;
-
-  Category?: Category | null;
-  Condition?: Condition | null;
-  PriceUnit?: PriceUnit | null;
-  Owner?: Owner | null;
-  Images?: ItemImage[];
-  Tags?: ProductTag[];
-}
-
-export interface PaginatedProducts {
-  items: Product[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface Renter {
-  _id: string;
-  FullName?: string;
-  DisplayName?: string;
-  AvatarUrl?: string;
-}
-
-export interface RatedItem {
-  _id: string;
-  Title: string;
-  Images?: ItemImage[];
-}
-
-export interface Rating {
-  _id: string;
-  rating: number;
-  comment?: string;
-  images?: string[];
-  createdAt: string;
-  renterId: Renter;
-  itemId: RatedItem;
-  Item?: RatedItem;
-}
-
-export interface OwnerRatingsResult {
-  success: boolean;
-  message?: string;
-  average: number;
-  ratings: Rating[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface HighlightProduct {
-  _id: string;
-  Title: string;
-  BasePrice: number;
-  Currency: string;
-  ViewCount: number;
-  FavoriteCount: number;
-  RentCount: number;
-  thumbnail?: string;
-  category?: Category;
-  condition?: Condition;
-  priceUnit?: PriceUnit;
-  tags?: Tag[];
-  Address?: string;
-  City?: string;
-  District?: string;
-  CreatedAt: string;
-}
-
-export const getAllItems = async (): Promise<{ success: boolean; data: PaginatedProducts; message: string }> => {
-  const res = await instance.get("/products/public/items");
-  return res.json();
-};
-
-export const getFeaturedItems = async (params?: { page?: number; limit?: number }) => {
-  const query = new URLSearchParams();
-  if (params?.page) query.set("page", String(params.page));
-  if (params?.limit) query.set("limit", String(params.limit));
-
-  const res = await instance.get(`/products/product/featured?${query.toString()}`);
-  return res.json() as Promise<{ success: boolean; data: PaginatedProducts; message: string }>;
+//owner
+export const getUserAddresses = async (): Promise<Response> => {
+  return await instance.get("/products/user/addresses");
 };
 
 export const getProductsByCategoryId = async (
   categoryId: string,
   params?: { page?: number; limit?: number }
-): Promise<{ success: boolean; data: PaginatedProducts; message: string }> => {
-  const query = new URLSearchParams();
-  if (params?.page) query.set("page", String(params.page));
-  if (params?.limit) query.set("limit", String(params.limit));
-
-  const res = await instance.get(`/products/product/category/${categoryId}?${query.toString()}`);
-  return res.json();
-};
-
-export const getPublicItemById = async (id: string): Promise<{
+): Promise<{
   success: boolean;
   message: string;
-  data: Product;
+  data: { items: unknown[]; total: number; page: number; limit: number };
 }> => {
-  const res = await instance.get(`/products/product/${id}`);
-  return res.json();
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/product/category/${categoryId}${qs ? `?${qs}` : ""}`
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching products by category:", error);
+    return {
+      success: true,
+      message: "Không có sản phẩm",
+      data: {
+        items: [],
+        total: 0,
+        page: params?.page || 1,
+        limit: params?.limit || 20,
+      },
+    };
+  }
+};
+
+export const setDefaultAddress = (addressData: {
+  Address: string;
+  City: string;
+  District: string;
+}) => {
+  return instance.post("/products/addresses/default", addressData);
+};
+
+export const addProduct = async (
+  productData: FormData | Record<string, unknown>
+): Promise<Response> => {
+  return await instance.post("/products/user/add", productData);
+};
+
+export const uploadImages = async (formData: FormData): Promise<Response> => {
+  return await instance.post("/products/upload", formData);
+};
+
+export const getConditions = async (): Promise<Response> => {
+  return await instance.get("/conditions");
+};
+
+export const getPriceUnits = async (): Promise<Response> => {
+  return await instance.get("/price-units");
+};
+
+export const getUserProducts = async (): Promise<Response> => {
+  return await instance.get("/products/user");
+};
+
+export const getProductById = async (id: string): Promise<Response> => {
+  return await instance.get(`/products/user/${id}`);
+};
+
+export const updateProduct = async (
+  id: string,
+  productData: FormData | Record<string, unknown>
+): Promise<Response> => {
+  return await instance.put(`/products/user/${id}`, productData);
+};
+
+export const deleteProduct = async (id: string): Promise<Response> => {
+  return await instance.delete(`/products/user/${id}`);
+};
+
+//moderator
+export const getPendingProducts = async (): Promise<Response> => {
+  return await instance.get("/products/pending");
+};
+
+export const getPendingProductDetails = async (
+  id: string
+): Promise<Response> => {
+  return await instance.get(`/products/pending/${id}`);
+};
+
+export const approveProduct = async (id: string): Promise<Response> => {
+  return await instance.put(`/products/pending/${id}/approve`);
+};
+
+export const rejectProduct = async (
+  id: string,
+  reason?: string
+): Promise<Response> => {
+  return await instance.put(`/products/pending/${id}/reject`, { reason });
+};
+
+// Types for top highlight products
+export interface TopHighlightProduct {
+  _id: string;
+  Title: string;
+  ownerName: string;
+  categoryName: string;
+  BasePrice: number;
+  Currency: string;
+  ViewCount: number;
+  FavoriteCount: number;
+  RentCount: number;
+  score: number;
+  IsHighlighted: boolean;
+  CreatedAt: string;
+  thumbnailUrl?: string;
+}
+
+export interface HighlightResponse {
+  success: boolean;
+  message?: string;
+  data: TopHighlightProduct[];
+}
+
+export const getHighlightedProducts = async (): Promise<Response> => {
+  return await instance.get("/products/products/public/highlighted");
+};
+
+export const getTopProductsForHighlight = async (): Promise<Response> => {
+  return await instance.get("/products/top-for-highlight");
+};
+
+export const toggleProductHighlight = async (
+  id: string,
+  isHighlighted?: boolean
+): Promise<Response> => {
+  const body = isHighlighted !== undefined ? { isHighlighted } : {};
+  return await instance.put(`/products/approve/${id}/highlight`, body);
+};
+
+//product public
+
+export const addToFavorites = async (productId: string): Promise<Response> => {
+  return await instance.post(`/products/${productId}/favorite`);
+};
+
+export const removeFromFavorites = async (
+  productId: string
+): Promise<Response> => {
+  return await instance.delete(`/products/${productId}/favorite`);
+};
+
+export const getFavorites = async (): Promise<Response> => {
+  return await instance.get("/products/favorites");
+};
+
+export const getTopViewedItemsByOwner = async (
+  ownerId: string,
+  limit: number = 4
+): Promise<{
+  success: boolean;
+  message: string;
+  data: { items: unknown[]; total: number };
+}> => {
+  try {
+    const res = await instance.get(
+      `/products/owner/${ownerId}/top-viewed?limit=${limit}`
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching top viewed items by owner:", error);
+    return {
+      success: true,
+      message: "Không có sản phẩm",
+      data: { items: [], total: 0 },
+    };
+  }
+};
+
+export const getAllItems = async (): Promise<{
+  success: boolean;
+  message: string;
+  data: { items: unknown[]; total: number };
+}> => {
+  try {
+    const res = await instance.get(`/products/public/items`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching all items:", error);
+    throw error;
+  }
+};
+
+export const getFeaturedItems = async (params?: {
+  page?: number;
+  limit?: number;
+}): Promise<{
+  success: boolean;
+  message: string;
+  data: { items: unknown[]; total: number; page: number; limit: number };
+}> => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/product/featured${qs ? `?${qs}` : ""}`
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching featured items:", error);
+    throw error;
+  }
+};
+
+export const getSearchTags = async (): Promise<{
+  success: boolean;
+  message: string;
+  data: { tags: { _id: string; name: string; count: number }[]; total: number };
+}> => {
+  try {
+    const res = await instance.get(`/products/product/tags`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching search tags:", error);
+    return {
+      success: true,
+      message: "Không có tag",
+      data: { tags: [], total: 0 },
+    };
+  }
+};
+
+export const getPublicItemById = async (
+  id: string
+): Promise<{
+  success: boolean;
+  message: string;
+  data: Record<string, unknown>;
+}> => {
+  try {
+    const res = await instance.get(`/products/product/${id}`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching item detail:", error);
+    throw error;
+  }
+};
+
+export const getAllPublicCategories = async (): Promise<{
+  success: boolean;
+  message: string;
+  data: unknown[];
+}> => {
+  try {
+    const res = await instance.get(`/products/public/categories`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching all public categories:", error);
+    return { success: true, message: "Không có danh mục", data: [] };
+  }
+};
+
+export const getAllCategories = async (): Promise<{ data: unknown[] }> => {
+  try {
+    const res = await instance.get(`/categories`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching all categories:", error);
+    return { data: [] };
+  }
 };
 
 export const getPublicStoreByUserGuid = async (
@@ -179,130 +309,200 @@ export const getPublicStoreByUserGuid = async (
   success: boolean;
   message: string;
   data: {
-    owner: Owner;
-    items: Product[];
+    owner: Record<string, unknown> | null;
+    items: unknown[];
     total: number;
     page: number;
     limit: number;
   };
 }> => {
-  const query = new URLSearchParams();
-  if (params?.page) query.set("page", String(params.page));
-  if (params?.limit) query.set("limit", String(params.limit));
-
-  const res = await instance.get(`/products/store/${userGuid}?${query.toString()}`);
-  return res.json();
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/store/${userGuid}${qs ? `?${qs}` : ""}`
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching public store by userGuid:", error);
+    return {
+      success: true,
+      message: "Không tìm thấy cửa hàng",
+      data: {
+        owner: null,
+        items: [],
+        total: 0,
+        page: params?.page || 1,
+        limit: params?.limit || 20,
+      },
+    };
+  }
 };
 
-export const getAllPublicCategories = async (): Promise<{
-  success: boolean;
-  message: string;
-  data: Category[];
-}> => {
-  const res = await instance.get("/products/public/categories");
-  return res.json();
-};
-
-export const getHighlightedProducts = async (): Promise<{
-  success: boolean;
-  message: string;
-  data: HighlightProduct[];
-}> => {
-  const res = await instance.get("/products/products/public/highlighted");
-  return res.json();
-};
+// product.api.ts
 
 export const getComparableProducts = async (
   productId: string,
   categoryId: string,
-  limit = 5
-): Promise<{
+  limit: number = 5
+): Promise<{ success: boolean; message: string; data: unknown[] }> => {
+  try {
+    const query = new URLSearchParams();
+    if (limit) query.set("limit", limit.toString());
+
+    const url = `/products/compare/${productId}/${categoryId}${
+      query.toString() ? `?${query.toString()}` : ""
+    }`;
+    console.log("Fetching comparable products from:", url);
+
+    const res = await instance.get(url);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.message || "Không thể lấy sản phẩm so sánh");
+    }
+
+    const data = await res.json();
+    console.log("Comparable products response:", data);
+    return data;
+  } catch (error) {
+    console.error("Error fetching comparable products:", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Có lỗi xảy ra khi tải sản phẩm so sánh");
+  }
+};
+
+export const getRatingsByItem = async (
+  itemId: string
+): Promise<{ data: unknown[] }> => {
+  try {
+    const res = await fetch(`/api/v1/products/rating/item/${itemId}`);
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+
+    const data = await res.json();
+    return { data: Array.isArray(data) ? data : [] };
+  } catch (error) {
+    console.error(" Error fetching ratings:", error);
+    return { data: [] };
+  }
+};
+
+export const createRating = async (formData: FormData): Promise<unknown> => {
+  try {
+    const res = await instance.post("/products/rating", formData, {
+      headers: {},
+    });
+
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Error creating rating:", error);
+    throw error;
+  }
+};
+
+export interface OwnerRating {
+  _id: string;
+  rating: number;
+  comment?: string;
+  images?: string[];
+  createdAt?: string;
+  renterId?: Record<string, unknown>;
+  itemId?: Record<string, unknown>;
+  Item?: Record<string, unknown>;
+}
+
+export interface OwnerRatingsResult {
+  average: number;
   success: boolean;
-  message: string;
-  data: Product[];
-}> => {
-  const query = new URLSearchParams();
-  if (limit) query.set("limit", String(limit));
-
-  const res = await instance.get(
-    `/products/compare/${productId}/${categoryId}?${query.toString()}`
-  );
-  return res.json();
-};
-
-export const getTopViewedItemsByOwner = async (
-  ownerId: string,
-  limit = 4
-): Promise<{ success: boolean; data: { items: Product[]; total: number }; message: string }> => {
-  const res = await instance.get(`/products/owner/${ownerId}/top-viewed?limit=${limit}`);
-  return res.json();
-};
+  message?: string;
+  ratings: OwnerRating[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 export const getRatingsByOwner = async (
   ownerId: string,
   params?: { page?: number; limit?: number }
 ): Promise<OwnerRatingsResult> => {
-  const query = new URLSearchParams();
-  if (params?.page) query.set("page", String(params.page));
-  if (params?.limit) query.set("limit", String(params.limit));
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/rating/owner/${ownerId}${qs ? `?${qs}` : ""}`
+    );
 
-  const res = await instance.get(`/products/rating/owner/${ownerId}?${query.toString()}`);
-  const json = await res.json();
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
 
-  return {
-    success: json.success ?? true,
-    message: json.message,
-    average: Number(json.data?.average ?? 0),
-    ratings: Array.isArray(json.data?.ratings) ? json.data.ratings : [],
-    total: Number(json.data?.total ?? 0),
-    page: Number(json.data?.page ?? params?.page ?? 1),
-    limit: Number(json.data?.limit ?? params?.limit ?? 20),
-  };
-};
+    const data = await res.json();
+    const payload = data?.data || {};
 
-export const createRating = async (formData: FormData): Promise<{
-  success: boolean;
-  message: string;
-  data?: Rating;
-}> => {
-  const res = await instance.post("/products/rating", formData);
-  return res.json();
+    return {
+      success: data?.success ?? true,
+      message: data?.message,
+      ratings: Array.isArray(payload.ratings) ? payload.ratings : [],
+      total: Number(payload.total) || 0,
+      page: Number(payload.page) || params?.page || 1,
+      limit: Number(payload.limit) || params?.limit || 20,
+      average: Number(payload.average) || 0,
+    };
+  } catch (error) {
+    console.error("Error fetching owner ratings:", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Không thể tải đánh giá",
+      ratings: [],
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+      average: 0,
+    };
+  }
 };
 
 export const updateRating = async (
-  ratingId: string,
-  payload: { rating?: number; comment?: string; images?: string[] }
-): Promise<{ success: boolean; message: string; data?: Rating }> => {
-  const res = await instance.put(`/products/rating/${ratingId}`, payload);
-  return res.json();
+  id: string,
+  payload: Record<string, unknown>
+): Promise<unknown> => {
+  try {
+    const res = await api.put(`/products/rating/${id}`, payload);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Error updating rating:", error);
+    throw error;
+  }
 };
 
-export const deleteRating = async (ratingId: string, renterId: string): Promise<{
-  success: boolean;
-  message: string;
-}> => {
-  const res = await instance.delete(`/products/rating/${ratingId}`, {
-    body: JSON.stringify({ renterId }),
-  });
-  return res.json();
-};
-
-export const addToFavorites = async (productId: string): Promise<{ success: boolean; message: string }> => {
-  const res = await instance.post(`/products/${productId}/favorite`);
-  return res.json();
-};
-
-export const removeFromFavorites = async (productId: string): Promise<{ success: boolean; message: string }> => {
-  const res = await instance.delete(`/products/${productId}/favorite`);
-  return res.json();
-};
-
-export const getFavorites = async (page = 1, limit = 20): Promise<{
-  success: boolean;
-  data: PaginatedProducts;
-  message: string;
-}> => {
-  return instance
-    .get(`/products/favorites?page=${page}&limit=${limit}`)
-    .then((res) => res.json());
+export const deleteRating = async (
+  id: string,
+  renterId: string
+): Promise<unknown> => {
+  try {
+    const res = await api.delete(`/products/rating/${id}`, {
+      body: JSON.stringify({ renterId }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Error deleting rating:", error);
+    throw error;
+  }
 };
