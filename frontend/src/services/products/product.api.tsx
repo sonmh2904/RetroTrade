@@ -9,11 +9,7 @@ export const getUserAddresses = async (): Promise<Response> => {
 export const getProductsByCategoryId = async (
   categoryId: string,
   params?: { page?: number; limit?: number }
-): Promise<{
-  success: boolean;
-  message: string;
-  data: { items: unknown[]; total: number; page: number; limit: number };
-}> => {
+) => {
   try {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
@@ -28,19 +24,9 @@ export const getProductsByCategoryId = async (
     return await res.json();
   } catch (error) {
     console.error("Error fetching products by category:", error);
-    return {
-      success: true,
-      message: "Không có sản phẩm",
-      data: {
-        items: [],
-        total: 0,
-        page: params?.page || 1,
-        limit: params?.limit || 20,
-      },
-    };
+    return { data: { items: [], total: 0 } } as any;
   }
 };
-
 export const setDefaultAddress = (addressData: {
   Address: string;
   City: string;
@@ -48,13 +34,9 @@ export const setDefaultAddress = (addressData: {
 }) => {
   return instance.post("/products/addresses/default", addressData);
 };
-
-export const addProduct = async (
-  productData: FormData | Record<string, unknown>
-): Promise<Response> => {
+export const addProduct = async (productData: any): Promise<Response> => {
   return await instance.post("/products/user/add", productData);
 };
-
 export const uploadImages = async (formData: FormData): Promise<Response> => {
   return await instance.post("/products/upload", formData);
 };
@@ -77,7 +59,7 @@ export const getProductById = async (id: string): Promise<Response> => {
 
 export const updateProduct = async (
   id: string,
-  productData: FormData | Record<string, unknown>
+  productData: any
 ): Promise<Response> => {
   return await instance.put(`/products/user/${id}`, productData);
 };
@@ -166,11 +148,7 @@ export const getFavorites = async (): Promise<Response> => {
 export const getTopViewedItemsByOwner = async (
   ownerId: string,
   limit: number = 4
-): Promise<{
-  success: boolean;
-  message: string;
-  data: { items: unknown[]; total: number };
-}> => {
+) => {
   try {
     const res = await instance.get(
       `/products/owner/${ownerId}/top-viewed?limit=${limit}`
@@ -181,19 +159,10 @@ export const getTopViewedItemsByOwner = async (
     return await res.json();
   } catch (error) {
     console.error("Error fetching top viewed items by owner:", error);
-    return {
-      success: true,
-      message: "Không có sản phẩm",
-      data: { items: [], total: 0 },
-    };
+    return { data: { items: [], total: 0 } } as any;
   }
 };
-
-export const getAllItems = async (): Promise<{
-  success: boolean;
-  message: string;
-  data: { items: unknown[]; total: number };
-}> => {
+export const getAllItems = async () => {
   try {
     const res = await instance.get(`/products/public/items`);
     if (!res.ok) {
@@ -209,11 +178,7 @@ export const getAllItems = async (): Promise<{
 export const getFeaturedItems = async (params?: {
   page?: number;
   limit?: number;
-}): Promise<{
-  success: boolean;
-  message: string;
-  data: { items: unknown[]; total: number; page: number; limit: number };
-}> => {
+}) => {
   try {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
@@ -232,11 +197,7 @@ export const getFeaturedItems = async (params?: {
   }
 };
 
-export const getSearchTags = async (): Promise<{
-  success: boolean;
-  message: string;
-  data: { tags: { _id: string; name: string; count: number }[]; total: number };
-}> => {
+export const getSearchTags = async () => {
   try {
     const res = await instance.get(`/products/product/tags`);
     if (!res.ok) {
@@ -245,21 +206,11 @@ export const getSearchTags = async (): Promise<{
     return await res.json();
   } catch (error) {
     console.error("Error fetching search tags:", error);
-    return {
-      success: true,
-      message: "Không có tag",
-      data: { tags: [], total: 0 },
-    };
+    return { data: { tags: [], total: 0 } } as any;
   }
 };
 
-export const getPublicItemById = async (
-  id: string
-): Promise<{
-  success: boolean;
-  message: string;
-  data: Record<string, unknown>;
-}> => {
+export const getPublicItemById = async (id: string) => {
   try {
     const res = await instance.get(`/products/product/${id}`);
     if (!res.ok) {
@@ -272,11 +223,7 @@ export const getPublicItemById = async (
   }
 };
 
-export const getAllPublicCategories = async (): Promise<{
-  success: boolean;
-  message: string;
-  data: unknown[];
-}> => {
+export const getAllPublicCategories = async () => {
   try {
     const res = await instance.get(`/products/public/categories`);
     if (!res.ok) {
@@ -285,11 +232,11 @@ export const getAllPublicCategories = async (): Promise<{
     return await res.json();
   } catch (error) {
     console.error("Error fetching all public categories:", error);
-    return { success: true, message: "Không có danh mục", data: [] };
+    return { data: [] };
   }
 };
 
-export const getAllCategories = async (): Promise<{ data: unknown[] }> => {
+export const getAllCategories = async () => {
   try {
     const res = await instance.get(`/categories`);
     if (!res.ok) {
@@ -298,24 +245,14 @@ export const getAllCategories = async (): Promise<{ data: unknown[] }> => {
     return await res.json();
   } catch (error) {
     console.error("Error fetching all categories:", error);
+    // Fallback to empty array if categories endpoint not ready
     return { data: [] };
   }
 };
-
 export const getPublicStoreByUserGuid = async (
   userGuid: string,
   params?: { page?: number; limit?: number }
-): Promise<{
-  success: boolean;
-  message: string;
-  data: {
-    owner: Record<string, unknown> | null;
-    items: unknown[];
-    total: number;
-    page: number;
-    limit: number;
-  };
-}> => {
+) => {
   try {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
@@ -330,17 +267,7 @@ export const getPublicStoreByUserGuid = async (
     return await res.json();
   } catch (error) {
     console.error("Error fetching public store by userGuid:", error);
-    return {
-      success: true,
-      message: "Không tìm thấy cửa hàng",
-      data: {
-        owner: null,
-        items: [],
-        total: 0,
-        page: params?.page || 1,
-        limit: params?.limit || 20,
-      },
-    };
+    return { data: { owner: null, items: [], total: 0 } } as any;
   }
 };
 
@@ -350,7 +277,7 @@ export const getComparableProducts = async (
   productId: string,
   categoryId: string,
   limit: number = 5
-): Promise<{ success: boolean; message: string; data: unknown[] }> => {
+): Promise<any> => {
   try {
     const query = new URLSearchParams();
     if (limit) query.set("limit", limit.toString());
@@ -370,17 +297,13 @@ export const getComparableProducts = async (
     const data = await res.json();
     console.log("Comparable products response:", data);
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching comparable products:", error);
-    throw error instanceof Error
-      ? error
-      : new Error("Có lỗi xảy ra khi tải sản phẩm so sánh");
+    throw new Error(error.message || "Có lỗi xảy ra khi tải sản phẩm so sánh");
   }
 };
 
-export const getRatingsByItem = async (
-  itemId: string
-): Promise<{ data: unknown[] }> => {
+export const getRatingsByItem = async (itemId: string) => {
   try {
     const res = await fetch(`/api/v1/products/rating/item/${itemId}`);
 
@@ -391,13 +314,13 @@ export const getRatingsByItem = async (
 
     const data = await res.json();
     return { data: Array.isArray(data) ? data : [] };
-  } catch (error) {
-    console.error(" Error fetching ratings:", error);
+  } catch (error: any) {
+    console.error(" Error fetching ratings:", error?.message || error);
     return { data: [] };
   }
 };
 
-export const createRating = async (formData: FormData): Promise<unknown> => {
+export const createRating = async (formData: FormData) => {
   try {
     const res = await instance.post("/products/rating", formData, {
       headers: {},
@@ -417,9 +340,9 @@ export interface OwnerRating {
   comment?: string;
   images?: string[];
   createdAt?: string;
-  renterId?: Record<string, unknown>;
-  itemId?: Record<string, unknown>;
-  Item?: Record<string, unknown>;
+  renterId?: Record<string, any>;
+  itemId?: Record<string, any>;
+  Item?: Record<string, any>;
 }
 
 export interface OwnerRatingsResult {
@@ -461,12 +384,11 @@ export const getRatingsByOwner = async (
       limit: Number(payload.limit) || params?.limit || 20,
       average: Number(payload.average) || 0,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching owner ratings:", error);
     return {
       success: false,
-      message:
-        error instanceof Error ? error.message : "Không thể tải đánh giá",
+      message: error?.message || "Không thể tải đánh giá",
       ratings: [],
       total: 0,
       page: params?.page || 1,
@@ -475,25 +397,20 @@ export const getRatingsByOwner = async (
     };
   }
 };
-
-export const updateRating = async (
-  id: string,
-  payload: Record<string, unknown>
-): Promise<unknown> => {
+// Cập nhật đánh giá
+export const updateRating = async (id: string, payload: any) => {
   try {
     const res = await api.put(`/products/rating/${id}`, payload);
     const data = await res.json();
     return data;
-  } catch (error) {
-    console.error("Error updating rating:", error);
+  } catch (error: any) {
+    console.error("Error updating rating:", error?.message || error);
     throw error;
   }
 };
 
-export const deleteRating = async (
-  id: string,
-  renterId: string
-): Promise<unknown> => {
+// Xóa đánh giá (soft delete)
+export const deleteRating = async (id: string, renterId: string) => {
   try {
     const res = await api.delete(`/products/rating/${id}`, {
       body: JSON.stringify({ renterId }),
@@ -501,8 +418,8 @@ export const deleteRating = async (
     });
     const data = await res.json();
     return data;
-  } catch (error) {
-    console.error("Error deleting rating:", error);
+  } catch (error: any) {
+    console.error("Error deleting rating:", error?.message || error);
     throw error;
   }
 };
