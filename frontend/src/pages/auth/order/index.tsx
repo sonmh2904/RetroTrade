@@ -2435,7 +2435,7 @@ const processPayment = async () => {
 
                   <div className="space-y-2">
                     {/* Thanh toán ngay */}
-                    <label className="flex items-center gap-3 cursor-pointer border p-3 rounded-lg hover:bg-gray-50">
+                    <label className="flex items-center gap-3 cursor-pointer border p-3 rounded-lg">
                       <input
                         type="radio"
                         name="paymentOption"
@@ -2446,14 +2446,14 @@ const processPayment = async () => {
                       />
                       <div>
                         <p className="font-medium">Thanh toán ngay</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-amber-200">
                           Thanh toán bằng ví, tiền sẽ bị trừ ngay
                         </p>
                       </div>
                     </label>
 
                     {/* Thanh toán sau */}
-                    <label className="flex items-center gap-3 cursor-pointer border p-3 rounded-lg hover:bg-gray-50">
+                    <label className="flex items-center gap-3 cursor-pointer border p-3 rounded-lg">
                       <input
                         type="radio"
                         name="paymentOption"
@@ -2464,7 +2464,7 @@ const processPayment = async () => {
                       />
                       <div>
                         <p className="font-medium">Thanh toán sau</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-amber-200">
                           Chỉ tạo đơn hàng, thanh toán sau trong mục đơn thuê
                         </p>
                       </div>
