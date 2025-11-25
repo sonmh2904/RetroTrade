@@ -82,7 +82,6 @@ const availableIcons: IconOption[] = [
   { value: "Star", icon: Star },
 ];
 
-// Modal Animation Variants
 const modalVariants = {
   hidden: { opacity: 0, scale: 0.95 },
   visible: { opacity: 1, scale: 1 },
@@ -159,7 +158,7 @@ function TypeFormModal({
       if (response.ok) {
         toast.success(isEditing ? "Cập nhật thành công" : "Tạo mới thành công");
         onSuccess();
-        onClose(); // Đóng modal sau success
+        onClose();
       } else {
         const errorData = await response.json();
         toast.error(errorData.message || "Thao tác thất bại");
@@ -198,13 +197,12 @@ function TypeFormModal({
             variants={modalVariants}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div className="p-6 border-b border-slate-200">
               <h2 className="text-xl font-semibold text-slate-900">
                 {isEditing ? "Chỉnh sửa loại" : "Tạo loại mới"}
               </h2>
             </div>
-            {/* Modal Body */}
+
             <div className="p-6 space-y-6">
               {/* Icon & Display Name */}
               <div className="space-y-4">
@@ -212,34 +210,40 @@ function TypeFormModal({
                   Icon & Tên hiển thị *
                 </label>
                 <div className="flex gap-3 items-center">
-                  <button
-                    onClick={() => setIconOpen(!iconOpen)}
-                    type="button"
-                    className="w-12 h-12 border-2 border-slate-200 rounded-xl flex items-center justify-center bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-all"
-                  >
-                    <SelectedIconComponent className="w-6 h-6 text-indigo-600" />
-                  </button>
-                  {iconOpen && (
-                    <div className="absolute top-20 left-4 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-5 gap-2 z-10">
-                      {availableIcons.map((iconOption) => {
-                        const OptionIcon = iconOption.icon;
-                        return (
-                          <button
-                            key={iconOption.value}
-                            onClick={() => handleIconChange(iconOption.value)}
-                            type="button"
-                            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
-                              formData.iconKey === iconOption.value
-                                ? "bg-indigo-100 text-indigo-600"
-                                : "hover:bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            <OptionIcon className="w-5 h-5" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {/* FIXED: Dropdown không bay nữa */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setIconOpen(!iconOpen)}
+                      type="button"
+                      className="w-12 h-12 border-2 border-slate-200 rounded-xl flex items-center justify-center bg-white hover:border-indigo-300 hover:bg-indigo-50 transition-all"
+                    >
+                      <SelectedIconComponent className="w-6 h-6 text-indigo-600" />
+                    </button>
+
+                    {/* Dropdown icon - giờ nằm đúng chỗ */}
+                    {iconOpen && (
+                      <div className="absolute top-14 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-5 gap-2 min-w-[280px]">
+                        {availableIcons.map((iconOption) => {
+                          const OptionIcon = iconOption.icon;
+                          return (
+                            <button
+                              key={iconOption.value}
+                              onClick={() => handleIconChange(iconOption.value)}
+                              type="button"
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
+                                formData.iconKey === iconOption.value
+                                  ? "bg-indigo-100 text-indigo-600"
+                                  : "hover:bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              <OptionIcon className="w-5 h-5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   <input
                     type="text"
                     placeholder="Nhập tên hiển thị..."
@@ -249,7 +253,8 @@ function TypeFormModal({
                   />
                 </div>
               </div>
-              {/* Description */}
+
+              {/* Mô tả */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Mô tả
@@ -264,31 +269,36 @@ function TypeFormModal({
                   className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                 />
               </div>
-              {/* Active Toggle */}
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-indigo-600" />
+
+              {/* Trạng thái - chỉ hiện khi chỉnh sửa */}
+              {isEditing && (
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-900">Trạng thái</p>
+                      <p className="text-xs text-slate-500">
+                        Kích hoạt loại này
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900">Trạng thái</p>
-                    <p className="text-xs text-slate-500">Kích hoạt loại này</p>
-                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive}
+                      onChange={(e) =>
+                        setFormData({ ...formData, isActive: e.target.checked })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={(e) =>
-                      setFormData({ ...formData, isActive: e.target.checked })
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-              </div>
+              )}
             </div>
-            {/* Actions */}
+
             <div className="flex justify-end gap-3 pt-4 px-6 pb-6 border-t border-slate-200">
               <button
                 type="button"
@@ -326,7 +336,6 @@ function DeleteConfirmModal({
   onClose,
   onConfirm,
 }: DeleteConfirmModalProps) {
-  // Added null check to prevent error if type is unexpectedly null
   if (!isOpen || !type) return null;
 
   const isDeactivating = type.isActive;
@@ -357,7 +366,6 @@ function DeleteConfirmModal({
             variants={modalVariants}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div className="p-6 border-b border-slate-200 flex items-start gap-3">
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center ${
@@ -378,11 +386,9 @@ function DeleteConfirmModal({
                 </h2>
               </div>
             </div>
-            {/* Modal Body */}
             <div className="p-6">
               <p className="text-slate-600 leading-relaxed">{body}</p>
             </div>
-            {/* Actions */}
             <div className="flex justify-end gap-3 pt-4 px-6 pb-6 border-t border-slate-200">
               <button
                 type="button"
@@ -447,15 +453,13 @@ export default function AdminPrivacyTypesPage() {
     try {
       const response = await deletePrivacyType(deletingType._id);
       if (response.ok) {
-        const data = await response.json();
-        toast.success(data.message || "Thao tác thành công");
+        toast.success("Thao tác thành công");
         fetchTypes();
       } else {
         const errorData = await response.json();
         toast.error(errorData.message || "Thao tác thất bại");
       }
-    } catch (error) {
-      console.error("Delete error:", error);
+    } catch {
       toast.error("Lỗi khi thực hiện");
     } finally {
       setShowDeleteModal(false);
@@ -518,7 +522,7 @@ export default function AdminPrivacyTypesPage() {
           </div>
         </div>
 
-        {/* Search & Filter */}
+        {/* Search */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -531,7 +535,7 @@ export default function AdminPrivacyTypesPage() {
           </div>
         </div>
 
-        {/* Types Grid */}
+        {/* Types Grid - GIỮ NGUYÊN 100% NHƯ CŨ */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence>
             {filteredTypes.map((typeItem, index) => {
@@ -547,7 +551,6 @@ export default function AdminPrivacyTypesPage() {
                   transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow group flex flex-col h-full"
                 >
-                  {/* Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -569,7 +572,7 @@ export default function AdminPrivacyTypesPage() {
                       {typeItem.isActive ? "Active" : "Inactive"}
                     </span>
                   </div>
-                  {/* Description - Flex grow to fill space */}
+
                   <div className="flex-1 mb-4">
                     {typeItem.description && (
                       <p className="text-sm text-slate-600 line-clamp-2">
@@ -577,7 +580,7 @@ export default function AdminPrivacyTypesPage() {
                       </p>
                     )}
                   </div>
-                  {/* Actions - Pinned to bottom */}
+
                   <div className="flex gap-2 pt-4 border-t border-slate-100 mt-auto">
                     <button
                       onClick={() => handleEdit(typeItem)}
@@ -599,6 +602,7 @@ export default function AdminPrivacyTypesPage() {
           </AnimatePresence>
         </div>
 
+        {/* Empty State - giữ nguyên */}
         {filteredTypes.length === 0 && !loading && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
