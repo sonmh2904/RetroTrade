@@ -27,6 +27,12 @@ module.exports.getDashboardStats = async (req, res) => {
         // Last 24 hours
         const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+        // Last 7 days for time series data
+        const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        
+        // Last 30 days for monthly trends
+        const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
         // Main statistics
         const [
             pendingProducts,
@@ -40,10 +46,15 @@ module.exports.getDashboardStats = async (req, res) => {
             pendingVerifications,
             totalVerifications,
             pendingOwnerRequests,
+            approvedOwnerRequests,
+            rejectedOwnerRequests,
             totalOwnerRequests,
             pendingDisputes,
             totalDisputes,
             pendingComplaints,
+            reviewingComplaints,
+            resolvedComplaints,
+            rejectedComplaints,
             totalComplaints,
             newUsersToday,
             newUsersThisMonth,
@@ -72,6 +83,8 @@ module.exports.getDashboardStats = async (req, res) => {
             
             // Owner requests
             OwnerRequest.countDocuments({ status: "pending" }),
+            OwnerRequest.countDocuments({ status: "approved" }),
+            OwnerRequest.countDocuments({ status: "rejected" }),
             OwnerRequest.countDocuments({}),
             
             // Disputes/Reports
@@ -80,6 +93,9 @@ module.exports.getDashboardStats = async (req, res) => {
             
             // Complaints
             Complaint.countDocuments({ status: "pending" }),
+            Complaint.countDocuments({ status: "reviewing" }),
+            Complaint.countDocuments({ status: "resolved" }),
+            Complaint.countDocuments({ status: "rejected" }),
             Complaint.countDocuments({}),
             
             // Users
@@ -93,28 +109,149 @@ module.exports.getDashboardStats = async (req, res) => {
             Comment.countDocuments({ createdAt: { $gte: todayStart, $lte: todayEnd } })
         ]);
 
-        // Calculate changes
-        const previousMonthProducts = await Item.countDocuments({
+        // Calculate changes - SO SÁNH SẢN PHẨM MỚI THÁNG NAY vs THÁNG TRƯỚC
+        const previousMonthNewProducts = await Item.countDocuments({
             IsDeleted: { $ne: true },
             CreatedAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
-        const productsChange = previousMonthProducts > 0 
-            ? ((totalProducts - previousMonthProducts) / previousMonthProducts) * 100 
+        const currentMonthNewProducts = await Item.countDocuments({
+            IsDeleted: { $ne: true },
+            CreatedAt: { $gte: currentMonthStart }
+        });
+        const productsChange = previousMonthNewProducts > 0 
+            ? ((currentMonthNewProducts - previousMonthNewProducts) / previousMonthNewProducts) * 100 
             : 0;
 
-        const previousMonthUsers = await User.countDocuments({
+        const previousMonthNewUsers = await User.countDocuments({
             createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
-        const usersChange = previousMonthUsers > 0 
-            ? ((totalUsers - previousMonthUsers) / previousMonthUsers) * 100 
+        const currentMonthNewUsers = await User.countDocuments({
+            createdAt: { $gte: currentMonthStart }
+        });
+        const usersChange = previousMonthNewUsers > 0 
+            ? ((currentMonthNewUsers - previousMonthNewUsers) / previousMonthNewUsers) * 100 
             : 0;
 
-        const previousMonthPosts = await Post.countDocuments({
+        const previousMonthNewPosts = await Post.countDocuments({
             createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
-        const postsChange = previousMonthPosts > 0 
-            ? ((totalPosts - previousMonthPosts) / previousMonthPosts) * 100 
+        const currentMonthNewPosts = await Post.countDocuments({
+            createdAt: { $gte: currentMonthStart }
+        });
+        const postsChange = previousMonthNewPosts > 0 
+            ? ((currentMonthNewPosts - previousMonthNewPosts) / previousMonthNewPosts) * 100 
             : 0;
+
+        // Time series data for charts - Daily data for last 7 days
+        const dailyStats = await Promise.all([
+            // Products created per day
+            Item.aggregate([
+                { $match: { IsDeleted: { $ne: true }, CreatedAt: { $gte: last7Days } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$CreatedAt" } },
+                        count: { $sum: 1 },
+                        pending: { $sum: { $cond: [{ $eq: ["$StatusId", 1] }, 1, 0] } },
+                        approved: { $sum: { $cond: [{ $eq: ["$StatusId", 2] }, 1, 0] } },
+                        rejected: { $sum: { $cond: [{ $eq: ["$StatusId", 3] }, 1, 0] } }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]),
+            // Posts created per day
+            Post.aggregate([
+                { $match: { createdAt: { $gte: last7Days } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                        count: { $sum: 1 },
+                        pending: { $sum: { $cond: [{ $eq: ["$isActive", false] }, 1, 0] } },
+                        active: { $sum: { $cond: [{ $eq: ["$isActive", true] }, 1, 0] } }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]),
+            // Users registered per day
+            User.aggregate([
+                { $match: { createdAt: { $gte: last7Days } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                        count: { $sum: 1 },
+                        verified: { $sum: { $cond: [{ $eq: ["$isIdVerified", true] }, 1, 0] } }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]),
+            // Reports per day
+            Report.aggregate([
+                { $match: { createdAt: { $gte: last7Days } } },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                        count: { $sum: 1 },
+                        pending: { $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] } },
+                        resolved: { $sum: { $cond: [{ $ne: ["$status", "Pending"] }, 1, 0] } }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ])
+        ]);
+
+        // Hourly data for last 24 hours
+        const hourlyStats = await Promise.all([
+            // Products per hour
+            Item.aggregate([
+                { $match: { IsDeleted: { $ne: true }, CreatedAt: { $gte: last24Hours } } },
+                {
+                    $group: {
+                        _id: { $hour: "$CreatedAt" },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]),
+            // Users per hour
+            User.aggregate([
+                { $match: { createdAt: { $gte: last24Hours } } },
+                {
+                    $group: {
+                        _id: { $hour: "$createdAt" },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ])
+        ]);
+
+        // Category distribution for products
+        const categoryStats = await Item.aggregate([
+            { $match: { IsDeleted: { $ne: true } } },
+            { $group: { _id: "$CategoryId", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 10 }
+        ]);
+
+        // Status distribution pie chart data
+        const statusDistribution = {
+            products: {
+                pending: pendingProducts,
+                approved: approvedProducts,
+                rejected: rejectedProducts
+            },
+            posts: {
+                pending: pendingPosts,
+                active: totalPosts - pendingPosts
+            },
+            users: {
+                verified: verifiedUsers,
+                unverified: totalUsers - verifiedUsers
+            },
+            disputes: {
+                pending: pendingDisputes,
+                resolved: totalDisputes - pendingDisputes
+            }
+        };
 
         return res.json({
             code: 200,
@@ -186,6 +323,14 @@ module.exports.getDashboardStats = async (req, res) => {
                     value: pendingOwnerRequests.toLocaleString(),
                     rawValue: pendingOwnerRequests
                 },
+                approvedOwnerRequests: {
+                    value: approvedOwnerRequests.toLocaleString(),
+                    rawValue: approvedOwnerRequests
+                },
+                rejectedOwnerRequests: {
+                    value: rejectedOwnerRequests.toLocaleString(),
+                    rawValue: rejectedOwnerRequests
+                },
                 totalOwnerRequests: {
                     value: totalOwnerRequests.toLocaleString(),
                     rawValue: totalOwnerRequests
@@ -205,6 +350,18 @@ module.exports.getDashboardStats = async (req, res) => {
                 pendingComplaints: {
                     value: pendingComplaints.toLocaleString(),
                     rawValue: pendingComplaints
+                },
+                reviewingComplaints: {
+                    value: reviewingComplaints.toLocaleString(),
+                    rawValue: reviewingComplaints
+                },
+                resolvedComplaints: {
+                    value: resolvedComplaints.toLocaleString(),
+                    rawValue: resolvedComplaints
+                },
+                rejectedComplaints: {
+                    value: rejectedComplaints.toLocaleString(),
+                    rawValue: rejectedComplaints
                 },
                 totalComplaints: {
                     value: totalComplaints.toLocaleString(),
@@ -229,7 +386,56 @@ module.exports.getDashboardStats = async (req, res) => {
                 verifiedUsers: {
                     value: verifiedUsers.toLocaleString(),
                     rawValue: verifiedUsers
-                }
+                },
+                
+                // Time series data for charts
+                timeSeries: {
+                    daily: {
+                        products: dailyStats[0].map(item => ({
+                            date: item._id,
+                            total: item.count,
+                            pending: item.pending,
+                            approved: item.approved,
+                            rejected: item.rejected
+                        })),
+                        posts: dailyStats[1].map(item => ({
+                            date: item._id,
+                            total: item.count,
+                            pending: item.pending,
+                            active: item.active
+                        })),
+                        users: dailyStats[2].map(item => ({
+                            date: item._id,
+                            total: item.count,
+                            verified: item.verified
+                        })),
+                        reports: dailyStats[3].map(item => ({
+                            date: item._id,
+                            total: item.count,
+                            pending: item.pending,
+                            resolved: item.resolved
+                        }))
+                    },
+                    hourly: {
+                        products: hourlyStats[0].map(item => ({
+                            hour: item._id,
+                            count: item.count
+                        })),
+                        users: hourlyStats[1].map(item => ({
+                            hour: item._id,
+                            count: item.count
+                        }))
+                    }
+                },
+                
+                // Distribution data for pie charts
+                distribution: statusDistribution,
+                
+                // Category data
+                categories: categoryStats.map(item => ({
+                    categoryId: item._id,
+                    count: item.count
+                }))
             }
         });
     } catch (error) {

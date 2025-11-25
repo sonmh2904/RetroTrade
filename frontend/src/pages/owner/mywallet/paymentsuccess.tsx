@@ -1,7 +1,11 @@
 import { CheckCircleOutlined } from '@ant-design/icons';
+import Header from '@/components/common/header';
+import Footer from '@/components/common/footer';
 
 export default function PaymentSuccess() {
   return (
+    <div>
+      <Header />
     <div
       style={{
         display: "flex",
@@ -32,6 +36,8 @@ export default function PaymentSuccess() {
       >
         Quay lại ví
       </a>
+    </div>
+      <Footer />
     </div>
   );
 }

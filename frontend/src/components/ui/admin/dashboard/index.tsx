@@ -93,185 +93,114 @@ const AnalyticsDashboard = () => {
       try {
         const { dashboardApi } = await import("@/services/admin/dashboard.api");
         const statsData = await dashboardApi.getDashboardStats();
+        
+        // Debug logging to check data
+        console.log("Admin Dashboard Stats Data:", statsData);
+        console.log("Revenue change:", statsData.revenue.change, statsData.revenue.changeType);
+        console.log("Users change:", statsData.users.change, statsData.users.changeType);
+        console.log("Orders change:", statsData.orders.change, statsData.orders.changeType);
+        console.log("Products change:", statsData.products.change, statsData.products.changeType);
 
+        // Helper function to ensure consistent change values
+        const normalizeChange = (change: number | undefined, changeType: string | undefined) => {
+          const changeValue = change || 0;
+          const type = changeType || (changeValue >= 0 ? "increase" : "decrease");
+          return {
+            change: parseFloat(changeValue.toFixed(1)),
+            changeType: type as "increase" | "decrease"
+          };
+        };
+
+        // TỔNG QUAN - 5 items đầu tiên
         const statsCards: StatCard[] = [
           {
             id: "revenue",
             label: "Tổng doanh thu",
             value: statsData.revenue.value,
-            change: statsData.revenue.change,
-            changeType: statsData.revenue.changeType,
+            ...normalizeChange(statsData.revenue.change, statsData.revenue.changeType),
             icon: DollarSign,
-            bgColor: "bg-green-50",
-            iconColor: "text-green-600",
-          },
-          {
-            id: "users",
-            label: "Tổng người dùng",
-            value: statsData.users.value,
-            change: statsData.users.change,
-            changeType: statsData.users.changeType,
-            icon: Users,
-            bgColor: "bg-purple-50",
-            iconColor: "text-purple-600",
+            bgColor: "bg-gradient-to-r from-emerald-50 to-green-50",
+            iconColor: "text-emerald-600",
           },
           {
             id: "orders",
             label: "Tổng đơn hàng",
             value: statsData.orders.value,
-            change: statsData.orders.change,
-            changeType: statsData.orders.changeType,
+            ...normalizeChange(statsData.orders.change, statsData.orders.changeType),
             icon: ShoppingCart,
-            bgColor: "bg-orange-50",
-            iconColor: "text-orange-600",
+            bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+            iconColor: "text-blue-600",
           },
           {
             id: "products",
             label: "Tổng sản phẩm",
             value: statsData.products.value,
-            change: statsData.products.change,
-            changeType: statsData.products.changeType,
+            ...normalizeChange(statsData.products.change, statsData.products.changeType),
             icon: Package,
-            bgColor: "bg-pink-50",
-            iconColor: "text-pink-600",
-          },
-          // Additional stats
-          {
-            id: "pendingOrders",
-            label: "Đơn hàng đang xử lý",
-            value: statsData.pendingOrders?.value || "0",
-            icon: Clock,
-            bgColor: "bg-yellow-50",
-            iconColor: "text-yellow-600",
+            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+            iconColor: "text-purple-600",
           },
           {
-            id: "completedOrders",
-            label: "Đơn hàng đã hoàn thành",
-            value: statsData.completedOrders?.value || "0",
-            icon: CheckCircle,
-            bgColor: "bg-emerald-50",
-            iconColor: "text-emerald-600",
+            id: "users",
+            label: "Tổng người dùng",
+            value: statsData.users.value,
+            ...normalizeChange(statsData.users.change, statsData.users.changeType),
+            icon: Users,
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            iconColor: "text-amber-600",
           },
+          
+          // HOẠT ĐỘNG CẦN XỬ LÝ - 5 items tiếp theo
           {
-            id: "cancelledOrders",
-            label: "Đơn hàng bị hủy",
-            value: statsData.cancelledOrders?.value || "0",
-            icon: XCircle,
-            bgColor: "bg-red-50",
+            id: "complaints",
+            label: "Khiếu nại chờ xử lý",
+            value: statsData.complaints?.value || "0",
+            icon: AlertCircle,
+            bgColor: "bg-gradient-to-r from-red-50 to-rose-50",
             iconColor: "text-red-600",
           },
           {
-            id: "pendingProducts",
-            label: "Sản phẩm chờ duyệt",
-            value: statsData.pendingProducts?.value || "0",
-            icon: Clock,
-            bgColor: "bg-amber-50",
-            iconColor: "text-amber-600",
-          },
-          {
-            id: "approvedProducts",
-            label: "Sản phẩm đã duyệt",
-            value: statsData.approvedProducts?.value || "0",
-            icon: CheckCircle,
-            bgColor: "bg-teal-50",
-            iconColor: "text-teal-600",
-          },
-          {
-            id: "complaints",
-            label: "Tổng khiếu nại",
-            value: statsData.complaints?.value || "0",
-            icon: AlertCircle,
-            bgColor: "bg-rose-50",
-            iconColor: "text-rose-600",
-          },
-          {
             id: "disputes",
-            label: "Tổng tranh chấp",
+            label: "Tranh chấp chờ xử lý",
             value: statsData.disputes?.value || "0",
             icon: FileText,
-            bgColor: "bg-violet-50",
+            bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
             iconColor: "text-violet-600",
           },
           {
-            id: "ratings",
-            label: "Tổng đánh giá",
-            value: statsData.ratings?.value || "0",
-            icon: Star,
-            bgColor: "bg-yellow-50",
-            iconColor: "text-yellow-600",
-          },
-          {
-            id: "views",
-            label: "Tổng lượt xem",
-            value: statsData.views?.value || "0",
-            icon: Eye,
-            bgColor: "bg-cyan-50",
-            iconColor: "text-cyan-600",
-          },
-          {
-            id: "favorites",
-            label: "Tổng lượt yêu thích",
-            value: statsData.favorites?.value || "0",
-            icon: Heart,
-            bgColor: "bg-pink-50",
-            iconColor: "text-pink-600",
-          },
-          {
-            id: "posts",
-            label: "Tổng bài viết",
-            value: statsData.posts?.value || "0",
-            icon: FileText,
-            bgColor: "bg-indigo-50",
-            iconColor: "text-indigo-600",
-          },
-          {
-            id: "comments",
-            label: "Tổng bình luận",
-            value: statsData.comments?.value || "0",
-            icon: MessageSquare,
-            bgColor: "bg-blue-50",
-            iconColor: "text-blue-600",
-          },
-          {
-            id: "categories",
-            label: "Tổng danh mục",
-            value: statsData.categories?.value || "0",
-            icon: Folder,
-            bgColor: "bg-slate-50",
-            iconColor: "text-slate-600",
-          },
-          {
             id: "walletTransactions",
-            label: "Giao dịch ví",
+            label: "Giao dịch ví chờ duyệt",
             value: statsData.walletTransactions?.value || "0",
             icon: CreditCard,
-            bgColor: "bg-emerald-50",
-            iconColor: "text-emerald-600",
+            bgColor: "bg-gradient-to-r from-teal-50 to-cyan-50",
+            iconColor: "text-teal-600",
           },
+          
+          // THỐNG KÊ KHÁC - 5 items cuối
           {
-            id: "walletBalance",
-            label: "Tổng số dư ví",
-            value: statsData.walletBalance?.value || "0",
-            icon: Wallet,
-            bgColor: "bg-green-50",
-            iconColor: "text-green-600",
+            id: "completedOrders",
+            label: "Đơn hàng hoàn thành",
+            value: statsData.completedOrders?.value || "0",
+            icon: CheckCircle,
+            bgColor: "bg-gradient-to-r from-emerald-50 to-green-50",
+            iconColor: "text-emerald-600",
           },
           {
             id: "verifiedUsers",
             label: "Người dùng đã xác thực",
             value: statsData.verifiedUsers?.value || "0",
             icon: Shield,
-            bgColor: "bg-blue-50",
+            bgColor: "bg-gradient-to-r from-blue-50 to-indigo-50",
             iconColor: "text-blue-600",
           },
           {
-            id: "activeUsers",
-            label: "Người dùng đang hoạt động",
-            value: statsData.activeUsers?.value || "0",
-            icon: UserCheck,
-            bgColor: "bg-purple-50",
-            iconColor: "text-purple-600",
-          },
+            id: "ratings",
+            label: "Tổng đánh giá",
+            value: statsData.ratings?.value || "0",
+            icon: Star,
+            bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
+            iconColor: "text-yellow-600",
+          }
         ];
         setStats(statsCards);
       } catch (error) {
@@ -372,7 +301,7 @@ const AnalyticsDashboard = () => {
                 <p className="mb-6 text-sm text-gray-600">
                   Bấm vào các thẻ thống kê để xem biểu đồ và phân tích chi tiết
                 </p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
                   {stats.map((stat, index) => {
                     const Icon = stat.icon;
                     const isClickable = ["revenue", "users", "orders", "products"].includes(stat.id);
