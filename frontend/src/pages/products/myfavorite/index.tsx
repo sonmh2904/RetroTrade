@@ -198,65 +198,93 @@ export default function MyFavoritePage(): React.JSX.Element {
   const [itemsPerPage, setItemsPerPage] = useState<number>(9);
 
   const fetchData = useCallback(async (): Promise<void> => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [itemData, favoritesRes] = await Promise.all([
-        getAllItems(),
-        getFavorites(),
-      ]);
-      const normalizedItems = normalizeItems(
-        itemData?.data?.items || itemData?.items || []
-      );
-      setAllItems(normalizedItems);
+  try {
+    setLoading(true);
+    setError(null);
 
-      if (favoritesRes.ok) {
-        const data = await favoritesRes.json();
-        const favorites: RawFavorite[] = data.data || [];
-        const favoriteIds = new Set(
-          favorites.map((fav: RawFavorite) => toIdString(fav.productId?._id))
-        );
-        setLocalFavorites(favoriteIds);
-        const countsMap = new Map<string, number>();
-        const favoriteDates = new Map<string, string>();
-        favorites.forEach((fav: RawFavorite) => {
-          const prodId = toIdString(fav.productId?._id);
-          const count = fav.productId?.FavoriteCount || 0;
-          countsMap.set(prodId, count);
-          favoriteDates.set(prodId, fav.createdAt);
-        });
-        setLocalCounts(countsMap);
+    const [itemData, favoritesRes] = await Promise.all([
+      getAllItems(),
+      getFavorites(),
+    ]);
 
-        const favoriteProducts = normalizedItems
-          .filter((item) => favoriteIds.has(item._id))
-          .map((item) => ({
-            ...item,
-            favoriteCreatedAt: favoriteDates.get(item._id),
-          }));
-        setFavoriteItems(favoriteProducts);
-      } else {
-        const errorData = (await favoritesRes.json().catch(() => ({}))) as {
-          message?: string;
-        };
-        const errorMsg =
-          errorData.message ||
-          `Lỗi tải danh sách yêu thích: ${favoritesRes.status}`;
-        if (favoritesRes.status === 401 || favoritesRes.status === 403) {
-          router.push("/auth/login");
-          toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
-        } else {
-          toast.error(errorMsg);
-        }
-      }
-    } catch (err) {
-      console.error("Fetch data error:", err);
-      const errorMsg = "Lỗi khi tải dữ liệu.";
-      setError(errorMsg);
-      toast.error(errorMsg);
-    } finally {
-      setLoading(false);
+    // Fix: Ép kiểu đúng và kiểm tra response
+    interface ApiResponse {
+      success?: boolean;
+      data?: {
+        items: RawItem[];
+        total?: number;
+      };
+      items?: RawItem[];
     }
-  }, [router]);
+
+    const itemResponse = itemData as ApiResponse;
+    const rawItems: RawItem[] =
+      (itemResponse.success
+        ? itemResponse.data?.items
+        : itemResponse.items) || [];
+
+    const normalizedItems = normalizeItems(rawItems);
+    setAllItems(normalizedItems);
+
+    if (favoritesRes.ok) {
+      const data = await favoritesRes.json();
+      const favorites: RawFavorite[] = (data?.data || []) as RawFavorite[];
+
+      const favoriteIds = new Set<string>(
+        favorites
+          .map((fav) => toIdString(fav.productId?._id))
+          .filter((id => id !== "")
+      ));
+
+      setLocalFavorites(favoriteIds);
+
+      const countsMap = new Map<string, number>();
+      const favoriteDates = new Map<string, string>();
+
+      favorites.forEach((fav) => {
+        const prodId = toIdString(fav.productId?._id);
+        if (prodId) {
+          countsMap.set(prodId, fav.productId?.FavoriteCount || 0);
+          favoriteDates.set(prodId, fav.createdAt);
+        }
+      });
+
+      setLocalCounts(countsMap);
+
+      const favoriteProducts = normalizedItems
+        .filter((item) => favoriteIds.has(item._id))
+        .map((item) => ({
+          ...item,
+          favoriteCreatedAt: favoriteDates.get(item._id),
+        }));
+
+      setFavoriteItems(favoriteProducts);
+    } else {
+      const errorData = (await favoritesRes.json().catch(() => ({}))) as {
+        message?: string;
+      };
+      const errorMsg =
+        errorData.message ||
+        `Lỗi tải danh sách yêu thích: ${favoritesRes.status}`;
+
+      if (favoritesRes.status === 401 || favoritesRes.status === 403) {
+        router.push("/auth/login");
+        toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+      } else {
+        toast.error(errorMsg);
+      }
+      setFavoriteItems([]); // Đảm bảo không bị undefined
+    }
+  } catch (err) {
+    console.error("Fetch data error:", err);
+    const errorMsg = "Lỗi khi tải dữ liệu.";
+    setError(errorMsg);
+    toast.error(errorMsg);
+    setFavoriteItems([]);
+  } finally {
+    setLoading(false);
+  }
+}, [router]);
 
   useEffect(() => {
     if (!isAuthenticated) {
