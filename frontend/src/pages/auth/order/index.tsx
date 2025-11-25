@@ -1106,11 +1106,14 @@ const processPayment = async () => {
 
         // Xóa khỏi giỏ (nếu không phải temp)
         if (!item._id.startsWith("temp-")) {
-          await dispatch(removeItemFromCartAction(item._id))
-            .unwrap()
-            .catch(() => {});
-        }
-        continue;
+  try {
+    await dispatch(removeItemFromCartAction(item._id));
+  } catch (e) {
+    console.error("Remove cart item failed:", e);
+  }
+}
+continue;
+
       }
 
       // CHỈ VÀO ĐÂY KHI CHỌN "THANH TOÁN NGAY"
