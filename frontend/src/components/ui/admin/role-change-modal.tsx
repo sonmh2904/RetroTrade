@@ -148,7 +148,7 @@ export function RoleChangeModal({
                 {ROLE_OPTIONS.map((option) => {
                   // Disable if it's the user's current role or if it's the same level as current admin
                   const isCurrentRole = option.value === user.role
-                  const isSameLevelAsAdmin = currentAdminRole && option.value.toLowerCase() === currentAdminRole.toLowerCase()
+                  const isSameLevelAsAdmin = Boolean(currentAdminRole && option.value.toLowerCase() === currentAdminRole.toLowerCase())
                   const isDisabled = isCurrentRole || isSameLevelAsAdmin
                   
                   return (

@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store/redux_store";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import { Card, CardContent } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Input } from "@/components/ui/common/input";
@@ -16,13 +14,10 @@ import {
   CheckCircle,
   XCircle,
   User,
-  Mail,
   Search,
   RefreshCw,
   Eye,
-  Clock,
   UserCheck,
-  ArrowLeft,
   FileText,
   Calendar,
   MapPin,
@@ -35,7 +30,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar";
 
 export function VerificationRequestManagement() {
-  const { accessToken } = useSelector((state: RootState) => state.auth);
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +105,7 @@ export function VerificationRequestManagement() {
         setSelectedRequest(response.data);
         // Log để debug ảnh
         if (response.data.documents) {
-          console.log("Documents URLs:", response.data.documents.map((d: any) => d.fileUrl));
+          console.log("Documents URLs:", response.data.documents.map((d: { documentType: string; fileUrl: string; uploadedAt: string }) => d.fileUrl));
         }
         setDetailDialog(true);
       } else {
@@ -516,7 +510,9 @@ export function VerificationRequestManagement() {
                   <div>
                     <label className="text-sm font-medium text-gray-700">Trạng thái xác minh</label>
                     <p className="text-gray-900">
-                      {selectedRequest.userId?.isIdVerified ? "Đã xác minh" : "Chưa xác minh"}
+                      {selectedRequest.userId && typeof selectedRequest.userId === "object" && "isIdVerified" in selectedRequest.userId && (selectedRequest.userId as { isIdVerified?: boolean })?.isIdVerified
+                        ? "Đã xác minh"
+                        : "Chưa xác minh"}
                     </p>
                   </div>
                 </div>

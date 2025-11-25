@@ -116,8 +116,8 @@ export default function DisputeModal({
       });
       toast.success("Gửi tranh chấp thành công!");
       handleClose(false);
-    } catch (err: any) {
-      toast.error(err.message || "Lỗi hệ thống");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Lỗi hệ thống");
     } finally {
       setSubmitting(false);
     }

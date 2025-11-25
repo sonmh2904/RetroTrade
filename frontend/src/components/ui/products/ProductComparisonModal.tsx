@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, XCircle, Clock, DollarSign, Bookmark, Eye, Calendar, CheckCircle, Users } from 'lucide-react';
+import { X, XCircle, Clock, DollarSign, Bookmark, Eye, Calendar, CheckCircle, Users } from 'lucide-react';
 import Image from 'next/image';
 import { getComparableProducts } from '@/services/products/product.api';
 
@@ -74,7 +74,7 @@ interface Product {
 interface ProductComparisonModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentProduct: any;
+  currentProduct: Product;
 }
 
 export default function ProductComparisonModal({ isOpen, onClose, currentProduct }: ProductComparisonModalProps) {
@@ -121,9 +121,9 @@ export default function ProductComparisonModal({ isOpen, onClose, currentProduct
       } else if (response && response.message) {
         setError(response.message);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading comparable products:', error);
-      setError(error.message || 'Không thể tải sản phẩm so sánh. Vui lòng thử lại sau.');
+      setError((error as Error).message || 'Không thể tải sản phẩm so sánh. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -146,12 +146,6 @@ export default function ProductComparisonModal({ isOpen, onClose, currentProduct
     });
   };
 
-  const handleCompare = () => {
-    if (selectedProducts.length === 2) {
-      setIsComparing(true);
-    }
-  };
-
   const resetComparison = () => {
     setIsComparing(false);
   };
@@ -170,9 +164,6 @@ export default function ProductComparisonModal({ isOpen, onClose, currentProduct
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = comparableProducts.slice(indexOfFirstItem, indexOfLastItem);
-
-  // Change page
-  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   // Handle previous page
   const handlePrevPage = () => {

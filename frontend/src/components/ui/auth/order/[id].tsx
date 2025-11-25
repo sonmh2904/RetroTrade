@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import {
   getOrderDetails,
-  confirmOrder,
-  startOrder,
-  renterReturn,
-  ownerComplete,
-  cancelOrder,
+
 } from "@/services/auth/order.api";
 import { format } from "date-fns";
 import {
@@ -24,8 +20,6 @@ import {
   RefreshCw,
   Download,
   Share2,
-  Home,
-  ShoppingBag,
   Eye,
   User,
   Mail,
@@ -37,7 +31,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { payOrderWithWallet, getMyWallet } from "@/services/wallet/wallet.api"; // Đảm bảo import đúng
 import { toast } from "sonner";
-import PopupModal from "@/components/ui/common/PopupModal";
+
 interface TimelineStep {
   status: string;
   label: string;
@@ -58,13 +52,28 @@ const getUnitName = (priceUnit: string | undefined): string => {
   return map[priceUnit] || "đơn vị";
 };
 
-
-const calculateRentalAmount = (order: Order): number => {
-  const basePrice = order.itemSnapshot.basePrice ?? 0;
-  const duration = order.rentalDuration ?? 0;
-  const count = order.unitCount ?? 1;
-  return basePrice * duration * count;
+// Helper function to extract error message from unknown error
+const getErrorMessage = (error: unknown): string => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "message" in error.response.data &&
+    typeof error.response.data.message === "string"
+  ) {
+    return error.response.data.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Đã xảy ra lỗi";
 };
+
 
 
 const getOrderStatusLabel = (status: string): string => {
@@ -103,7 +112,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [pendingAction, setPendingAction] = useState<() => Promise<void>>(
+  const [pendingAction] = useState<() => Promise<void>>(
     () => async () => {}
   );
   const [isPaying, setIsPaying] = useState(false); //Thanh toan
@@ -128,9 +137,12 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
     shortage: 0,
   });
   useEffect(() => {
-    if (id) {
-      loadOrder();
+    async function fetchOrder() {
+      if (id) {
+        await loadOrder();
+      }
     }
+    fetchOrder();
   }, [id]);
 
   // Load ví
@@ -190,8 +202,8 @@ const executeWalletPayment = async () => {
 
     const updated = await getMyWallet();
     setWalletBalance(updated.balance ?? 0);
-  } catch (error: any) {
-    const msg = error?.response?.data?.message || "Thanh toán thất bại";
+  } catch (error: unknown) {
+    const msg = getErrorMessage(error) || "Thanh toán thất bại";
     toast.error(msg);
 
     if (
@@ -227,18 +239,13 @@ const executeWalletPayment = async () => {
     }
   };
 
-  const handleAction = async (action: () => Promise<void>) => {
-    setPendingAction(() => action);
-    setShowConfirm(true);
-  };
-
   const executeAction = async () => {
     setActionLoading(true);
     try {
       await pendingAction();
       await loadOrder();
-    } catch (error) {
-      alert("Thao tác thất bại");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Thao tác thất bại");
     } finally {
       setShowConfirm(false);
       setActionLoading(false);
@@ -303,21 +310,6 @@ const executeWalletPayment = async () => {
       current: order.orderStatus === "cancelled",
     },
   ];
-
-  const canConfirm = order.orderStatus === "pending";
-  const canStart = order.orderStatus === "confirmed";
-  const canReturn = order.orderStatus === "progress";
-  const canComplete = order.orderStatus === "returned";
-  const canCancel = ["pending", "confirmed"].includes(order.orderStatus);
-
-  // Breadcrumb data
-  const breadcrumbs = [
-    { label: "Trang chủ", href: "/home", icon: Home },
-    { label: "Đơn hàng", href: "/my-orders", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/my-orders/${id}`, icon: Eye },
-  ];
-
-  // Breadcrumb removed in inline render
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-8 px-4">
@@ -386,9 +378,11 @@ const executeWalletPayment = async () => {
               <div className="flex gap-6 items-start">
                 <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
                   {order.itemSnapshot.images[0] ? (
-                    <img
-                      src={order.itemSnapshot.images[0]}
-                      alt={order.itemSnapshot.title}
+                    <Image
+                      src={order.itemSnapshot.images[0] || ""}
+                      alt={order.itemSnapshot.title || "Ảnh sản phẩm"}
+                      width={160}
+                      height={160}
                       className="w-full h-full object-cover"
                     />
                   ) : (

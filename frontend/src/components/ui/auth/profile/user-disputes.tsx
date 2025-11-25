@@ -1,25 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store/redux_store";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import { Card, CardContent } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/common/dialog";
 import {
   AlertTriangle,
   CheckCircle,
-  XCircle,
   Eye,
   Clock,
-  FileText,
 } from "lucide-react";
 import { getMyDisputes, getDisputeById, type Dispute } from "@/services/moderator/disputeOrder.api";
 
 export function UserDisputes() {
-  const { accessToken } = useSelector((state: RootState) => state.auth);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +134,6 @@ export function UserDisputes() {
           <div className="space-y-3">
             {disputes.map((dispute) => {
               const orderGuid = typeof dispute.orderId === "object" ? dispute.orderId?.orderGuid : "N/A";
-              const isReporter = typeof dispute.reporterId === "object" && dispute.reporterId?._id;
 
               return (
                 <div
@@ -226,51 +220,28 @@ export function UserDisputes() {
                         <p className="text-gray-900 whitespace-pre-wrap">{dispute.description}</p>
                       </div>
                     )}
-                    {(dispute.evidenceUrls && dispute.evidenceUrls.length > 0) || 
-                     (dispute.evidence && dispute.evidence.length > 0) ? (
+                    {dispute.evidence && dispute.evidence.length > 0 ? (
                       <div>
                         <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {dispute.evidenceUrls && dispute.evidenceUrls.length > 0 && 
-                            dispute.evidenceUrls.map((url, index) => (
-                              <a
-                                key={index}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
-                              >
-                                <img
-                                  src={url}
-                                  alt={`Bằng chứng ${index + 1}`}
-                                  className="w-full h-32 object-cover rounded"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/file.svg";
-                                  }}
-                                />
-                              </a>
-                            ))
-                          }
-                          {dispute.evidence && dispute.evidence.length > 0 && 
-                            dispute.evidence.map((url, index) => (
-                              <a
-                                key={`evidence-${index}`}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
-                              >
-                                <img
-                                  src={url}
-                                  alt={`Bằng chứng ${index + 1}`}
-                                  className="w-full h-32 object-cover rounded"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/file.svg";
-                                  }}
-                                />
-                              </a>
-                            ))
-                          }
+                          {dispute.evidence.map((url, index) => (
+                            <a
+                              key={index}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
+                            >
+                              <img
+                                src={url}
+                                alt={`Bằng chứng ${index + 1}`}
+                                className="w-full h-32 object-cover rounded"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/file.svg";
+                                }}
+                              />
+                            </a>
+                          ))}
                         </div>
                       </div>
                     ) : null}

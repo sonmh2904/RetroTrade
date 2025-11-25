@@ -15,7 +15,6 @@ import {
   XCircle,
   Clock,
   Mail,
-  User,
   Calendar,
   AlertCircle,
 } from "lucide-react";
@@ -118,21 +117,21 @@ export function ComplaintManagement() {
     switch (status) {
       case "pending":
         return (
-          <Badge variant="warning" className="flex items-center gap-1">
+          <Badge variant="secondary" className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
             Chờ xử lý
           </Badge>
         );
       case "reviewing":
         return (
-          <Badge variant="info" className="flex items-center gap-1">
+          <Badge variant="secondary" className="flex items-center gap-1">
             <Eye className="w-3 h-3" />
             Đang xem xét
           </Badge>
         );
       case "resolved":
         return (
-          <Badge variant="success" className="flex items-center gap-1">
+          <Badge variant="default" className="flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
             Đã chấp nhận
           </Badge>

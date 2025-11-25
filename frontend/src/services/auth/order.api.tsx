@@ -88,12 +88,10 @@ export interface Order {
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
-  cancelReason: String;
+  cancelReason: string;
 }
 
-
-
-const parseResponse = async (response: Response): Promise<ApiResponse<any>> => {
+const parseResponse = async <T = unknown>(response: Response): Promise<ApiResponse<T>> => {
   const contentType = response.headers.get("content-type");
   const data = contentType?.includes("application/json")
     ? await response.json()
@@ -102,7 +100,7 @@ const parseResponse = async (response: Response): Promise<ApiResponse<any>> => {
   return {
     code: response.status,
     message: data?.message || "Request completed",
-    data: data?.data || data,
+    data: (data?.data || data) as T,
   };
 };
 
@@ -111,7 +109,7 @@ export const createOrder = async (
   payload: CreateOrderRequest
 ): Promise<ApiResponse<{ orderGuid: string; orderId: string; _id?: string }>> => {
   const response = await api.post("/order/", payload);
-  return await parseResponse(response);
+  return await parseResponse<{ orderGuid: string; orderId: string; _id?: string }>(response);
 };
 
 
@@ -119,26 +117,26 @@ export const getOrderDetails = async (
   orderId: string
 ): Promise<ApiResponse<Order>> => {
   const response = await api.get(`/order/${orderId}`);
-  return await parseResponse(response);
+  return await parseResponse<Order>(response);
 };
 
 
 export const listOrders = async (): Promise<ApiResponse<Order[]>> => {
   const response = await api.get(`/order`);
-  return await parseResponse(response);
+  return await parseResponse<Order[]>(response);
 };
 
 
 export const confirmOrder = async (
   orderId: string
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<Order>> => {
   const response = await api.post(`/order/${orderId}/confirm`);
-  return await parseResponse(response);
+  return await parseResponse<Order>(response);
 };
 
 export const startOrder = async (
   orderId: string
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<Order>> => {
   const response = await api.post(`/order/${orderId}/start`);
   return await parseResponse(response);
 };
@@ -146,7 +144,7 @@ export const startOrder = async (
 export const renterReturn = async (
   orderId: string,
   notes?: string
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<Order>> => {
   const response = await api.post(`/order/${orderId}/return`, { notes });
   return await parseResponse(response);
 };
@@ -155,7 +153,7 @@ export const renterReturn = async (
 export const ownerComplete = async (
   orderId: string,
   payload: { conditionStatus?: string; damageFee?: number; ownerNotes?: string }
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<Order>> => {
   const response = await api.post(`/order/${orderId}/complete`, payload);
   return await parseResponse(response);
 };
@@ -164,7 +162,7 @@ export const ownerComplete = async (
 export const cancelOrder = async (
   orderId: string,
   reason?: string
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<Order>> => {
   const response = await api.post(`/order/${orderId}/cancel`, { reason });
   return await parseResponse(response);
 };
@@ -173,7 +171,7 @@ export const cancelOrder = async (
 export const disputeOrder = async (
   orderId: string,
   reason?: string
-): Promise<ApiResponse<any>> => {
+): Promise<ApiResponse<Order>> => {
   const response = await api.post(`/order/${orderId}/dispute`, { reason });
   return await parseResponse(response);
 };
@@ -194,5 +192,5 @@ export const listOrdersByOwner = async (params?: {
   ).toString();
 
   const response = await api.get(`/order/owner${query ? `?${query}` : ""}`);
-  return await parseResponse(response);
+  return await parseResponse<Order[]>(response);
 };

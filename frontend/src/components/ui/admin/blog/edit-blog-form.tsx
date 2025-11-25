@@ -33,26 +33,26 @@ export default function EditBlogForm({ blogId, isOpen, onClose, onSuccess }: Edi
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
+    const fetchBlog = async () => {
+      try {
+        setFetching(true);
+        const blog = await getBlogDetail(blogId);
+        setFormData({
+          title: blog.title || "",
+          content: blog.content || "",
+          excerpt: blog.excerpt || "",
+        });
+      } catch {
+        toast.error("Không thể tải thông tin bài viết!");
+      } finally {
+        setFetching(false);
+      }
+    };
+
     if (isOpen && blogId) {
       fetchBlog();
     }
   }, [isOpen, blogId]);
-
-  const fetchBlog = async () => {
-    try {
-      setFetching(true);
-      const blog = await getBlogDetail(blogId);
-      setFormData({
-        title: blog.title || "",
-        content: blog.content || "",
-        excerpt: blog.excerpt || "",
-      });
-    } catch (error) {
-      toast.error("Không thể tải thông tin bài viết!");
-    } finally {
-      setFetching(false);
-    }
-  };
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -69,7 +69,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     toast.success("Cập nhật bài viết thành công!");
     onSuccess();
-  } catch (error) {
+  } catch {
     toast.error("Không thể cập nhật bài viết!");
   } finally {
     setLoading(false);

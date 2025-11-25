@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
 import { Conversation, getConversations } from "@/services/messages/messages.api";
@@ -15,13 +15,16 @@ interface ConversationListModeratorProps {
   currentUserId: string;
 }
 
+// Type for user in conversation
+type ConversationUser = Conversation["userId1"];
+
 const roleOptions = [
   { value: "", label: "Tất cả" },
   { value: "user", label: "User" },
   { value: "owner", label: "Owner" },
   { value: "moderator", label: "Moderator" },
   { value: "admin", label: "Admin" },
-];
+] as const;
 
 const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
   conversations: conversationsProp,
@@ -53,7 +56,7 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
           } else {
             setError("Không thể tải danh sách cuộc trò chuyện");
           }
-        } catch (err) {
+        } catch {
           setError("Lỗi khi tải cuộc trò chuyện");
         } finally {
           setLoading(false);
@@ -63,33 +66,40 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
     }
   }, [conversationsProp]);
 
-  const getOtherUser = (conversation: Conversation) => {
-    return conversation.userId1._id === currentUserId
-      ? conversation.userId2
-      : conversation.userId1;
-  };
+  const getOtherUser = useCallback(
+    (conversation: Conversation): ConversationUser => {
+      return conversation.userId1._id === currentUserId
+        ? conversation.userId2
+        : conversation.userId1;
+    },
+    [currentUserId]
+  );
 
   const filteredConversations = useMemo(() => {
     // conversations with at least one message
     let list = conversations.filter((c) => !!c.lastMessage);
+    
     // filter by role if selected
     if (roleFilter) {
+      const roleLower = roleFilter.toLowerCase();
       list = list.filter((c) => {
-        const other = getOtherUser(c) as any;
-        return (other?.role || "").toLowerCase() === roleFilter.toLowerCase();
+        const other = getOtherUser(c);
+        return (other.role || "").toLowerCase() === roleLower;
       });
     }
+    
     // search by name/email
     if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
+      const query = searchTerm.toLowerCase().trim();
       list = list.filter((c) => {
-        const other = getOtherUser(c) as any;
+        const other = getOtherUser(c);
         return (
-          other?.fullName?.toLowerCase().includes(q) ||
-          other?.email?.toLowerCase().includes(q)
+          other.fullName.toLowerCase().includes(query) ||
+          other.email.toLowerCase().includes(query)
         );
       });
     }
+    
     // sort by last message time desc
     return list.sort((a, b) => {
       const aDate = a.lastMessage?.createdAt
@@ -100,15 +110,14 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
         : new Date(b.updatedAt).getTime();
       return bDate - aDate;
     });
-  }, [conversations, roleFilter, searchTerm]);
+  }, [conversations, roleFilter, searchTerm, getOtherUser]);
 
-  const getLastMessagePreview = (conversation: Conversation) => {
-    if (conversation.lastMessage) {
-      return conversation.lastMessage.content.length > 40
-        ? conversation.lastMessage.content.substring(0, 40) + "..."
-        : conversation.lastMessage.content;
+  const getLastMessagePreview = (conversation: Conversation): string => {
+    if (!conversation.lastMessage) {
+      return "Bắt đầu cuộc trò chuyện";
     }
-    return "Bắt đầu cuộc trò chuyện";
+    const content = conversation.lastMessage.content;
+    return content.length > 40 ? `${content.substring(0, 40)}...` : content;
   };
 
   if (loading) {
@@ -159,8 +168,11 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
         </div>
       ) : (
         filteredConversations.map((conversation) => {
-          const otherUser = getOtherUser(conversation) as any;
+          const otherUser = getOtherUser(conversation);
           const isSelected = selectedConversationId === conversation._id;
+          const unreadCount = conversation.unreadCount ?? 0;
+          const isOnline = otherUser._id ? onlineByUserId[String(otherUser._id)] : false;
+          
           return (
             <div
               key={conversation._id}
@@ -172,7 +184,7 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
               <div className="flex items-start gap-3">
                 <div className="relative flex-shrink-0">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold overflow-hidden">
-                    {otherUser?.avatarUrl ? (
+                    {otherUser.avatarUrl ? (
                       <Image
                         src={otherUser.avatarUrl}
                         alt={otherUser.fullName}
@@ -182,27 +194,32 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
                         style={{ objectFit: "cover" }}
                       />
                     ) : (
-                      <span>{otherUser?.fullName?.charAt(0).toUpperCase() || "U"}</span>
+                      <span>{otherUser.fullName.charAt(0).toUpperCase()}</span>
                     )}
                   </div>
-                  {otherUser?._id && (
-                    <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${onlineByUserId[String(otherUser._id)] ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                  {otherUser._id && (
+                    <span
+                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                        isOnline ? "bg-green-500" : "bg-red-500"
+                      }`}
+                      aria-label={isOnline ? "Đang online" : "Đang offline"}
+                    />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-semibold text-gray-900 truncate">
-                      {otherUser?.fullName}
-                      {otherUser?.role && (
+                      {otherUser.fullName}
+                      {otherUser.role && (
                         <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
                           {otherUser.role}
                         </span>
                       )}
                     </span>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {(conversation.unreadCount ?? 0) > 0 && (
+                      {unreadCount > 0 && (
                         <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                          {conversation.unreadCount! > 9 ? "9+" : conversation.unreadCount}
+                          {unreadCount > 9 ? "9+" : unreadCount}
                         </span>
                       )}
                       {conversation.lastMessage && (
@@ -215,7 +232,13 @@ const ConversationListModerator: React.FC<ConversationListModeratorProps> = ({
                       )}
                     </div>
                   </div>
-                  <div className={`text-sm truncate ${(conversation.unreadCount ?? 0) > 0 ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                  <div
+                    className={`text-sm truncate ${
+                      unreadCount > 0
+                        ? "font-semibold text-gray-900"
+                        : "text-gray-600"
+                    }`}
+                  >
                     {getLastMessagePreview(conversation)}
                   </div>
                 </div>

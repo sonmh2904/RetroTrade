@@ -156,7 +156,7 @@ export function OrdersChart() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Progress bars */}
             <div className="space-y-4">
-              {Object.entries(data.byStatus).map(([status, count], index) => {
+              {Object.entries(data.byStatus).map(([status, count]) => {
                 const percentage = totalByStatus > 0 ? (count / totalByStatus) * 100 : 0;
                 const colorInfo = statusColors[status.toLowerCase()] || { 
                   bg: "bg-gray-500", 
@@ -191,7 +191,6 @@ export function OrdersChart() {
             <div className="flex items-center justify-center">
               <div className="relative w-48 h-48">
                 {Object.entries(data.byStatus).map(([status, count], index) => {
-                  const percentage = totalByStatus > 0 ? (count / totalByStatus) * 100 : 0;
                   const colorInfo = statusColors[status.toLowerCase()] || { 
                     bg: "bg-gray-500",
                     gradient: "from-gray-400 to-gray-500"

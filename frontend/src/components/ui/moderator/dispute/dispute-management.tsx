@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
-import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
+import { decodeToken } from '@/utils/jwtHelper';
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
@@ -14,21 +14,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   AlertTriangle,
   CheckCircle,
-  XCircle,
   User,
-  Mail,
   Search,
   RefreshCw,
   Eye,
   Clock,
   UserCheck,
   ArrowLeft,
-  DollarSign,
   FileText,
 } from "lucide-react";
 import { getDisputes, getDisputeById, assignDispute, unassignDispute, resolveDispute, type Dispute } from "@/services/moderator/disputeOrder.api";
 import { getOrderDetails, type Order } from "@/services/auth/order.api";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar";
 
 const REFUND_TARGET_OPTIONS = [
   { value: "reporter", label: "Người khiếu nại (người thuê)" },
@@ -139,8 +135,8 @@ export function DisputeManagement() {
       const response = await getDisputes(params);
       if (response.code === 200) {
         // Backend trả về { total, data } nên cần lấy response.data.data
-        const disputeData = response.data as any;
-        setDisputes(Array.isArray(disputeData?.data) ? disputeData.data : (Array.isArray(disputeData) ? disputeData : []));
+        const disputeData = response.data as { data?: Dispute[] } | Dispute[];
+        setDisputes(Array.isArray(disputeData) ? disputeData : (Array.isArray(disputeData?.data) ? disputeData.data : []));
       } else {
         setError(response.message || "Không thể tải danh sách tranh chấp");
         toast.error(response.message || "Có lỗi xảy ra");
@@ -191,10 +187,13 @@ export function DisputeManagement() {
   const fetchOrderAndDisputeDetails = async (dispute: Dispute) => {
     setLoadingDetails(true);
     try {
-      // Get orderId from dispute
-      const orderIdValue = typeof dispute.orderId === "object" 
-        ? dispute.orderId._id || dispute.orderId 
-        : dispute.orderId;
+      // Get orderId from dispute - ensure it's always a string
+      let orderIdValue: string | null = null;
+      if (typeof dispute.orderId === "object" && dispute.orderId !== null) {
+        orderIdValue = dispute.orderId._id || null;
+      } else if (typeof dispute.orderId === "string") {
+        orderIdValue = dispute.orderId;
+      }
 
       // Fetch dispute details
       const disputeResponse = await getDisputeById(dispute._id);
@@ -690,33 +689,11 @@ export function DisputeManagement() {
                         <p className="text-gray-900 whitespace-pre-wrap">{dispute.description}</p>
                       </div>
                     )}
-                    {(dispute.evidenceUrls && dispute.evidenceUrls.length > 0) || 
-                     (dispute.evidence && dispute.evidence.length > 0) ? (
+                    {dispute.evidence && dispute.evidence.length > 0 ? (
                       <div>
                         <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {dispute.evidenceUrls && dispute.evidenceUrls.length > 0 && 
-                            dispute.evidenceUrls.map((url, index) => (
-                              <a
-                                key={index}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
-                              >
-                                <img
-                                  src={url}
-                                  alt={`Bằng chứng ${index + 1}`}
-                                  className="w-full h-32 object-cover rounded"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/file.svg";
-                                  }}
-                                />
-                              </a>
-                            ))
-                          }
-                          {dispute.evidence && dispute.evidence.length > 0 && 
-                            dispute.evidence.map((url, index) => (
+                          {dispute.evidence.map((url: string, index: number) => (
                               <a
                                 key={`evidence-${index}`}
                                 href={url}
@@ -733,8 +710,7 @@ export function DisputeManagement() {
                                   }}
                                 />
                               </a>
-                            ))
-                          }
+                            ))}
                         </div>
                       </div>
                     ) : null}
@@ -949,36 +925,11 @@ export function DisputeManagement() {
                         <label className="text-sm font-medium text-gray-700">Trạng thái</label>
                         <div className="mt-1">{getStatusBadge(disputeDetails.status)}</div>
                       </div>
-                      {disputeDetails.evidenceUrls && disputeDetails.evidenceUrls.length > 0 && (
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {disputeDetails.evidenceUrls.map((url, index) => (
-                              <a
-                                key={index}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
-                              >
-                                <img
-                                  src={url}
-                                  alt={`Bằng chứng ${index + 1}`}
-                                  className="w-full h-20 object-cover rounded"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/file.svg";
-                                  }}
-                                />
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                       {disputeDetails.evidence && disputeDetails.evidence.length > 0 && (
                         <div>
                           <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
                           <div className="grid grid-cols-2 gap-2">
-                            {disputeDetails.evidence.map((url, index) => (
+                            {disputeDetails.evidence.map((url: string, index: number) => (
                               <a
                                 key={index}
                                 href={url}
@@ -1102,7 +1053,7 @@ export function DisputeManagement() {
               disabled={
                 loadingDetails ||
                 !decision.trim() ||
-                (refundPercentage && !refundTarget)
+                (refundPercentage !== "" && refundTarget === "")
               }
             >
               Xác nhận

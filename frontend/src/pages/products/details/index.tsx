@@ -18,7 +18,6 @@ import {
   addToFavorites,
   removeFromFavorites,
   getFavorites,
-  getComparableProducts,
 } from "@/services/products/product.api";
 import {
   createConversation,
@@ -41,10 +40,8 @@ import {
   ShieldCheck,
   Calendar,
   MessageCircle,
-  Truck,
 } from "lucide-react";
 import RatingSection from "@/components/ui/products/rating";
-import { useDispatch } from "react-redux";
 import { fetchOrderList } from "@/store/order/orderActions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { jwtDecode } from "jwt-decode";
@@ -86,6 +83,168 @@ interface ProductDetailDto {
   ConditionId?: number | null;
 }
 
+// Types for related data
+interface ProductItem {
+  _id: string;
+  Title: string;
+  BasePrice: number;
+  Currency: string;
+  DepositAmount?: number;
+  PriceUnit?: { UnitName: string } | null;
+  Images?: { Url: string }[];
+  AvailableQuantity?: number;
+  District?: string;
+  City?: string;
+}
+
+interface Order {
+  _id: string;
+  itemId?: { _id: string } | null;
+  orderStatus?: string;
+}
+
+interface Favorite {
+  productId?: { _id?: string | { $oid: string } } | null;
+}
+
+interface JwtPayload {
+  sub?: string;
+  _id?: string;
+  userId?: string;
+  id?: string;
+  userGuid?: string;
+}
+
+// Type for ProductComparisonModal (matches the interface in ProductComparisonModal.tsx)
+interface ProductForComparison {
+  _id: string;
+  Title: string;
+  ShortDescription?: string;
+  BasePrice: number;
+  DepositAmount: number;
+  MinRentalDuration: number;
+  MaxRentalDuration: number | null;
+  Currency: string;
+  Quantity: number;
+  AvailableQuantity: number;
+  Address?: string;
+  City?: string;
+  District?: string;
+  IsHighlighted: boolean;
+  IsTrending: boolean;
+  ViewCount: number;
+  FavoriteCount: number;
+  RentCount: number;
+  CreatedAt: string;
+  UpdatedAt: string;
+  Images: Array<{
+    _id: string;
+    ItemId: string;
+    Url: string;
+    IsPrimary: boolean;
+    Ordinal: number;
+    AltText: string;
+    IsDeleted: boolean;
+    CreatedAt: string;
+    UpdatedAt: string;
+    __v: number;
+  }>;
+  Condition: {
+    _id: string;
+    ConditionId: number;
+    ConditionName: string;
+    UpdatedAt: string;
+    IsDeleted: boolean;
+    CreatedAt: string;
+  };
+  PriceUnit: {
+    _id: string;
+    UnitId: number;
+    UnitName: string;
+    IsDeleted: boolean;
+    CreatedAt: string;
+    UpdatedAt: string;
+  };
+  Category?: {
+    _id: string;
+    name: string;
+  };
+  Location?: string;
+}
+
+// Adapter function to convert ProductDetailDto to ProductForComparison
+const adaptProductForComparison = (product: ProductDetailDto): ProductForComparison => {
+  return {
+    _id: product._id,
+    Title: product.Title,
+    ShortDescription: product.ShortDescription,
+    BasePrice: product.BasePrice,
+    DepositAmount: product.DepositAmount || 0,
+    MinRentalDuration: product.MinRentalDuration || 1,
+    MaxRentalDuration: product.MaxRentalDuration ?? null,
+    Currency: product.Currency,
+    Quantity: product.Quantity || 0,
+    AvailableQuantity: product.AvailableQuantity || 0,
+    Address: product.Address,
+    City: product.City,
+    District: product.District,
+    IsHighlighted: false, // Default value
+    IsTrending: false, // Default value
+    ViewCount: product.ViewCount || 0,
+    FavoriteCount: product.FavoriteCount || 0,
+    RentCount: product.RentCount || 0,
+    CreatedAt: product.CreatedAt || new Date().toISOString(),
+    UpdatedAt: product.CreatedAt || new Date().toISOString(), // Use CreatedAt as fallback
+    Images: (product.Images || []).map((img, index) => ({
+      _id: `${product._id}-img-${index}`,
+      ItemId: product._id,
+      Url: img.Url,
+      IsPrimary: index === 0,
+      Ordinal: index,
+      AltText: product.Title,
+      IsDeleted: false,
+      CreatedAt: product.CreatedAt || new Date().toISOString(),
+      UpdatedAt: product.CreatedAt || new Date().toISOString(),
+      __v: 0,
+    })),
+    Condition: product.Condition ? {
+      _id: product.Condition.ConditionName || '',
+      ConditionId: product.ConditionId || 0,
+      ConditionName: product.Condition.ConditionName || '',
+      UpdatedAt: product.CreatedAt || new Date().toISOString(),
+      IsDeleted: false,
+      CreatedAt: product.CreatedAt || new Date().toISOString(),
+    } : {
+      _id: '',
+      ConditionId: 0,
+      ConditionName: '',
+      UpdatedAt: new Date().toISOString(),
+      IsDeleted: false,
+      CreatedAt: new Date().toISOString(),
+    },
+    PriceUnit: product.PriceUnit ? {
+      _id: product.PriceUnit.UnitName || '',
+      UnitId: 0,
+      UnitName: product.PriceUnit.UnitName || '',
+      IsDeleted: false,
+      CreatedAt: product.CreatedAt || new Date().toISOString(),
+      UpdatedAt: product.CreatedAt || new Date().toISOString(),
+    } : {
+      _id: '',
+      UnitId: 0,
+      UnitName: 'ngày',
+      IsDeleted: false,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    },
+    Category: product.Category ? {
+      _id: product.Category._id || '',
+      name: product.Category.name || '',
+    } : undefined,
+    Location: [product.Address, product.District, product.City].filter(Boolean).join(', ') || undefined,
+  };
+};
+
 const formatPrice = (price: number, currency: string) => {
   if (currency === "VND") {
     return new Intl.NumberFormat("vi-VN").format(price) + "đ";
@@ -109,8 +268,8 @@ export default function ProductDetailPage() {
   >("day");
   const [durationUnits, setDurationUnits] = useState<string>("");
   const [dateError, setDateError] = useState<string>("");
-  const [ownerTopItems, setOwnerTopItems] = useState<any[]>([]);
-  const [similarItems, setSimilarItems] = useState<any[]>([]);
+  const [ownerTopItems, setOwnerTopItems] = useState<ProductItem[]>([]);
+  const [similarItems, setSimilarItems] = useState<ProductItem[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
   const [ratings, setRatings] = useState<Array<{ rating: number }>>([]);
   const isAuthenticated = useSelector(
@@ -125,10 +284,10 @@ export default function ProductDetailPage() {
     if (!id || !Array.isArray(orders)) return [];
     return orders
       .filter(
-        (order: any) =>
+        (order: Order) =>
           order.itemId?._id === id && order.orderStatus === "completed"
       )
-      .map((order: any) => order._id);
+      .map((order: Order) => order._id);
   }, [orders, id]);
 
   useEffect(() => {
@@ -180,7 +339,7 @@ export default function ProductDetailPage() {
   const currentUserId = useMemo(() => {
     if (!accessToken) return null;
     try {
-      const decoded: any = jwtDecode(accessToken);
+      const decoded = jwtDecode<JwtPayload>(accessToken);
       // Backend có thể lưu userId ở: sub, _id, userId, id, userGuid...
       return (
         decoded.sub ||
@@ -213,10 +372,18 @@ export default function ProductDetailPage() {
         const res = await getFavorites();
         if (res.ok) {
           const data = await res.json();
-          const favorites = data.data || [];
+          const favorites: Favorite[] = data.data || [];
           const isFav = favorites.some(
-            (fav: any) =>
-              fav.productId?._id === id || fav.productId?._id?.$oid === id
+            (fav: Favorite) => {
+              const productId = fav.productId?._id;
+              if (typeof productId === 'string') {
+                return productId === id;
+              }
+              if (productId && typeof productId === 'object' && '$oid' in productId) {
+                return productId.$oid === id;
+              }
+              return false;
+            }
           );
           setIsFavorite(isFav);
         }
@@ -301,9 +468,10 @@ export default function ProductDetailPage() {
       toast.success(
         newFavoriteStatus ? "Đã thêm vào yêu thích!" : "Đã xóa khỏi yêu thích!"
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error toggling favorite:", err);
-      toast.error(err.message || "Lỗi khi cập nhật yêu thích.");
+      const errorMessage = err instanceof Error ? err.message : "Lỗi khi cập nhật yêu thích.";
+      toast.error(errorMessage);
     } finally {
       setFavoriteLoading(false);
     }
@@ -311,14 +479,14 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     const run = async () => {
-      const ownerId = (product?.Owner as any)?._id;
+      const ownerId = product?.Owner?._id;
       if (!ownerId) return;
       try {
         const res = await getTopViewedItemsByOwner(ownerId, 6);
         const data = res?.data ?? res;
-        const items = data?.data?.items || data?.items || [];
-        const filtered = (items || [])
-          .filter((it: any) => it?._id !== product?._id)
+        const items: ProductItem[] = data?.data?.items || data?.items || [];
+        const filtered = items
+          .filter((it: ProductItem) => it?._id !== product?._id)
           .slice(0, 5);
         setOwnerTopItems(filtered);
       } catch (e) {
@@ -331,7 +499,7 @@ export default function ProductDetailPage() {
   // Fetch similar items by same category
   useEffect(() => {
     const run = async () => {
-      const catId = (product?.Category as any)?._id;
+      const catId = product?.Category?._id;
       if (!catId) return;
       try {
         const res = await getProductsByCategoryId(catId, {
@@ -339,9 +507,9 @@ export default function ProductDetailPage() {
           limit: 12,
         });
         const data = res?.data ?? res;
-        const items = data?.data?.items || data?.items || [];
-        const filtered = (items || [])
-          .filter((it: any) => it?._id !== product?._id)
+        const items: ProductItem[] = data?.data?.items || data?.items || [];
+        const filtered = items
+          .filter((it: ProductItem) => it?._id !== product?._id)
           .slice(0, 8);
         setSimilarItems(filtered);
       } catch (e) {
@@ -372,11 +540,23 @@ export default function ProductDetailPage() {
   //   [product]
   // );
 
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // getMonth() trả về 0-11, cần +1
+    const date = now.getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+  }, []);
+  
   const tomorrowStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    const year = tomorrow.getFullYear();
+    const month = tomorrow.getMonth() + 1;
+    const date = tomorrow.getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
   }, []);
 
   // Normalize unit from backend to one of: 'hour' | 'day' | 'week' | 'month'
@@ -409,13 +589,16 @@ export default function ProductDetailPage() {
 
   const unitsFromDates = useMemo(() => {
     if (!dateFrom || !dateTo) return 0;
-    const start = new Date(dateFrom);
-    const end = new Date(dateTo);
-    const today = new Date(todayStr);
-    // clear time
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
+    
+    // Normalize dates to 00:00:00 for accurate comparison (avoid timezone issues)
+    const normalizeDate = (dateStr: string): Date => {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day, 0, 0, 0, 0);
+    };
+    
+    const start = normalizeDate(dateFrom);
+    const end = normalizeDate(dateTo);
+    const today = normalizeDate(todayStr);
 
     if (start < today || end < today) {
       return 0;
@@ -515,8 +698,14 @@ export default function ProductDetailPage() {
 
     // If dates are selected, calculate based on actual duration
     if (dateFrom && dateTo && !dateError) {
-      const start = new Date(dateFrom);
-      const end = new Date(dateTo);
+      // Normalize dates to avoid timezone issues
+      const normalizeDate = (dateStr: string): Date => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+      };
+      
+      const start = normalizeDate(dateFrom);
+      const end = normalizeDate(dateTo);
       const msPerDay = 24 * 60 * 60 * 1000;
       const days = Math.max(
         1,
@@ -566,7 +755,81 @@ export default function ProductDetailPage() {
       return;
     }
 
-    if (!dateFrom || !dateTo) {
+    // Get current date and time in real-time to ensure accuracy
+    const getCurrentDateTimeStr = () => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const seconds = now.getSeconds();
+      return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    };
+
+    // Get current date only (for comparison)
+    const getCurrentDateStr = () => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+    };
+
+    // Get tomorrow date and time in real-time
+    const getTomorrowDateTimeStr = () => {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      const year = tomorrow.getFullYear();
+      const month = tomorrow.getMonth() + 1;
+      const date = tomorrow.getDate();
+      const hours = tomorrow.getHours();
+      const minutes = tomorrow.getMinutes();
+      const seconds = tomorrow.getSeconds();
+      return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    };
+
+    // Get tomorrow date only (for comparison)
+    const getTomorrowDateStr = () => {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      const year = tomorrow.getFullYear();
+      const month = tomorrow.getMonth() + 1;
+      const date = tomorrow.getDate();
+      return `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+    };
+
+    // Use current date/time if dateFrom is not set or is in the past
+    let finalDateFrom = dateFrom || getCurrentDateStr();
+    let finalDateTo = dateTo || getTomorrowDateStr();
+
+    // Validate and fix dates if they are in the past
+    const currentDateStr = getCurrentDateStr();
+    if (finalDateFrom < currentDateStr) {
+      finalDateFrom = getCurrentDateTimeStr();
+      setDateFrom(getCurrentDateStr());
+    } else if (finalDateFrom === currentDateStr) {
+      // If it's today, use current time
+      finalDateFrom = getCurrentDateTimeStr();
+    } else {
+      // If it's a future date, add time 00:00:00
+      finalDateFrom = `${finalDateFrom}T00:00:00`;
+    }
+
+    if (finalDateTo < currentDateStr) {
+      finalDateTo = getTomorrowDateTimeStr();
+      setDateTo(getTomorrowDateStr());
+    } else if (finalDateTo === currentDateStr) {
+      // If it's today, use current time + 1 day
+      finalDateTo = getTomorrowDateTimeStr();
+    } else {
+      // If it's a future date, add time 23:59:59
+      finalDateTo = `${finalDateTo}T23:59:59`;
+    }
+
+    if (!finalDateFrom || !finalDateTo) {
       toast.error("Vui lòng chọn thời gian thuê");
       return;
     }
@@ -584,8 +847,8 @@ export default function ProductDetailPage() {
       depositAmount: product.DepositAmount || 0,
       quantity: 1,
       priceUnit: product.PriceUnit?.UnitName || "ngày",
-      rentalStartDate: dateFrom,
-      rentalEndDate: dateTo,
+      rentalStartDate: finalDateFrom,
+      rentalEndDate: finalDateTo,
       primaryImage: product.Images?.[0]?.Url || "",
       shortDescription: product.ShortDescription || "",
     };
@@ -597,13 +860,21 @@ export default function ProductDetailPage() {
   };
 
   useEffect(() => {
-    const today = new Date(todayStr);
-    const start = dateFrom ? new Date(dateFrom) : null;
-    const end = dateTo ? new Date(dateTo) : null;
+    // Normalize dates to 00:00:00 for accurate comparison (avoid timezone issues)
+    const normalizeDate = (dateStr: string): Date => {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day, 0, 0, 0, 0);
+    };
+
+    const today = normalizeDate(todayStr);
+    const start = dateFrom ? normalizeDate(dateFrom) : null;
+    const end = dateTo ? normalizeDate(dateTo) : null;
+    
     let err = "";
-    if (start && start < today) err = "Không thể chọn ngày trong quá khứ";
-    if (!err && end && end < today) err = "Không thể chọn ngày trong quá khứ";
-    if (!err && start && end && end < start)
+    // Allow today, only block past dates (use <= instead of <)
+    if (start && start.getTime() < today.getTime()) err = "Không thể chọn ngày trong quá khứ";
+    if (!err && end && end.getTime() < today.getTime()) err = "Không thể chọn ngày trong quá khứ";
+    if (!err && start && end && end.getTime() < start.getTime())
       err = "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu";
     setDateError(err);
   }, [dateFrom, dateTo, todayStr]);
@@ -923,9 +1194,9 @@ export default function ProductDetailPage() {
                       <button
                         onClick={async () => {
                           const ownerId =
-                            (product as any)?.Owner?._id ||
-                            (product as any)?.Owner?.userGuid ||
-                            (product as any)?.Owner?.UserGuid;
+                            product?.Owner?._id ||
+                            product?.Owner?.userGuid ||
+                            (product?.Owner as { UserGuid?: string })?.UserGuid;
                           if (!ownerId) {
                             toast.error("Không tìm thấy thông tin người bán");
                             return;
@@ -1359,7 +1630,7 @@ export default function ProductDetailPage() {
               {similarItems.length > 0 ? (
                 <div className="relative">
                   <div className="similar-products-slider flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
-                    {similarItems.map((it: any) => {
+                    {similarItems.map((it: ProductItem) => {
                       const thumb = it?.Images?.[0]?.Url;
                       const href = `/products/details?id=${it._id}`;
                       return (
@@ -1600,7 +1871,7 @@ export default function ProductDetailPage() {
         <ProductComparisonModal
           isOpen={showComparisonModal}
           onClose={() => setShowComparisonModal(false)}
-          currentProduct={product}
+          currentProduct={adaptProductForComparison(product)}
         />
       )}
     </div>

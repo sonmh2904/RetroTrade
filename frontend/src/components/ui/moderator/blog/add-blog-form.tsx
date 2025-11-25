@@ -13,6 +13,8 @@ import {
   createPost,
   getAllCategories,
   getAllTags,
+  Category,
+  Tag,
 } from "@/services/auth/blog.api";
 import { Switch } from "@/components/ui/common/switch";
 import { Label } from "@/components/ui/common/label";
@@ -50,8 +52,8 @@ const AddBlogForm: React.FC<AddBlogFormProps> = ({
     isFeatured: false,
   });
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [tags, setTags] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
 
 
@@ -264,7 +266,7 @@ if (res && !res.error && res._id) {
             <Label className="flex items-center gap-2">
               <Switch
                 checked={form.isFeatured}
-                onCheckedChange={(checked: any) =>
+                onCheckedChange={(checked: boolean) =>
                   setForm((prev) => ({ ...prev, isFeatured: checked }))
                 }
               />
@@ -273,7 +275,7 @@ if (res && !res.error && res._id) {
             <Label className="flex items-center gap-2">
               <Switch
                 checked={form.isActive}
-                onCheckedChange={(checked: any) =>
+                onCheckedChange={(checked: boolean) =>
                   setForm((prev) => ({ ...prev, isActive: checked }))
                 }
               />

@@ -35,8 +35,25 @@ import {
   DialogFooter,
 } from "@/components/ui/common/dialog";
 
+interface CommentUser {
+  _id?: string;
+  fullName?: string;
+  avatarUrl?: string;
+  displayName?: string;
+}
+
+interface Comment {
+  _id: string;
+  content: string;
+  user?: CommentUser;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  ownerName?: string;
+}
+
 export function CommentManagementTable() {
-  const [comments, setComments] = useState<any[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [openDetail, setOpenDetail] = useState(false);
@@ -46,7 +63,7 @@ export function CommentManagementTable() {
 
  
   const [openDelete, setOpenDelete] = useState(false);
-  const [deleteCommentData, setDeleteCommentData] = useState<any>(null);
+  const [deleteCommentData, setDeleteCommentData] = useState<Comment | null>(null);
 
   const fetchComments = async () => {
     try {
@@ -243,14 +260,15 @@ export function CommentManagementTable() {
               <Button
                 className="bg-red-600 hover:bg-red-700 text-gray-900"
                 onClick={async () => {
+                  if (!deleteCommentData?._id) return;
                   try {
-                    await deleteComment(deleteCommentData?._id);
+                    await deleteComment(deleteCommentData._id);
                     setComments((prev) =>
-                      prev.filter((c) => c._id !== deleteCommentData?._id)
+                      prev.filter((c) => c._id !== deleteCommentData._id)
                     );
                     toast.success("Xóa bình luận thành công!");
                     setOpenDelete(false);
-                  } catch (error) {
+                  } catch {
                     toast.error("Xóa bình luận thất bại");
                   }
                 }}

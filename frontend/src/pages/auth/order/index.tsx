@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { useRouter } from "next/router";
 import { createOrderAction } from "@/store/order/orderActions";
 import {
@@ -10,7 +10,7 @@ import {
   fetchCartItems,
 } from "@/store/cart/cartActions";
 import type { CartItem } from "@/services/auth/cartItem.api";
-import { RootState, AppDispatch } from "@/store/redux_store";
+import { RootState } from "@/store/redux_store";
 import { decodeToken } from "@/utils/jwtHelper";
 import { getUserProfile } from "@/services/auth/user.api";
 import {
@@ -252,6 +252,7 @@ useEffect(() => {
     setSelectedItemIds(items.map((item) => item._id));
     setHasInitializedSelection(true);
   } catch (err) {
+    console.error("Error parsing checkout items from sessionStorage:", err);
     toast.error("Dữ liệu giỏ hàng bị lỗi", {
       description: "Đang làm mới giỏ hàng...",
     });
@@ -347,8 +348,12 @@ useEffect(() => {
     try {
       const response = await listAvailableDiscounts(1, 50);
       if (response.status === "success" && response.data) {
-        // Hiển thị tất cả discount active - logic validate sẽ kiểm tra thời gian khi áp dụng
-        setAvailableDiscounts(response.data);
+        // Gộp cả public và special discounts vào một mảng
+        const allDiscounts = [
+          ...(response.data.public || []),
+          ...(response.data.special || []),
+        ];
+        setAvailableDiscounts(allDiscounts);
       } else {
         setDiscountListError(
           response.message || "Không thể tải danh sách mã giảm giá."
@@ -545,6 +550,7 @@ useEffect(() => {
           baseAmountForDiscount,
           discount.maxDiscountAmount
         );
+        amount = calculatedAmount;
 
         // Kiểm tra loại discount (public hay private)
         if (discount.isPublic) {
@@ -1148,13 +1154,14 @@ const processPayment = async () => {
         }
 
         console.log("Thanh toán thành công:", orderId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Lỗi thanh toán ví:", err);
 
         // Xử lý lỗi không đủ tiền
-        if (err?.response?.data?.balance !== undefined) {
-          const balance = err.response.data.balance || 0;
-          const required = err.response.data.required || 0;
+        const apiError = err as ApiError;
+        if (apiError?.response?.data?.balance !== undefined) {
+          const balance = apiError.response.data.balance || 0;
+          const required = apiError.response.data.required || 0;
           const shortage = required - balance;
 
           setErrorModalTitle("Ví không đủ tiền");
@@ -1476,9 +1483,9 @@ const processPayment = async () => {
                             <Image
                               src={item.primaryImage}
                               alt={item.title}
-                              fill
-                              sizes="128px"
-                              className="object-cover"
+                              width={128}
+                              height={128}
+                              className="object-cover w-full h-full"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -2174,6 +2181,11 @@ const processPayment = async () => {
                                             ) : (
                                               <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">
                                                 Riêng tư
+                                              </span>
+                                            )}
+                                            {discount.isSpecial && (
+                                              <span className="text-[9px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-medium">
+                                                Đặc biệt
                                               </span>
                                             )}
                                             {isUpcoming && (

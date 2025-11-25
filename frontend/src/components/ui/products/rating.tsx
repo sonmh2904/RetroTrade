@@ -177,9 +177,9 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
       setImages(null);
       setRating(5);
       setEditingRatingId(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error submitting rating:", err);
-      toast.error(err?.message || "Có lỗi xảy ra");
+      toast.error((err as Error)?.message || "Có lỗi xảy ra");
     } finally {
       setLoading(false);
     }
@@ -194,8 +194,8 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
       toast.success("Xóa đánh giá thành công!");
       setActiveDropdown(null);
       fetchRatings();
-    } catch (err: any) {
-      toast.error(err?.message || "Xóa đánh giá thất bại");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Xóa đánh giá thất bại");
     }
   };
 

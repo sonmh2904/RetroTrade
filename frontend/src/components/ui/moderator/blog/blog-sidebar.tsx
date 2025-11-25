@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, FolderOpen, MessageSquare, LogOut, Tag } from "lucide-react";
+import { FileText, FolderOpen, MessageSquare, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
 
 interface BlogSidebarProps {

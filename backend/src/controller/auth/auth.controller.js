@@ -39,12 +39,6 @@ module.exports.login = async (req, res) => {
                 message: "Mật khẩu không đúng"
             });
         }
-        // if(!user.isEmailConfirmed || !user.isPhoneConfirmed || !user.isIdVerified) {
-        //     return res.json({
-        //         code: 400,
-        //         message: "Email, phone and id not confirmed"
-        //     });
-        // }
 
         // Check if account is locked
         if (user.isDeleted || !user.isActive) {
@@ -55,13 +49,21 @@ module.exports.login = async (req, res) => {
             });
         }
 
-        if (!user.isEmailConfirmed) {
-            return res.json({
-                code: 400,
-                message: "Email chưa được xác minh"
-            });
+        // Check verification status and create notification if needed (but still allow login)
+        if (!user.isEmailConfirmed || !user.isPhoneConfirmed || !user.isIdVerified) {
+            try {
+                await createNotification(
+                    user._id,
+                    "Auth",
+                    "Xác thực tài khoản chưa hoàn tất",
+                    "Bạn cần xác thực đầy đủ Email, số điện thoại và giấy tờ tùy thân để đăng nhập.",
+                    { isEmailConfirmed: user.isEmailConfirmed, isPhoneConfirmed: user.isPhoneConfirmed, isIdVerified: user.isIdVerified }
+                );
+            } catch (notificationError) {
+                console.error("Error creating verification notification:", notificationError);
+                // Không block login nếu lỗi khi tạo thông báo
+            }
         }
-
         const dataToken = {
             _id: user._id,
             email: user.email,
@@ -70,16 +72,16 @@ module.exports.login = async (req, res) => {
             fullName: user.fullName,
             role: user.role
         };
-        const accessToken = jwt.sign(dataToken, process.env.TOKEN_SECRET, { expiresIn: "7d" });
-        const refreshToken = jwt.sign(dataToken, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
+        const accessToken = jwt.sign(dataToken, process.env.TOKEN_SECRET, { expiresIn: "3d" });
+        const refreshToken = jwt.sign(dataToken, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "15m" });
 
         // Update last login timestamp
         await User.findOneAndUpdate(
-            { email: user.email }, 
-            { 
+            { email: user.email },
+            {
                 lastLoginAt: new Date(),
-                re_token: refreshToken 
-            }, 
+                re_token: refreshToken
+            },
             { new: true }
         );
 
@@ -157,11 +159,11 @@ module.exports.loginWithGoogle = async (req, res) => {
         const accessToken = jwt.sign(dataToken, process.env.TOKEN_SECRET, { expiresIn: "7d" });
         const refreshToken = jwt.sign(dataToken, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
         await User.findOneAndUpdate(
-            { email: existingUser.email }, 
-            { 
+            { email: existingUser.email },
+            {
                 lastLoginAt: new Date(),
-                re_token: refreshToken 
-            }, 
+                re_token: refreshToken
+            },
             { new: true }
         );
         return res.json({ code: 200, message: "Đăng nhập bằng Google thành công", data: { accessToken: accessToken, refreshToken: refreshToken } });
@@ -175,36 +177,36 @@ module.exports.handleFacebookCallback = async (req, res) => {
     try {
         const { code } = req.query;
         if (!code) {
-            return res.status(400).json({ 
-                code: 400, 
-                message: "Thiếu authorization code từ Facebook" 
+            return res.status(400).json({
+                code: 400,
+                message: "Thiếu authorization code từ Facebook"
             });
         }
 
         const appId = process.env.FACEBOOK_APP_ID;
         const appSecret = process.env.FACEBOOK_APP_SECRET;
-        const redirectUri = process.env.FACEBOOK_REDIRECT_URI || 
-                           `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+        const redirectUri = process.env.FACEBOOK_REDIRECT_URI ||
+            `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
 
         if (!appId || !appSecret) {
-            return res.status(500).json({ 
-                code: 500, 
-                message: "Thiếu cấu hình Facebook App ID hoặc App Secret" 
+            return res.status(500).json({
+                code: 500,
+                message: "Thiếu cấu hình Facebook App ID hoặc App Secret"
             });
         }
 
         // Đổi authorization code lấy access token
         const fetch = await initFetch();
         const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${appSecret}&code=${code}`;
-        
+
         const tokenRes = await fetch(tokenUrl);
         const tokenData = await tokenRes.json();
 
         if (!tokenRes.ok || tokenData.error) {
-            return res.status(400).json({ 
-                code: 400, 
+            return res.status(400).json({
+                code: 400,
                 message: tokenData.error?.message || "Không thể lấy access token từ Facebook",
-                error: tokenData.error 
+                error: tokenData.error
             });
         }
 
@@ -216,10 +218,10 @@ module.exports.handleFacebookCallback = async (req, res) => {
         const profile = await profileRes.json();
 
         if (!profileRes.ok || profile.error) {
-            return res.status(400).json({ 
-                code: 400, 
+            return res.status(400).json({
+                code: 400,
                 message: profile.error?.message || "Không thể lấy thông tin từ Facebook",
-                error: profile.error 
+                error: profile.error
             });
         }
 
@@ -228,9 +230,9 @@ module.exports.handleFacebookCallback = async (req, res) => {
         const avatarUrl = profile.picture?.data?.url;
 
         if (!email) {
-            return res.status(400).json({ 
-                code: 400, 
-                message: "Tài khoản Facebook không cấp email" 
+            return res.status(400).json({
+                code: 400,
+                message: "Tài khoản Facebook không cấp email"
             });
         }
 
@@ -271,20 +273,20 @@ module.exports.handleFacebookCallback = async (req, res) => {
         };
         const accessTokenJWT = jwt.sign(dataToken, process.env.TOKEN_SECRET, { expiresIn: "7d" });
         const refreshToken = jwt.sign(dataToken, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
-        
+
         await User.findOneAndUpdate(
-            { email: existingUser.email }, 
-            { 
+            { email: existingUser.email },
+            {
                 lastLoginAt: new Date(),
-                re_token: refreshToken 
-            }, 
+                re_token: refreshToken
+            },
             { new: true }
         );
 
         // Redirect về frontend với tokens trong query params (hoặc có thể dùng session)
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
         const redirectUrl = `${frontendUrl}/auth/facebook/success?accessToken=${accessTokenJWT}&refreshToken=${refreshToken}`;
-        
+
         return res.redirect(redirectUrl);
     } catch (error) {
         console.error("Facebook callback error:", error);
@@ -332,11 +334,11 @@ module.exports.loginWithFacebook = async (req, res) => {
         const accessToken = jwt.sign(dataToken, process.env.TOKEN_SECRET, { expiresIn: "7d" });
         const refreshToken = jwt.sign(dataToken, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
         await User.findOneAndUpdate(
-            { email: existingUser.email }, 
-            { 
+            { email: existingUser.email },
+            {
                 lastLoginAt: new Date(),
-                re_token: refreshToken 
-            }, 
+                re_token: refreshToken
+            },
             { new: true }
         );
         return res.json({ code: 200, message: "Đăng nhập bằng Facebook thành công", data: { accessToken: accessToken, refreshToken: refreshToken } });
