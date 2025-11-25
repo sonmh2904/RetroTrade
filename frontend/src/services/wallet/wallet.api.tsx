@@ -85,9 +85,9 @@ export const getMyWallet = async () => {
   }
 };
 // API nạp tiền vào ví nười dùng 
-export const depositToWallet = async (amount: number, note?: string) => {
+export const depositToWallet = async (amount: number, note?: string , returnUrlBase?: string ) => {
   try {
-    const res = await instance.post("/wallet/deposit", { amount, note });
+    const res = await instance.post("/wallet/deposit", { amount, note , returnUrlBase });
     const parsed = await parseFetchResponse(res);
     return parsed;
   } catch (error) {
