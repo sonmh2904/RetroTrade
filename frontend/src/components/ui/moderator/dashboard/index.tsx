@@ -31,7 +31,8 @@ import {
   Edit,
   Trash2,
   MoreVertical,
-  AlertTriangle
+  AlertTriangle,
+  TrendingUp
 } from "lucide-react";
 import { ProductsChart } from "./charts/products-chart";
 import { PostsChart } from "./charts/posts-chart";
