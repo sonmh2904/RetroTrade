@@ -23,9 +23,13 @@ router.get('/facebook/callback', userAuthController.handleFacebookCallback);
 // Complaint route (public - for banned users)
 router.post('/complaint', complaintController.submitComplaint);
 
-// Phone verification via Firebase ID token (client performs Firebase Phone Auth)
+// Phone verification via Twilio (recommended)
+router.post('/phone/send-otp', authenticateToken, verifyController.sendOtpViaTwilio);
+router.post('/phone/verify-otp', authenticateToken, verifyController.verifyOtpViaTwilio);
+
+// Phone verification via Firebase ID token (client performs Firebase Phone Auth) - deprecated
 router.post('/phone/confirm-firebase', authenticateToken, verifyController.confirmPhoneWithFirebaseIdToken);
-// Firebase Auth REST: send and verify OTP from backend (still needs recaptchaToken from client)
+// Firebase Auth REST: send and verify OTP from backend (deprecated - use Twilio instead)
 router.post('/phone/send-otp-firebase', authenticateToken, verifyController.sendOtpViaFirebase);
 router.post('/phone/verify-otp-firebase', authenticateToken, verifyController.verifyOtpViaFirebase);
 

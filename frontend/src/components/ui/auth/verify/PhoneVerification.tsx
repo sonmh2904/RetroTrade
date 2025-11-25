@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import Script from 'next/script';
+import { useState } from 'react';
 import PhoneInput from "./PhoneInput";
 import OTPInput from "./OTPInput";
 import ResultDisplay from "./ResultDisplay";
-import { sendOtpFirebase, verifyOtpFirebase } from '@/services/auth/auth.api';
+import { sendOtp, verifyOtp } from '@/services/auth/auth.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../common/card';
 import { Phone } from 'lucide-react';
 
@@ -27,22 +26,10 @@ export function PhoneVerification({
   const [step, setStep] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [sessionInfo, setSessionInfo] = useState('');
   const [result, setResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [failedStep, setFailedStep] = useState<number | null>(null);
-
-  // Prepare reCAPTCHA container
-  useEffect(() => {
-    const containerId = 'recaptcha-container-phone';
-    let container = document.getElementById(containerId);
-    if (!container) {
-      container = document.createElement('div');
-      container.id = containerId;
-      document.body.appendChild(container);
-    }
-  }, []);
 
   const formatPhoneNumber = (phone: string): string => {
     const digits = phone.replace(/\D/g, '');
@@ -58,10 +45,10 @@ export function PhoneVerification({
       setError('');
       setFailedStep(null);
       const formatted = formatPhoneNumber(phoneNumber);
-      const resp = await sendOtpFirebase(formatted, undefined);
+
+      const resp = await sendOtp(formatted);
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.message || 'Send OTP failed');
-      setSessionInfo(data?.data?.sessionInfo || '');
       setStep(2);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Có lỗi xảy ra khi gửi OTP');
@@ -76,7 +63,8 @@ export function PhoneVerification({
       setIsLoading(true);
       setError('');
       setFailedStep(null);
-      const resp = await verifyOtpFirebase(sessionInfo, otp);
+      const formatted = formatPhoneNumber(phoneNumber);
+      const resp = await verifyOtp(formatted, otp);
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.message || 'Verify OTP failed');
       
@@ -117,7 +105,6 @@ export function PhoneVerification({
     setStep(1);
     setPhoneNumber('');
     setOtp('');
-    setSessionInfo('');
     setResult(null);
     setError('');
     setFailedStep(null);
@@ -131,10 +118,6 @@ export function PhoneVerification({
 
   return (
     <div className={className}>
-      {/* Firebase compat scripts */}
-      <Script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" strategy="afterInteractive" />
-      <Script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" strategy="afterInteractive" />
-      <div id="recaptcha-container-phone" />
 
       <Card className="w-full">
         <CardHeader className="text-center">

@@ -4,6 +4,7 @@ const { getAdmin } = require("../../config/firebase");
 const { uploadToCloudinary } = require('../../middleware/upload.middleware');
 const { createNotification } = require("../../middleware/createNotification");
 const { encryptObject, decryptObject } = require("../../utils/cryptoHelper");
+const { sendOtp: sendOtpTwilio, verifyOtp: verifyOtpTwilio, formatPhoneForTwilio } = require("../../utils/twilioUtils");
 
 let Tesseract;
 let tesseractLoaded = false;
@@ -513,77 +514,42 @@ const extractIdCardInfo = async (idCardImageBuffer) => {
     }
 };
 
-module.exports.sendOtpViaFirebase = async (req, res) => {
+module.exports.sendOtpViaTwilio = async (req, res) => {
     try {
-        const { phone, recaptchaToken } = req.body;
+        const { phone } = req.body;
         if (!phone) {
             return res.status(400).json({ code: 400, message: "Thiếu số điện thoại" });
         }
 
-        const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-        const usingEmulator = Boolean(emulatorHost);
-        const apiKey = usingEmulator ? "dummy" : process.env.FIREBASE_WEB_API_KEY;
+        const result = await sendOtpTwilio(phone);
 
-        if (!apiKey) {
-            return res.status(500).json({
-                code: 500,
-                message: "Thiếu FIREBASE_WEB_API_KEY trong môi trường. Vui lòng kiểm tra cấu hình Firebase.",
-                error: "Missing FIREBASE_WEB_API_KEY environment variable"
-            });
-        }
-
-        const baseUrl = usingEmulator
-            ? `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`
-            : `https://identitytoolkit.googleapis.com/v1`;
-
-        const payload = usingEmulator
-            ? { phoneNumber: phone }
-            : { phoneNumber: phone, recaptchaToken };
-
-        if (!usingEmulator && !recaptchaToken) {
-            return res.status(400).json({ code: 400, message: "Thiếu recaptchaToken (production)" });
-        }
-
-        const fetch = await initFetch();
-        const response = await fetch(`${baseUrl}/accounts:sendVerificationCode?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            timeout: 30000
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
+        if (!result.success) {
             return res.status(400).json({
                 code: 400,
-                message: data.error?.message || "Gửi OTP thất bại",
-                error: data
+                message: result.error || "Gửi OTP thất bại",
+                error: result.error
             });
         }
 
         return res.json({
             code: 200,
-            message: "Đã gửi OTP qua Firebase",
-            data: { sessionInfo: data.sessionInfo }
+            message: "Đã gửi OTP qua SMS",
+            data: { 
+                sid: result.sid,
+                status: result.status
+            }
         });
     } catch (error) {
         console.error('OTP sending error:', error);
         let errorMessage = "Lỗi khi gửi OTP";
         let statusCode = 500;
 
-        if (error.message.includes('fetch failed')) {
-            errorMessage = "Không thể kết nối đến dịch vụ xác thực. Vui lòng kiểm tra kết nối mạng và thử lại.";
-            statusCode = 503;
-        } else if (error.message.includes('timeout')) {
-            errorMessage = "Yêu cầu gửi OTP quá thời gian chờ. Vui lòng thử lại.";
-            statusCode = 408;
-        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            errorMessage = "Không thể kết nối đến server xác thực. Vui lòng thử lại sau.";
-            statusCode = 503;
-        } else if (error.message.includes('Invalid API key')) {
-            errorMessage = "Cấu hình API key không đúng. Vui lòng liên hệ quản trị viên.";
+        if (error.message.includes('TWILIO')) {
+            errorMessage = "Cấu hình Twilio chưa đúng. Vui lòng kiểm tra environment variables.";
             statusCode = 500;
+        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+            errorMessage = "Không thể kết nối đến dịch vụ Twilio. Vui lòng thử lại sau.";
+            statusCode = 503;
         }
 
         return res.status(statusCode).json({
@@ -594,73 +560,23 @@ module.exports.sendOtpViaFirebase = async (req, res) => {
     }
 }
 
-module.exports.verifyOtpViaFirebase = async (req, res) => {
+// Keep Firebase function for backward compatibility (deprecated)
+module.exports.sendOtpViaFirebase = module.exports.sendOtpViaTwilio;
+
+module.exports.verifyOtpViaTwilio = async (req, res) => {
     try {
-        const { sessionInfo, code } = req.body;
-        if (!sessionInfo || !code) {
-            return res.status(400).json({ code: 400, message: "Thiếu sessionInfo hoặc mã OTP" });
+        const { phone, code } = req.body;
+        if (!phone || !code) {
+            return res.status(400).json({ code: 400, message: "Thiếu số điện thoại hoặc mã OTP" });
         }
 
-        const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-        const usingEmulator = Boolean(emulatorHost);
-        const apiKey = usingEmulator ? "dummy" : process.env.FIREBASE_WEB_API_KEY;
+        const result = await verifyOtpTwilio(phone, code);
 
-        if (!apiKey) {
-            const mockUserId = `mock_user_${Date.now()}`;
-            const mockPhone = "0123456789";
-            return res.json({
-                code: 200,
-                message: "Xác minh OTP thành công (Mock Mode)",
-                data: {
-                    phone: mockPhone,
-                    userId: mockUserId,
-                    isPhoneConfirmed: true
-                },
-                warning: "Đang sử dụng mock verification cho development. Vui lòng cấu hình Firebase để sử dụng thật."
-            });
-        }
-
-        const baseUrl = usingEmulator
-            ? `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`
-            : `https://identitytoolkit.googleapis.com/v1`;
-
-        const fetch = await initFetch();
-        const response = await fetch(`${baseUrl}/accounts:signInWithPhoneNumber?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sessionInfo, code })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            return res.status(400).json({ code: 400, message: data.error?.message || "Xác minh OTP thất bại", error: data });
-        }
-
-        let admin, decoded, phoneNumber;
-        try {
-            admin = getAdmin();
-            decoded = await admin.auth().verifyIdToken(data.idToken);
-            phoneNumber = decoded.phone_number;
-        } catch (adminError) {
-            console.error('Firebase Admin SDK error:', adminError);
-            return res.status(500).json({
-                code: 500,
-                message: "Lỗi xác thực Firebase Admin SDK. Vui lòng kiểm tra cấu hình Firebase.",
-                error: adminError.message
-            });
-        }
-
-        if (!phoneNumber) {
-            return res.status(400).json({
-                code: 400,
-                message: "ID token không chứa số điện thoại"
-            });
-        }
-
-        const formattedPhone = formatPhoneNumber(phoneNumber);
-        if (!validateVietnamesePhoneNumber(formattedPhone)) {
-            return res.status(400).json({
-                code: 400,
-                message: "Số điện thoại không đúng định dạng Việt Nam"
+        if (!result.success) {
+            return res.status(400).json({ 
+                code: 400, 
+                message: result.error || "Xác minh OTP thất bại",
+                error: result.error
             });
         }
 
@@ -673,7 +589,17 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
         }
 
         try {
-            // First, get the user to check current verification status
+            // Format phone to Vietnamese format (0xxx)
+            const formattedPhone = formatPhoneNumber(formatPhoneForTwilio(phone));
+            
+            if (!validateVietnamesePhoneNumber(formattedPhone)) {
+                return res.status(400).json({
+                    code: 400,
+                    message: "Số điện thoại không đúng định dạng Việt Nam"
+                });
+            }
+
+            // Get the user to check current verification status
             const currentUser = await User.findById(userId);
             if (!currentUser) {
                 return res.status(404).json({
@@ -690,11 +616,44 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
             );
 
             // Check if both phone and ID are now verified
-            // If ID was already verified, user is now fully verified
-            if (currentUser.isIdVerified) {
-                // Both phone and ID are verified - user is fully verified
-                // The flags are already set correctly, no additional action needed
+            const isFullyVerified = updatedUser.isPhoneConfirmed && updatedUser.isIdVerified;
+
+            if (isFullyVerified) {
                 console.log(`User ${userId} is now fully verified (phone and ID both verified)`);
+                
+                try {
+                    await createNotification(
+                        userId,
+                        "Tài khoản đã được xác minh đầy đủ",
+                        "Tài khoản đã được xác minh đầy đủ",
+                        `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công. Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).`,
+                        {
+                            phone: formattedPhone,
+                            type: 'full_verification_success',
+                            redirectUrl: '/auth/verification-history',
+                            isFullyVerified: true
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error("Error creating full verification notification:", notificationError);
+                }
+            } else {
+                try {
+                    await createNotification(
+                        userId,
+                        "Xác minh số điện thoại thành công",
+                        "Xác minh số điện thoại thành công",
+                        `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công.`,
+                        {
+                            phone: formattedPhone,
+                            type: 'phone_verification_success',
+                            redirectUrl: '/auth/verification-history',
+                            isFullyVerified: false
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error("Error creating phone verification notification:", notificationError);
+                }
             }
 
             return res.json({
@@ -705,7 +664,7 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
                     userId: updatedUser._id,
                     isPhoneConfirmed: updatedUser.isPhoneConfirmed,
                     isIdVerified: updatedUser.isIdVerified,
-                    isFullyVerified: updatedUser.isPhoneConfirmed && updatedUser.isIdVerified,
+                    isFullyVerified: isFullyVerified,
                     user: updatedUser
                 }
             });
@@ -722,21 +681,12 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
         let errorMessage = "Lỗi khi xác minh OTP";
         let statusCode = 500;
 
-        if (error.message.includes('fetch failed')) {
-            errorMessage = "Không thể kết nối đến dịch vụ xác thực. Vui lòng kiểm tra kết nối mạng và thử lại.";
-            statusCode = 503;
-        } else if (error.message.includes('timeout')) {
-            errorMessage = "Yêu cầu xác minh OTP quá thời gian chờ. Vui lòng thử lại.";
-            statusCode = 408;
+        if (error.message.includes('TWILIO')) {
+            errorMessage = "Cấu hình Twilio chưa đúng. Vui lòng kiểm tra environment variables.";
+            statusCode = 500;
         } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            errorMessage = "Không thể kết nối đến server xác thực. Vui lòng thử lại sau.";
+            errorMessage = "Không thể kết nối đến dịch vụ Twilio. Vui lòng thử lại sau.";
             statusCode = 503;
-        } else if (error.message.includes('Invalid API key')) {
-            errorMessage = "Cấu hình API key không đúng. Vui lòng liên hệ quản trị viên.";
-            statusCode = 500;
-        } else if (error.message.includes('Firebase Admin credentials')) {
-            errorMessage = "Cấu hình Firebase Admin SDK không đúng. Vui lòng kiểm tra environment variables.";
-            statusCode = 500;
         } else if (error.message.includes('Database')) {
             errorMessage = "Lỗi cơ sở dữ liệu. Vui lòng thử lại sau.";
             statusCode = 500;
@@ -749,6 +699,9 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
         });
     }
 }
+
+// Keep Firebase function for backward compatibility (deprecated)
+module.exports.verifyOtpViaFirebase = module.exports.verifyOtpViaTwilio;
 
 module.exports.confirmPhoneWithFirebaseIdToken = async (req, res) => {
     try {
