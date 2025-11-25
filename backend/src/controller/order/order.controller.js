@@ -420,7 +420,8 @@ module.exports = {
 
       if (order.startAt && new Date(order.startAt) > new Date()) {
         return res.status(400).json({
-          message: "Cannot start rental before scheduled start date",
+          message:
+            "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
         });
       }
 
