@@ -52,7 +52,6 @@ const StyledWrapper = styled.div<{ gradient: string }>`
     backdrop-filter: blur(4px);
   }
 
-
   .card__front {
     position: absolute;
     inset: 0;
@@ -72,7 +71,6 @@ const StyledWrapper = styled.div<{ gradient: string }>`
     height: 130px;
     padding: 20px;
 
-
     background: rgba(255, 255, 255, 0.22);
     border-radius: 50%;
     border: 1.5px solid rgba(255, 255, 255, 0.3);
@@ -87,7 +85,7 @@ const StyledWrapper = styled.div<{ gradient: string }>`
   .card__icon-wrapper svg {
     width: 48px;
     height: 48px;
-    color: #ffffff;
+    color: #41a67e;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
   }
@@ -97,13 +95,12 @@ const StyledWrapper = styled.div<{ gradient: string }>`
     margin-bottom: 0;
     font-size: 1rem;
     font-weight: 600;
-    color: #ffffff;
+    color: #393d7e;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     line-height: 1.3;
     text-align: center;
     letter-spacing: 0.3px;
   }
-
 
   .card:hover .card__front {
     opacity: 0;
@@ -119,7 +116,6 @@ const StyledWrapper = styled.div<{ gradient: string }>`
     transform: rotate(-5deg) scale(1.1);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
   }
-
 
   .card__content {
     position: absolute;
@@ -151,7 +147,7 @@ const StyledWrapper = styled.div<{ gradient: string }>`
     margin: 0 0 8px 0;
     font-size: 1.5rem;
     font-weight: 700;
-    color: #1a1a1a;
+    color: #6677ee;
     line-height: 1.3;
   }
 
