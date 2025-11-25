@@ -1,10 +1,9 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { Bell, Search, User, LogOut, Settings, Activity, Home } from "lucide-react"
+import { Search, User, LogOut, Settings, Activity, Home } from "lucide-react"
 import { Button } from "@/components/ui/common/button"
 import { Input } from "@/components/ui/common/input"
-import { Badge } from "@/components/ui/common/badge"
 import { NotificationIcon } from "@/components/ui/common/notification-icon"
 import {
   DropdownMenu,

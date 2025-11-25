@@ -406,7 +406,7 @@ export function TermsForm({
               <form className="space-y-6" onSubmit={handleSubmit}>
                 {!isEditing && (
                   <motion.div variants={itemVariants}>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                       <FileText className="w-4 h-4 text-indigo-600" />
                       Phiên Bản <span className="text-red-500">*</span>
                     </label>
@@ -432,7 +432,7 @@ export function TermsForm({
                   </motion.div>
                 )}
                 <motion.div variants={itemVariants}>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-600" />
                     Tiêu Đề <span className="text-red-500">*</span>
                   </label>
@@ -457,7 +457,7 @@ export function TermsForm({
                   )}
                 </motion.div>
                 <motion.div variants={itemVariants}>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-indigo-600" />
                     Ngày Hiệu Lực <span className="text-red-500">*</span>
                   </label>
@@ -485,7 +485,7 @@ export function TermsForm({
                   )}
                 </motion.div>
                 <motion.div variants={itemVariants}>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-600" />
                     Tóm Tắt Thay Đổi (tùy chọn)
                   </label>
@@ -503,7 +503,7 @@ export function TermsForm({
                   />
                 </motion.div>
                 <motion.div variants={itemVariants}>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-600" />
                     Các Phần Điều Khoản <span className="text-red-500">*</span>
                   </label>

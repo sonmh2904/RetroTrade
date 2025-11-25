@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { useDispatch, useSelector } from "react-redux"
+import { useSelector } from "react-redux"
 import { useRouter } from "next/navigation"
-import { RootState, AppDispatch } from "@/store/redux_store"
+import { RootState } from "@/store/redux_store"
+import { useAppDispatch } from "@/store/hooks"
 import { addItemToCartAction, fetchCartItemCount } from "@/store/cart/cartActions"
 import { Button } from "@/components/ui/common/button"
 import { ShoppingCart, Loader2 } from "lucide-react"
@@ -28,7 +29,7 @@ export default function AddToCartButton({
   showText = false,
   disabled = false
 }: AddToCartButtonProps) {
-  const dispatch = useDispatch<AppDispatch>()
+  const dispatch = useAppDispatch()
   const router = useRouter()
   const { accessToken } = useSelector((state: RootState) => state.auth)
   const [isLoading, setIsLoading] = useState(false)
@@ -85,13 +86,30 @@ export default function AddToCartButton({
     try {
       setIsLoading(true)
       
-      // Set default rental dates: start today, end tomorrow (1 day rental)
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(today.getDate() + 1)
+      // Lấy thời gian thực tế hiện tại với cả giờ, phút, giây
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth() + 1
+      const currentDate = now.getDate()
+      const currentHours = now.getHours()
+      const currentMinutes = now.getMinutes()
+      const currentSeconds = now.getSeconds()
+
+      // Format ngày bắt đầu: YYYY-MM-DDTHH:mm:ss
+      const rentalStartDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDate).padStart(2, '0')}T${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`
       
-      const rentalStartDate = today.toISOString().split('T')[0] // Format: YYYY-MM-DD
-      const rentalEndDate = tomorrow.toISOString().split('T')[0] // Format: YYYY-MM-DD
+      // Tính ngày mai với thời gian hiện tại
+      const tomorrow = new Date(now)
+      tomorrow.setDate(now.getDate() + 1)
+      const tomorrowYear = tomorrow.getFullYear()
+      const tomorrowMonth = tomorrow.getMonth() + 1
+      const tomorrowDate = tomorrow.getDate()
+      const tomorrowHours = tomorrow.getHours()
+      const tomorrowMinutes = tomorrow.getMinutes()
+      const tomorrowSeconds = tomorrow.getSeconds()
+      
+      // Format ngày kết thúc: YYYY-MM-DDTHH:mm:ss
+      const rentalEndDate = `${tomorrowYear}-${String(tomorrowMonth).padStart(2, '0')}-${String(tomorrowDate).padStart(2, '0')}T${String(tomorrowHours).padStart(2, '0')}:${String(tomorrowMinutes).padStart(2, '0')}:${String(tomorrowSeconds).padStart(2, '0')}` 
       
       const result = await dispatch(addItemToCartAction({
         itemId,

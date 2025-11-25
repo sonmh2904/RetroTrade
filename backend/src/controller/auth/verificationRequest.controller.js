@@ -2,6 +2,35 @@ const VerificationRequest = require("../../models/VerificationRequest.model");
 const User = require("../../models/User.model");
 const { uploadToCloudinary } = require('../../middleware/upload.middleware');
 const { createNotification } = require("../../middleware/createNotification");
+const { encryptObject, decryptObject } = require("../../utils/cryptoHelper");
+
+// Helper function để giải mã idCardInfo từ request
+const decryptIdCardInfo = (request) => {
+    if (!request) return null;
+    
+    // Nếu có dữ liệu mã hóa, giải mã
+    if (request.idCardInfoEncrypted && request.idCardInfoEncrypted.encryptedData && request.idCardInfoEncrypted.iv) {
+        try {
+            const encryptedHex = request.idCardInfoEncrypted.encryptedData.toString("hex");
+            const decrypted = decryptObject(encryptedHex, request.idCardInfoEncrypted.iv);
+            // Chuyển đổi dateOfBirth từ string về Date nếu cần
+            if (decrypted.dateOfBirth) {
+                decrypted.dateOfBirth = new Date(decrypted.dateOfBirth);
+            }
+            return decrypted;
+        } catch (decryptError) {
+            console.error('Error decrypting idCardInfo:', decryptError);
+            return null;
+        }
+    }
+    
+    // Fallback: nếu có dữ liệu cũ chưa mã hóa (tương thích ngược)
+    if (request.idCardInfo) {
+        return request.idCardInfo;
+    }
+    
+    return null;
+};
 
 module.exports.createVerificationRequest = async (req, res) => {
     try {
@@ -72,14 +101,35 @@ module.exports.createVerificationRequest = async (req, res) => {
 
         const shouldAutoReject = !hasValidIdCardInfo;
 
+        // Mã hóa idCardInfo nếu có
+        let idCardInfoEncrypted = null;
+        if (idCardInfo && hasValidIdCardInfo) {
+            try {
+                const idCardData = {
+                    idNumber: idCardInfo.idNumber || null,
+                    fullName: idCardInfo.fullName || null,
+                    dateOfBirth: idCardInfo.dateOfBirth ? new Date(idCardInfo.dateOfBirth).toISOString() : null,
+                    address: idCardInfo.address || null
+                };
+                const { iv, encryptedData } = encryptObject(idCardData);
+                idCardInfoEncrypted = {
+                    encryptedData: Buffer.from(encryptedData, "hex"),
+                    iv: iv
+                };
+            } catch (encryptError) {
+                console.error('Error encrypting idCardInfo:', encryptError);
+                return res.status(500).json({
+                    code: 500,
+                    message: "Lỗi khi mã hóa thông tin căn cước công dân",
+                    error: encryptError.message
+                });
+            }
+        }
+
         const verificationRequest = new VerificationRequest({
             userId: userId,
-            idCardInfo: idCardInfo ? {
-                idNumber: idCardInfo.idNumber || null,
-                fullName: idCardInfo.fullName || null,
-                dateOfBirth: idCardInfo.dateOfBirth ? new Date(idCardInfo.dateOfBirth) : null,
-                address: idCardInfo.address || null
-            } : null,
+            idCardInfo: null, // Không lưu dữ liệu gốc
+            idCardInfoEncrypted: idCardInfoEncrypted,
             documents: documents,
             reason: reason || null,
             status: shouldAutoReject ? 'Rejected' : 'Pending',
@@ -109,11 +159,16 @@ module.exports.createVerificationRequest = async (req, res) => {
                 console.error("Error creating rejection notification:", notificationError);
             }
 
+            // Giải mã idCardInfo để trả về
+            const decryptedIdCardInfo = decryptIdCardInfo(verificationRequest);
+            const requestData = verificationRequest.toObject();
+            requestData.idCardInfo = decryptedIdCardInfo;
+
             return res.json({
                 code: 200,
                 message: "Yêu cầu xác minh đã bị từ chối tự động do không thể đọc được thông tin từ ảnh. Vui lòng chụp lại ảnh rõ nét hơn.",
                 data: {
-                    ...verificationRequest.toObject(),
+                    ...requestData,
                     autoRejected: true,
                     rejectionReason: verificationRequest.rejectionReason
                 }
@@ -154,10 +209,15 @@ module.exports.createVerificationRequest = async (req, res) => {
                 console.error("Error creating user notification:", notificationError);
             }
 
+            // Giải mã idCardInfo để trả về
+            const decryptedIdCardInfo = decryptIdCardInfo(verificationRequest);
+            const requestData = verificationRequest.toObject();
+            requestData.idCardInfo = decryptedIdCardInfo;
+
             return res.json({
                 code: 200,
                 message: "Yêu cầu xác minh đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.",
-                data: verificationRequest
+                data: requestData
             });
         }
     } catch (error) {
@@ -185,10 +245,17 @@ module.exports.getMyVerificationRequests = async (req, res) => {
             .populate('handledBy', 'fullName email')
             .sort({ createdAt: -1 });
 
+        // Giải mã idCardInfo cho mỗi request
+        const requestsWithDecrypted = requests.map(request => {
+            const requestData = request.toObject();
+            requestData.idCardInfo = decryptIdCardInfo(request);
+            return requestData;
+        });
+
         return res.json({
             code: 200,
             message: "Lấy danh sách yêu cầu xác minh thành công",
-            data: requests
+            data: requestsWithDecrypted
         });
     } catch (error) {
         console.error('Error getting verification requests:', error);
@@ -223,10 +290,15 @@ module.exports.getMyVerificationRequestById = async (req, res) => {
             });
         }
 
+        // Giải mã idCardInfo để trả về
+        const decryptedIdCardInfo = decryptIdCardInfo(request);
+        const requestData = request.toObject();
+        requestData.idCardInfo = decryptedIdCardInfo;
+
         return res.json({
             code: 200,
             message: "Lấy thông tin yêu cầu xác minh thành công",
-            data: request
+            data: requestData
         });
     } catch (error) {
         console.error('Error getting verification request:', error);
@@ -256,11 +328,18 @@ module.exports.getAllVerificationRequests = async (req, res) => {
             .populate('handledBy', 'fullName email')
             .sort({ createdAt: -1 });
 
+        // Giải mã idCardInfo cho mỗi request
+        const requestsWithDecrypted = requests.map(request => {
+            const requestData = request.toObject();
+            requestData.idCardInfo = decryptIdCardInfo(request);
+            return requestData;
+        });
+
         return res.json({
             code: 200,
             message: "Lấy danh sách yêu cầu xác minh thành công",
-            data: requests,
-            total: requests.length
+            data: requestsWithDecrypted,
+            total: requestsWithDecrypted.length
         });
     } catch (error) {
         console.error('Error getting all verification requests:', error);
@@ -288,10 +367,15 @@ module.exports.getVerificationRequestById = async (req, res) => {
             });
         }
 
+        // Giải mã idCardInfo để trả về
+        const decryptedIdCardInfo = decryptIdCardInfo(request);
+        const requestData = request.toObject();
+        requestData.idCardInfo = decryptedIdCardInfo;
+
         return res.json({
             code: 200,
             message: "Lấy thông tin yêu cầu xác minh thành công",
-            data: request
+            data: requestData
         });
     } catch (error) {
         console.error('Error getting verification request:', error);
@@ -437,12 +521,28 @@ module.exports.handleVerificationRequest = async (req, res) => {
         request.rejectionReason = action === 'rejected' ? (rejectionReason || null) : null;
 
         if (action === 'approved' && idCardInfo) {
-            request.idCardInfo = {
-                idNumber: idCardInfo.idNumber.trim(),
-                fullName: idCardInfo.fullName.trim(),
-                dateOfBirth: new Date(idCardInfo.dateOfBirth),
-                address: idCardInfo.address.trim()
-            };
+            // Mã hóa idCardInfo trước khi lưu
+            try {
+                const idCardData = {
+                    idNumber: idCardInfo.idNumber.trim(),
+                    fullName: idCardInfo.fullName.trim(),
+                    dateOfBirth: new Date(idCardInfo.dateOfBirth).toISOString(),
+                    address: idCardInfo.address.trim()
+                };
+                const { iv, encryptedData } = encryptObject(idCardData);
+                request.idCardInfo = null; // Không lưu dữ liệu gốc
+                request.idCardInfoEncrypted = {
+                    encryptedData: Buffer.from(encryptedData, "hex"),
+                    iv: iv
+                };
+            } catch (encryptError) {
+                console.error('Error encrypting idCardInfo:', encryptError);
+                return res.status(500).json({
+                    code: 500,
+                    message: "Lỗi khi mã hóa thông tin căn cước công dân",
+                    error: encryptError.message
+                });
+            }
         }
 
         await request.save();
@@ -452,14 +552,30 @@ module.exports.handleVerificationRequest = async (req, res) => {
             if (user) {
                 user.isIdVerified = true;
                 if (idCardInfo) {
-                    user.idCardInfo = {
-                        idNumber: idCardInfo.idNumber.trim(),
-                        fullName: idCardInfo.fullName.trim(),
-                        dateOfBirth: new Date(idCardInfo.dateOfBirth),
-                        address: idCardInfo.address.trim(),
-                        extractedAt: new Date(),
-                        extractionMethod: 'manual'
-                    };
+                    // Mã hóa idCardInfo trước khi lưu vào User
+                    try {
+                        const idCardData = {
+                            idNumber: idCardInfo.idNumber.trim(),
+                            fullName: idCardInfo.fullName.trim(),
+                            dateOfBirth: new Date(idCardInfo.dateOfBirth).toISOString(),
+                            address: idCardInfo.address.trim(),
+                            extractedAt: new Date().toISOString(),
+                            extractionMethod: 'manual'
+                        };
+                        const { iv, encryptedData } = encryptObject(idCardData);
+                        user.idCardInfo = null; // Không lưu dữ liệu gốc
+                        user.idCardInfoEncrypted = {
+                            encryptedData: Buffer.from(encryptedData, "hex"),
+                            iv: iv
+                        };
+                    } catch (encryptError) {
+                        console.error('Error encrypting idCardInfo for user:', encryptError);
+                        return res.status(500).json({
+                            code: 500,
+                            message: "Lỗi khi mã hóa thông tin căn cước công dân cho người dùng",
+                            error: encryptError.message
+                        });
+                    }
                 }
                 if (request.documents && request.documents.length > 0) {
                     const documents = request.documents.map((doc, index) => {
@@ -475,38 +591,72 @@ module.exports.handleVerificationRequest = async (req, res) => {
                     user.documents.push(...documents);
                 }
                 await user.save();
+
+                // Check if both phone and ID are now verified
+                // If phone was already verified, user is now fully verified
+                const isFullyVerified = user.isPhoneConfirmed && user.isIdVerified;
+                if (isFullyVerified) {
+                    console.log(`User ${user._id} is now fully verified (phone and ID both verified)`);
+                }
             }
         }
 
         await request.save();
 
         try {
-            const message = action === 'approved' 
-                ? `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh thành công.`
-                : `Yêu cầu xác minh căn cước công dân của bạn đã bị từ chối. Lý do: ${rejectionReason || 'Không được cung cấp'}`;
+            let message = '';
+            let notificationTitle = '';
+            let notificationType = '';
+            let isFullyVerified = false;
+            
+            if (action === 'approved') {
+                // Check if user is fully verified (both phone and ID)
+                const user = await User.findById(request.userId._id || request.userId);
+                isFullyVerified = user && user.isPhoneConfirmed && user.isIdVerified;
+                
+                if (isFullyVerified) {
+                    message = `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).`;
+                    notificationTitle = "Tài khoản đã được xác minh đầy đủ";
+                    notificationType = 'full_verification_success';
+                } else {
+                    message = `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt. Tài khoản của bạn đã được xác minh thành công.`;
+                    notificationTitle = "Xác minh CCCD đã được duyệt";
+                    notificationType = 'id_card_verification_approved';
+                }
+            } else {
+                message = `Yêu cầu xác minh căn cước công dân của bạn đã bị từ chối. Lý do: ${rejectionReason || 'Không được cung cấp'}`;
+                notificationTitle = "Xác minh CCCD bị từ chối";
+                notificationType = 'id_card_verification_rejected';
+            }
             
             await createNotification(
                 request.userId._id,
-                action === 'approved' ? "Xác minh CCCD đã được duyệt" : "Xác minh CCCD bị từ chối",
-                action === 'approved' ? "Xác minh CCCD đã được duyệt" : "Xác minh CCCD bị từ chối",
+                notificationTitle,
+                notificationTitle,
                 message,
                 {
                     requestId: request._id.toString(),
-                    type: action === 'approved' ? 'id_card_verification_approved' : 'id_card_verification_rejected',
+                    type: notificationType,
                     action: action,
-                    redirectUrl: '/auth/verification-history'
+                    redirectUrl: '/auth/verification-history',
+                    isFullyVerified: isFullyVerified
                 }
             );
         } catch (notificationError) {
             console.error("Error creating notification:", notificationError);
         }
 
+        // Giải mã idCardInfo để trả về
+        const decryptedIdCardInfo = decryptIdCardInfo(request);
+        const requestData = request.toObject();
+        requestData.idCardInfo = decryptedIdCardInfo;
+
         return res.json({
             code: 200,
             message: action === 'approved' 
                 ? "Yêu cầu xác minh đã được duyệt thành công" 
                 : "Yêu cầu xác minh đã bị từ chối",
-            data: request
+            data: requestData
         });
     } catch (error) {
         console.error('Error handling verification request:', error);

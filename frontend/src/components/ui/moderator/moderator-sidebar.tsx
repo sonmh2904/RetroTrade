@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   Package,
   MessageCircle,
-  CircleAlert,
   AlertTriangle,
   Users,
   Ban,

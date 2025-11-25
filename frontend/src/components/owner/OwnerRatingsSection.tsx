@@ -228,7 +228,7 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
                       />
                     ))}
                   </div>
-                  <span>{rating.Item?.Title || (rating as any)?.itemId?.Title}</span>
+                  <span>{rating.Item?.Title || (rating as unknown as { itemId: { Title: string } })?.itemId?.Title}</span>
                 </div>
               </div>
               <span className="ml-auto text-sm text-gray-500">

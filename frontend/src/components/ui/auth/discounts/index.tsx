@@ -55,7 +55,9 @@ export default function MyDiscountsPage() {
       setError(null);
       const res = await listAvailableDiscounts(page, 20);
       if (res.status === "success" && res.data) {
-        setItems(res.data);
+        // Kết hợp public và special discounts
+        const allDiscounts = [...(res.data.public || []), ...(res.data.special || [])];
+        setItems(allDiscounts);
         setTotalPages(res.pagination?.totalPages || 1);
       } else {
         setError(res.message || "Không thể tải danh sách mã của bạn");
@@ -90,62 +92,47 @@ export default function MyDiscountsPage() {
     }
   };
 
-  // Filter available public discounts (only active and within time window) - for featured section
-  const availablePublicDiscounts = useMemo(() => {
-    const now = new Date();
+  // Filter special discounts (discount đặc biệt gán riêng cho user)
+  const specialDiscounts = useMemo(() => {
     return items.filter((d) => {
-      const start = new Date(d.startAt);
-      const end = new Date(d.endAt);
-      const isPublic = d.isPublic === true || Boolean(d.isPublic);
-      return isPublic && d.active && start <= now && end >= now;
+      // Backend đã filter thời gian, chỉ cần check isSpecial flag
+      return d.isSpecial === true;
     });
   }, [items]);
 
-  // Filter private discounts (from RT Points conversion) - for user's own discounts
-  const myPrivateDiscounts = useMemo(() => {
+  // Filter public discounts (discount công khai)
+  const publicDiscounts = useMemo(() => {
     return items.filter((d) => {
-      const isPublic = d.isPublic === true || Boolean(d.isPublic);
-      return !isPublic && d.active; // Private discounts that are active
+      // Backend đã filter thời gian, chỉ cần check không phải special
+      return d.isSpecial !== true;
     });
   }, [items]);
 
-  // Filter all public + active discounts (regardless of time) - for main list
-  const allPublicActiveDiscounts = useMemo(() => {
-    return items.filter((d) => {
-      const isPublic = d.isPublic === true || Boolean(d.isPublic);
-      return isPublic && d.active;
-    });
-  }, [items]);
-
-  // Combine public and private discounts for main list
+  // Combine all available discounts for main list
   const allAvailableDiscounts = useMemo(() => {
-    return [...allPublicActiveDiscounts, ...myPrivateDiscounts];
-  }, [allPublicActiveDiscounts, myPrivateDiscounts]);
+    return items; // Backend đã filter và trả về tất cả discount đang sử dụng được
+  }, [items]);
 
   const filteredItems = useMemo(() => {
     const now = new Date();
 
-    // Start with ALL available discounts (public + private)
+    // Start with ALL available discounts (backend đã filter thời gian)
     let list = allAvailableDiscounts;
 
     // Apply tab filters
     if (tab === "active") {
-      // Only show discounts that are currently usable (within time window)
-      list = list.filter((d) => {
-        const start = new Date(d.startAt);
-        const end = new Date(d.endAt);
-        return start <= now && end >= now;
-      });
+      // Backend đã filter, tất cả discount đều đang active
+      // Không cần filter thêm
+      list = list;
     } else if (tab === "expiring") {
-      // Only show discounts that are expiring soon (within 7 days) and currently active
+      // Only show discounts that are expiring soon (within 7 days)
       list = list.filter((d) => {
-        const start = new Date(d.startAt);
         const end = new Date(d.endAt);
         const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return start <= now && end >= now && diffDays > 0 && diffDays <= 7;
+        return diffDays > 0 && diffDays <= 7;
       });
     }
-    // "all" tab shows all available discounts regardless of time
+    // "all" tab shows all available discounts (backend đã filter)
 
     // Apply type filter
     if (typeFilter !== "all") {
@@ -189,8 +176,8 @@ export default function MyDiscountsPage() {
           </Card>
         )}
 
-        {/* My Private Discounts Section */}
-        {!loading && myPrivateDiscounts.length > 0 && (
+        {/* Special Discounts Section - Discount đặc biệt gán riêng cho user */}
+        {!loading && specialDiscounts.length > 0 && (
           <Card className="mb-8 border-0 shadow-xl bg-gradient-to-br from-purple-50 via-pink-50/50 to-purple-50/50">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
@@ -200,25 +187,23 @@ export default function MyDiscountsPage() {
                   </div>
                   <div>
                     <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                      Discount của tôi
+                      Discount đặc biệt của tôi
                     </CardTitle>
                     <p className="text-sm text-gray-600 mt-0.5">
-                      Các mã giảm giá riêng tư từ quy đổi RT Points
+                      Các mã giảm giá được gán riêng cho bạn
                     </p>
                   </div>
                 </div>
                 <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">
-                  {myPrivateDiscounts.length} mã
+                  {specialDiscounts.length} mã
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {myPrivateDiscounts.slice(0, 6).map((d) => {
-                  const now = new Date();
-                  const start = new Date(d.startAt);
-                  const end = new Date(d.endAt);
-                  const isActiveWindow = start <= now && end >= now && d.active;
+                {specialDiscounts.slice(0, 6).map((d) => {
+                  // Backend đã filter thời gian, discount này đang sử dụng được
+                  const isActiveWindow = true;
 
                   return (
                     <Card
@@ -281,10 +266,10 @@ export default function MyDiscountsPage() {
                   );
                 })}
               </div>
-              {myPrivateDiscounts.length > 6 && (
+              {specialDiscounts.length > 6 && (
                 <div className="mt-4 text-center">
                   <p className="text-sm text-gray-600">
-                    Và <span className="font-semibold text-purple-600">{myPrivateDiscounts.length - 6}</span> mã giảm giá khác trong danh sách bên dưới
+                    Và <span className="font-semibold text-purple-600">{specialDiscounts.length - 6}</span> mã giảm giá khác trong danh sách bên dưới
                   </p>
                 </div>
               )}
@@ -292,8 +277,8 @@ export default function MyDiscountsPage() {
           </Card>
         )}
 
-        {/* Featured Discounts Section */}
-        {!loading && availablePublicDiscounts.length > 0 && (
+        {/* Featured Discounts Section - Discount công khai */}
+        {!loading && publicDiscounts.length > 0 && (
           <Card className="mb-8 border-0 shadow-xl bg-gradient-to-br from-emerald-50 via-green-50/50 to-teal-50/50">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
@@ -311,17 +296,15 @@ export default function MyDiscountsPage() {
                   </div>
                 </div>
                 <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                  {availablePublicDiscounts.length} mã
+                  {publicDiscounts.length} mã
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {availablePublicDiscounts.slice(0, 6).map((d) => {
-                  const now = new Date();
-                  const start = new Date(d.startAt);
-                  const end = new Date(d.endAt);
-                  const isActiveWindow = start <= now && end >= now && d.active;
+                {publicDiscounts.slice(0, 6).map((d) => {
+                  // Backend đã filter thời gian, discount này đang sử dụng được
+                  const isActiveWindow = true;
 
                   return (
                     <Card
@@ -381,10 +364,10 @@ export default function MyDiscountsPage() {
                   );
                 })}
               </div>
-              {availablePublicDiscounts.length > 6 && (
+              {publicDiscounts.length > 6 && (
                 <div className="mt-4 text-center">
                   <p className="text-sm text-gray-600">
-                    Và <span className="font-semibold text-emerald-600">{availablePublicDiscounts.length - 6}</span> mã giảm giá khác trong danh sách bên dưới
+                    Và <span className="font-semibold text-emerald-600">{publicDiscounts.length - 6}</span> mã giảm giá khác trong danh sách bên dưới
                   </p>
                 </div>
               )}
@@ -468,12 +451,14 @@ export default function MyDiscountsPage() {
                   const now = new Date();
                   const start = new Date(d.startAt);
                   const end = new Date(d.endAt);
-                  const isActiveWindow = start <= now && end >= now && d.active;
-                  const isUpcoming = start > now;
-                  const isExpired = end < now;
+                  // Backend đã filter, discount này đang trong thời gian hiệu lực
+                  const isActiveWindow = true;
+                  const isUpcoming = false; // Backend chỉ trả về discount đang active
+                  const isExpired = false; // Backend chỉ trả về discount đang active
                   const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                  const isExpiring = isActiveWindow && diffDays > 0 && diffDays <= 7;
+                  const isExpiring = diffDays > 0 && diffDays <= 7;
                   const usageBadge = d.usageLimit ? `${d.usedCount || 0}/${d.usageLimit}` : "∞";
+                  const isSpecial = d.isSpecial === true;
 
                   return (
                     <Card
@@ -542,13 +527,13 @@ export default function MyDiscountsPage() {
                                     Sắp hết hạn
                                   </Badge>
                                 )}
-                                {d.isPublic ? (
-                                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]">
-                                    Công khai
+                                {isSpecial ? (
+                                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 text-[10px]">
+                                    Đặc biệt
                                   </Badge>
                                 ) : (
-                                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 text-[10px]">
-                                    Riêng tư
+                                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]">
+                                    Công khai
                                   </Badge>
                                 )}
                               </div>

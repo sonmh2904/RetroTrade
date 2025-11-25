@@ -32,8 +32,26 @@ const statusLabelsVi: { [key: string]: string } = {
   paid: "Đã thanh toán",
 };
 
+interface WalletTransaction {
+  _id: string;
+  typeId: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected" | "completed" | "paid";
+  createdAt: string;
+  walletId?: {
+    userId?: {
+      fullName?: string;
+      email?: string;
+    };
+  };
+  orderId?: string | { _id: string };
+  orderCode?: string;
+  balanceAfter?: number;
+  note?: string;
+}
+
 export default function TransactionPage() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("Tất cả");
   const [currentPage, setCurrentPage] = useState(1);
@@ -72,10 +90,6 @@ export default function TransactionPage() {
   const startIndex = (currentPage - 1) * pageSize + 1;
   const endIndex = Math.min(currentPage * pageSize, filteredTransactions.length);
 
-  const goToPage = (page: number) => {
-    if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
-  };
 
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return "";
@@ -90,7 +104,7 @@ export default function TransactionPage() {
     });
   };
 
-  const renderStatus = (tx: any) => {
+  const renderStatus = (tx: WalletTransaction) => {
     if (tx.typeId === "deposit") return "Đã thanh toán";
     return (
       statusLabelsVi[tx.status] ||

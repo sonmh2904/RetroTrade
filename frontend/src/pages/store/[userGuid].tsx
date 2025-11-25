@@ -15,7 +15,7 @@ import { toast } from "sonner";
 
 interface Product {
   DepositAmount: number;
-  IsHighlighted: any;
+  IsHighlighted: boolean;
   FavoriteCount: number;
   RentCount: number;
   ViewCount: number;
@@ -81,8 +81,8 @@ export default function OwnerStorePage() {
   const [ownerRatingStats, setOwnerRatingStats] = useState<OwnerRatingStats | null>(null);
   const [storeStats, setStoreStats] = useState<{ inStockCount: number; categoryCount: number; totalProducts: number } | null>(null);
   const isAuthenticated = useAppSelector((state: RootState) => !!state.auth.accessToken);
-  const accessToken = useAppSelector((state: RootState) => state.auth.accessToken);
-  const dispatch = useAppDispatch();
+    const accessToken = useAppSelector((state: RootState) => state.auth.accessToken);
+    const dispatch = useAppDispatch();
 
   const totalPages = useMemo(() => Math.ceil((total || 0) / LIMIT), [total]);
 
@@ -97,7 +97,7 @@ export default function OwnerStorePage() {
   // Update URL with current query params (only for pagination mode)
   const updateUrl = useCallback((page: number) => {
     if (isLoadMoreMode) return; // No URL update in load more mode
-    const query: any = { ...router.query };
+    const query: { [key: string]: string | string[] | undefined } = { ...router.query };
     if (page > 1) {
       query.page = page.toString();
     } else {
@@ -134,8 +134,15 @@ export default function OwnerStorePage() {
         if (res.ok) {
           const data = await res.json();
           // Normalize IDs to string to satisfy Set<string> typing
-          const favoriteIdsArray = (data?.data || []).map((fav: any) => {
-            const id = fav?.productId?._id ?? fav?.productId;
+          interface FavoriteItem {
+            productId?: { _id?: string } | string;
+          }
+          const favoriteIdsArray = ((data?.data || []) as FavoriteItem[]).map((fav) => {
+            const id = typeof fav.productId === 'object' && fav.productId !== null
+              ? fav.productId._id
+              : typeof fav.productId === 'string'
+              ? fav.productId
+              : null;
             return id == null ? null : String(id);
           }).filter((id: string | null): id is string => id !== null);
           const favoriteIds = new Set<string>(favoriteIdsArray);

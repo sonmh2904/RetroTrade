@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useSelector, useDispatch } from "react-redux";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { Button } from "@/components/ui/common/button";
@@ -31,27 +30,27 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { RootState, AppDispatch } from "@/store/redux_store";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchCartItems,
   updateCartItemAction,
   removeItemFromCartAction,
   clearCartAction,
 } from "@/store/cart/cartActions";
-import { setCartItems } from "@/store/cart/cartReducer";
+import { setCartItems, type CartItem } from "@/store/cart/cartReducer";
 import PopupModal from "@/components/ui/common/PopupModal";
 import { getCurrentServiceFee } from "@/services/serviceFee/serviceFee.api";
 import RentalDatePicker from "@/components/ui/common/RentalDatePicker";
 
 
 export default function CartPage() {
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const {
     items: cartItems,
     loading,
     error,
-  } = useSelector((state: RootState) => state.cart);
+  } = useAppSelector((state) => state.cart);
 
   // Popup modal state
   const [popupModal, setPopupModal] = useState({
@@ -110,14 +109,14 @@ export default function CartPage() {
   useEffect(() => {
     if (cartItems.length === 0) return;
 
-    const getDisplayKeyLocal = (item: (typeof cartItems)[0]) => {
+    const getDisplayKeyLocal = (item: CartItem) => {
       if (item.rentalStartDate && item.rentalEndDate) {
         return `${item.itemId}_${item.rentalStartDate}_${item.rentalEndDate}`;
       }
       return item._id;
     };
-    const allItemKeys = new Set(
-      cartItems.map((item) => getDisplayKeyLocal(item))
+    const allItemKeys = new Set<string>(
+      cartItems.map((item: CartItem) => getDisplayKeyLocal(item))
     );
     setSelectedItems(allItemKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,7 +206,7 @@ export default function CartPage() {
       async () => {
         try {
           await dispatch(clearCartAction());
-          setSelectedItems(new Set());
+          setSelectedItems(new Set<string>());
           showPopup("success", "Thành công", "Đã xóa tất cả sản phẩm khỏi giỏ hàng");
         } catch {
           showPopup("error", "Lỗi", "Có lỗi xảy ra khi xóa tất cả sản phẩm");
@@ -315,7 +314,7 @@ export default function CartPage() {
 
   // Create unique display key for each cart item based on product + rental dates
   // This allows same products with different rental dates to be treated as separate items
-  const getDisplayKey = useCallback((item: (typeof cartItems)[0]) => {
+  const getDisplayKey = useCallback((item: CartItem) => {
     if (item.rentalStartDate && item.rentalEndDate) {
       return `${item.itemId}_${item.rentalStartDate}_${item.rentalEndDate}`;
     }
@@ -338,9 +337,9 @@ export default function CartPage() {
   // Select/Deselect all items
   const toggleSelectAll = useCallback(() => {
     if (selectedItems.size === cartItems.length) {
-      setSelectedItems(new Set());
+      setSelectedItems(new Set<string>());
     } else {
-      setSelectedItems(new Set(cartItems.map((item) => getDisplayKey(item))));
+      setSelectedItems(new Set<string>(cartItems.map((item: CartItem) => getDisplayKey(item))));
     }
   }, [selectedItems.size, cartItems, getDisplayKey]);
 
@@ -398,7 +397,7 @@ export default function CartPage() {
   const updateQuantity = useCallback(
     async (cartItemId: string, newQuantity: number) => {
       // Find the cart item to get available quantity
-      const cartItem = cartItems.find((item) => item._id === cartItemId);
+      const cartItem = cartItems.find((item: CartItem) => item._id === cartItemId);
 
       if (!cartItem) {
         showPopup("error", "Lỗi", "Không tìm thấy sản phẩm trong giỏ hàng");
@@ -470,7 +469,7 @@ export default function CartPage() {
   // Immediate UI update for better UX
   const handleQuantityChange = (cartItemId: string, newQuantity: number) => {
     // Find the cart item to get available quantity
-    const cartItem = cartItems.find((item) => item._id === cartItemId);
+    const cartItem = cartItems.find((item: CartItem) => item._id === cartItemId);
 
     if (!cartItem) return;
     // Quick validation for immediate UI update
@@ -499,7 +498,7 @@ export default function CartPage() {
     }
 
     // Immediate UI update
-    const updatedCartItems = cartItems.map((item) =>
+    const updatedCartItems: CartItem[] = cartItems.map((item: CartItem) =>
       item._id === cartItemId ? { ...item, quantity: newQuantity } : item
     );
     dispatch(setCartItems(updatedCartItems));
@@ -548,7 +547,7 @@ export default function CartPage() {
 
 const handleCheckout = () => {
   // Lấy các sản phẩm được chọn
-  const selectedCartItems = cartItems.filter((item) =>
+  const selectedCartItems: CartItem[] = cartItems.filter((item: CartItem) =>
     selectedItems.has(getDisplayKey(item))
   );
 
@@ -606,7 +605,7 @@ const handleCheckout = () => {
   };
 
   // Calculate totals for selected items only
-  const subtotal = cartItems.reduce((sum, item) => {
+  const subtotal = cartItems.reduce((sum: number, item: CartItem) => {
     if (selectedItems.has(getDisplayKey(item))) {
       const rentalDuration = calculateRentalDuration(
         item.rentalStartDate,
@@ -619,7 +618,7 @@ const handleCheckout = () => {
   }, 0);
 
   // Calculate total deposit for selected items
-  const totalDeposit = cartItems.reduce((sum, item) => {
+  const totalDeposit = cartItems.reduce((sum: number, item: CartItem) => {
     if (selectedItems.has(getDisplayKey(item))) {
       return sum + item.depositAmount * item.quantity;
     }
@@ -837,7 +836,7 @@ const handleCheckout = () => {
                 </div>
             </div>
 
-            {cartItems.map((item, index) => {
+            {cartItems.map((item: CartItem, index: number) => {
               const rentalDuration = calculateRentalDuration(
                 item.rentalStartDate,
                 item.rentalEndDate,

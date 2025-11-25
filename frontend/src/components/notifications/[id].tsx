@@ -63,9 +63,9 @@ export default function NotificationDetailPage() {
         setError('Không tìm thấy thông báo');
         toast.error('Không tìm thấy thông báo');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching notification:', error);
-      const errorMessage = error?.message || 'Không thể tải thông báo';
+      const errorMessage = error instanceof Error ? error.message : 'Không thể tải thông báo';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {

@@ -11,12 +11,17 @@ const verificationRequestSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    // Thông tin căn cước công dân (nếu user đã nhập)
+    // Thông tin căn cước công dân (đã được mã hóa)
     idCardInfo: {
         idNumber: String,
         fullName: String,
         dateOfBirth: Date,
         address: String
+    },
+    // Mã hóa idCardInfo
+    idCardInfoEncrypted: {
+        encryptedData: Buffer,
+        iv: String
     },
     // Ảnh đã upload
     documents: [{

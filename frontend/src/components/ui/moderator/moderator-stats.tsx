@@ -6,7 +6,6 @@ import {
   Users,
   FileText,
   Shield,
-  TrendingUp,
   Package,
   AlertCircle,
   CheckCircle,

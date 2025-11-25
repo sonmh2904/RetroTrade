@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useSelector } from "react-redux"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/common/table"
 import { Badge } from "@/components/ui/common/badge"
@@ -21,14 +20,15 @@ import {
   formatPaginationInfo,
   type PaginationState 
 } from "@/lib/pagination"
-import { decodeToken } from "@/utils/jwtHelper"
-import { RootState } from "@/store/redux_store"
+
+interface UserWithIssues extends UserProfile {
+  issues?: string[];
+}
 
 export function ModeratorUserManagementTable() {
   const router = useRouter()
-  const accessToken = useSelector((state: RootState) => state.auth.accessToken)
   
-  const [users, setUsers] = useState<UserProfile[]>([])
+  const [users, setUsers] = useState<UserWithIssues[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<string>("all")
@@ -383,7 +383,7 @@ export function ModeratorUserManagementTable() {
                     <TableCell className="text-gray-600">{user.email}</TableCell>
                     <TableCell>{getRoleBadge(user.role)}</TableCell>
                     <TableCell>
-                      {getIssueBadges((user as any).issues)}
+                      {getIssueBadges(user.issues)}
                     </TableCell>
                     <TableCell>{getStatusBadge(user)}</TableCell>
                     <TableCell className="text-gray-600">

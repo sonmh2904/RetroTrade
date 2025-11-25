@@ -81,7 +81,6 @@ export function Header() {
       fetchCartItemCount()(dispatch);
       // Chuyển hướng dựa trên role
       const currentPath = router.pathname;
-
       // Redirect logic dựa trên role
       if (currentPath === "/") {
         router.push("/home");

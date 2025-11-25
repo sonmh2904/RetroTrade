@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Script from 'next/script';
-import PhoneInput from '@/components/ui/auth/verify/PhoneInput';
+import { PhoneVerification } from '@/components/ui/auth/verify/PhoneVerification';
 import OTPInput from '@/components/ui/auth/verify/OTPInput';
 import ImageUpload from '@/components/ui/auth/verify/ImageUpload';
 import ResultDisplay from '@/components/ui/auth/verify/ResultDisplay';
@@ -157,11 +157,8 @@ export function AccountVerification({ className }: AccountVerificationProps) {
         )}
 
         {step === 1 && (
-          <PhoneInput
-            phoneNumber={phoneNumber}
-            setPhoneNumber={setPhoneNumber}
-            onNext={handleSendOTP}
-            isLoading={isLoading}
+          <PhoneVerification
+            onSuccess={handleSendOTP}
           />
         )}
 

@@ -44,7 +44,7 @@ const userSchema = new mongoose.Schema({
         reviewedAt: Date,
         rejectionReason: String
     }],
-    // Thông tin căn cước công dân
+    // Thông tin căn cước công dân (đã được mã hóa)
     idCardInfo: {
         idNumber: String, // Số căn cước công dân
         fullName: String, // Họ và tên
@@ -52,6 +52,11 @@ const userSchema = new mongoose.Schema({
         address: String, // Địa chỉ thường trú
         extractedAt: Date, // Thời gian extract thông tin
         extractionMethod: { type: String, enum: ['ocr', 'manual'], default: 'ocr' } // Phương thức extract
+    },
+    // Mã hóa idCardInfo
+    idCardInfoEncrypted: {
+        encryptedData: Buffer,
+        iv: String
     }
 }, {
     timestamps: true

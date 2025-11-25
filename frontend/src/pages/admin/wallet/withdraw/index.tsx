@@ -31,6 +31,27 @@ const STATUS_OPTIONS = [
   { value: "completed", label: STATUS_LABEL_VN.completed },
 ];
 
+interface WithdrawalRequest {
+  _id: string;
+  status: "pending" | "approved" | "rejected" | "completed";
+  amount: number;
+  note?: string;
+  createdAt: string;
+  reviewedAt?: string;
+  completedAt?: string;
+  walletId?: {
+    userId?: {
+      fullName?: string;
+      email?: string;
+    };
+  };
+  bankAccountId?: {
+    bankCode?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
+}
+
 // Format ngày/h/d/s: 26/10/2025 20:30:35
 function formatDatetime(dateStr?: string | Date) {
   if (!dateStr) return "";
@@ -46,7 +67,7 @@ function formatDatetime(dateStr?: string | Date) {
 }
 
 export default function WithdrawPage() {
-  const [withdrawRequests, setWithdrawRequests] = useState<any[]>([]);
+  const [withdrawRequests, setWithdrawRequests] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -91,8 +112,11 @@ export default function WithdrawPage() {
       const res = await reviewWithdrawalRequest(transactionId, action, "");
       fetchRequests();
       showMessage(res.message || "Đã xử lý", "success");
-    } catch (err: any) {
-      showMessage(err?.response?.data?.message || "Lỗi khi xử lý yêu cầu", "error");
+    } catch (err: unknown) {
+      const errorMessage = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        : undefined;
+      showMessage(errorMessage || "Lỗi khi xử lý yêu cầu", "error");
     } finally {
       setProcessingId(null);
     }
@@ -104,8 +128,11 @@ export default function WithdrawPage() {
       const res = await completeWithdrawal(transactionId, "");
       fetchRequests();
       showMessage(res.message || "Hoàn thành giao dịch", "success");
-    } catch (err: any) {
-      showMessage(err?.response?.data?.message || "Lỗi khi hoàn thành giao dịch", "error");
+    } catch (err: unknown) {
+      const errorMessage = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        : undefined;
+      showMessage(errorMessage || "Lỗi khi hoàn thành giao dịch", "error");
     } finally {
       setProcessingId(null);
     }
@@ -158,7 +185,7 @@ export default function WithdrawPage() {
   };
 
   // Bank info gộp
-  const renderBankInfo = (req: any) => {
+  const renderBankInfo = (req: WithdrawalRequest) => {
     const code = req.bankAccountId?.bankCode || "Không rõ";
     const acc = req.bankAccountId?.accountNumber || "(không rõ)";
     return (
@@ -171,7 +198,7 @@ export default function WithdrawPage() {
   };
 
   // Ngày tạo - Ngày duyệt gộp cùng cell
-  const renderDateInfo = (req: any) => (
+  const renderDateInfo = (req: WithdrawalRequest) => (
     <div className="text-xs flex flex-col min-w-[135px] gap-1">
       <span>
         <span className="text-gray-500">Tạo: </span>

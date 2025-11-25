@@ -33,7 +33,9 @@ export function DiscountSelector({ rentalTotal, selectedDiscount, onSelect }: Di
         setError(null);
         const res = await listAvailableDiscounts(1, 50);
         if (res.status === "success" && res.data) {
-          setDiscounts(res.data);
+          // Kết hợp public và special discounts
+          const allDiscounts = [...(res.data.public || []), ...(res.data.special || [])];
+          setDiscounts(allDiscounts);
         } else {
           setError(res.message || "Không thể tải danh sách mã giảm giá");
         }
@@ -54,17 +56,12 @@ export function DiscountSelector({ rentalTotal, selectedDiscount, onSelect }: Di
     const ineligible: Discount[] = [];
 
     discounts.forEach((discount) => {
-      const isPublic = discount?.isPublic !== false; // mặc định coi là công khai nếu không khai báo
-      const isActiveFlag = discount?.active !== false; // mặc định đang hoạt động nếu không khai báo
-      const hasStarted =
-        !discount?.startAt || (discount.startAt && new Date(discount.startAt) <= now);
-      const notEnded = !discount?.endAt || (discount.endAt && new Date(discount.endAt) >= now);
+      // Backend đã filter thời gian, discount này đang trong thời gian hiệu lực
+      // Chỉ cần kiểm tra minOrderAmount
       const meetsMinOrder =
         discount?.minOrderAmount === undefined || rentalTotal >= discount.minOrderAmount;
 
-      const isActiveWindow = isPublic && isActiveFlag && hasStarted && notEnded;
-
-      if (isActiveWindow && meetsMinOrder) {
+      if (meetsMinOrder) {
         active.push(discount);
       } else {
         ineligible.push(discount);
@@ -72,7 +69,7 @@ export function DiscountSelector({ rentalTotal, selectedDiscount, onSelect }: Di
     });
 
     return { active, ineligible };
-  }, [discounts, now, rentalTotal]);
+  }, [discounts, rentalTotal]);
 
   const handleApply = async (discount: Discount) => {
     try {
@@ -131,7 +128,11 @@ export function DiscountSelector({ rentalTotal, selectedDiscount, onSelect }: Di
                     Sắp hết hạn
                   </Badge>
                 )}
-                {discount.isPublic && (
+                {discount.isSpecial ? (
+                  <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">
+                    Đặc biệt
+                  </Badge>
+                ) : (
                   <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
                     Công khai
                   </Badge>

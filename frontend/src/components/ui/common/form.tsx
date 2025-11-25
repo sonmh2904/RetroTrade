@@ -5,8 +5,16 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/common/label"
 
+interface FormControl {
+  _formValues?: Record<string, {
+    value: unknown
+    onChange: (event: unknown) => void
+    onBlur: () => void
+  }>
+}
+
 const Form = React.createContext<{
-  form: any
+  form: unknown
 }>({
   form: null,
 })
@@ -14,9 +22,9 @@ const Form = React.createContext<{
 const FormField = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    control: any
+    control: FormControl
     name: string
-    render: (props: { field: any; fieldState: any; formState: any }) => React.ReactNode
+    render: (props: { field: unknown; fieldState: unknown; formState: unknown }) => React.ReactNode
   }
 >(({ className, control, name, render, ...props }, ref) => {
   const field = control._formValues?.[name] || { value: "", onChange: () => {}, onBlur: () => {} }
@@ -113,21 +121,29 @@ export {
 function useFormField() {
   const fieldContext = React.useContext(Form)
   const itemContext = React.useContext(Form)
-  const { getFieldState, formState } = fieldContext
+  
+  // Type guard to check if fieldContext has the expected properties
+  const hasFormState = fieldContext && typeof fieldContext === 'object' && 'getFieldState' in fieldContext && 'formState' in fieldContext
+  const hasName = itemContext && typeof itemContext === 'object' && 'name' in itemContext
 
-  const fieldState = getFieldState?.(itemContext.name, formState)
+  const fieldState = hasFormState 
+    ? (fieldContext as { getFieldState?: (name: string, formState: unknown) => unknown; formState: unknown }).getFieldState?.(
+        hasName ? (itemContext as { name: string }).name : '',
+        (fieldContext as { formState: unknown }).formState
+      )
+    : undefined
 
   if (!fieldContext) {
     throw new Error("useFormField should be used within <FormField>")
   }
 
-  const { name } = itemContext
+  const name = hasName ? (itemContext as { name: string }).name : ''
 
   return {
     name,
     formItemId: `${name}-form-item`,
     formDescriptionId: `${name}-form-item-description`,
     formMessageId: `${name}-form-item-message`,
-    ...fieldState,
+    ...(fieldState && typeof fieldState === 'object' ? fieldState : {}),
   }
 }

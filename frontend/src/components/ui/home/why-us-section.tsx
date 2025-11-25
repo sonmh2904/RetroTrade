@@ -1,8 +1,8 @@
 "use client"
 
-import { motion, Variants, AnimatePresence } from "framer-motion"
+import { motion, Variants } from "framer-motion"
 import { Shield, Zap, Clock, Users, Leaf, Award, CheckCircle } from "lucide-react"
-import { useState, useRef, useEffect } from "react"
+import { useState } from "react"
 
 const reasons = [
   {
@@ -114,7 +114,6 @@ const scaleIn: Variants = {
 
 export function WhyUsSection() {
   const [activeIndex, setActiveIndex] = useState(0)
-  const [isHovering, setIsHovering] = useState(false)
 
   return (
     <section 
