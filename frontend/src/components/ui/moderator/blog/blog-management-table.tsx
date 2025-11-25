@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/common/card";
 import { Button } from "@/components/ui/common/button";
 import { Input } from "@/components/ui/common/input";
-import { FileText, Edit, Trash2, Eye, Search } from "lucide-react";
+import { Edit, Trash2, Eye, Search } from "lucide-react";
 import BlogDetail from "@/components/ui/moderator/blog/blog-details";
 import AddPostDialog from "@/components/ui/moderator/blog/add-blog-form";
 import EditBlogForm from "@/components/ui/moderator/blog/edit-blog-form";
@@ -23,8 +23,23 @@ import {
   DialogFooter,
 } from "@/components/ui/common/dialog";
 
-export  function BlogManagementTable() {
-  const [posts, setPosts] = useState<any[]>([]);
+interface BlogPost {
+  _id: string;
+  title: string;
+  isFeatured?: boolean;
+  isActive?: boolean;
+  createdAt: string;
+  categoryId?: {
+    name?: string;
+  };
+  tags?: Array<{
+    _id: string;
+    name: string;
+  }>;
+}
+
+export function BlogManagementTable() {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null);
@@ -33,7 +48,7 @@ export  function BlogManagementTable() {
   const [openEdit, setOpenEdit] = useState(false);
   const [editBlogId, setEditBlogId] = useState<string | null>(null); 
   const [openDelete, setOpenDelete] = useState(false);
-  const [deleteBlog, setDeleteBlog] = useState<any>(null);
+  const [deleteBlog, setDeleteBlog] = useState<BlogPost | null>(null);
 
 
   const fetchPosts = async () => {
@@ -41,7 +56,7 @@ export  function BlogManagementTable() {
       setLoading(true); 
       const res = await getAllPosts(1, 20);
       setPosts(Array.isArray(res) ? res : res?.data || []);
-    } catch (error) {
+    } catch {
       toast.error("Không thể tải danh sách bài viết!");
     } finally {
       setLoading(false);
@@ -73,7 +88,7 @@ export  function BlogManagementTable() {
       await deletePost(id);
       toast.success("Xóa bài viết thành công!");
       fetchPosts();
-    } catch (error) {
+    } catch {
       toast.error("Không thể xóa bài viết. Vui lòng thử lại.");
     }
   };
@@ -150,7 +165,7 @@ export  function BlogManagementTable() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {post.tags?.length
-                          ? post.tags.map((tag: any) => tag.name).join(", ")
+                          ? post.tags.map((tag) => tag.name).join(", ")
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">

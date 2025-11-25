@@ -13,6 +13,7 @@ import { useDispatch } from "react-redux"
 import { login as loginAction } from "@/store/auth/authReducer"
 import { useGoogleLogin } from "@react-oauth/google"
 import Image from "next/image";
+import Link from "next/link";
 import { validatePassword } from "@/lib/validation-password";
 
 export function RegisterForm() {
@@ -283,9 +284,9 @@ export function RegisterForm() {
           />
           <Label htmlFor="terms" className="text-sm text-gray-700">
             Tôi đồng ý với{' '}
-            <a href="/terms" className="text-blue-600 hover:text-blue-700 hover:underline">Điều khoản dịch vụ</a>
+            <Link href="/terms" className="text-blue-600 hover:text-blue-700 hover:underline">Điều khoản dịch vụ</Link>
             {' '}và các{' '}
-            <a href="/privacy" className="text-blue-600 hover:text-blue-700 hover:underline">chính sách liên quan</a>.
+            <Link href="/privacy" className="text-blue-600 hover:text-blue-700 hover:underline">chính sách liên quan</Link>.
           </Label>
         </div>
 

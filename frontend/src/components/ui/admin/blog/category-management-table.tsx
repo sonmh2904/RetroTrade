@@ -1,6 +1,6 @@
 "use client";
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import {
   Card,
   CardContent,
@@ -78,7 +78,7 @@ export function CategoryManagementTable() {
         Hoạt động
       </Badge>
     );
-  const handleAddCategory = async (e: any) => {
+  const handleAddCategory = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error("Vui lòng nhập tên danh mục");
@@ -96,14 +96,17 @@ export function CategoryManagementTable() {
       await fetchCategories();
       setFormData({ name: "", description: "" });
       setOpenAdd(false);
-    } catch (error: any) {
-      const msg = error?.message || error?.error || "Không thể thêm danh mục.";
+    } catch (error: unknown) {
+      const msg =
+        (error as { message?: string })?.message ||
+        (error as { error?: string })?.error ||
+        "Không thể thêm danh mục.";
       toast.error(msg);
       console.error(" Lỗi khi thêm danh mục:", error);
     }
   };
 
-  const handleEditCategory = async (e: any) => {
+  const handleEditCategory = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentCategory?._id) return;
 
@@ -119,10 +122,11 @@ export function CategoryManagementTable() {
       await fetchCategories();
       setCurrentCategory(null);
       setOpenEdit(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorObj = error as { message?: string; response?: { data?: { message?: string } } };
       const msg =
-        error?.message ||
-        error.response?.data?.message ||
+        errorObj?.message ||
+        errorObj?.response?.data?.message ||
         "Không thể cập nhật danh mục. Vui lòng thử lại.";
 
       if (

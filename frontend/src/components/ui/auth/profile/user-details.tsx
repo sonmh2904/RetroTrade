@@ -1,26 +1,129 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Input } from "@/components/ui/common/input";
-import { User, Mail, Phone, Calendar, MapPin, CreditCard, Shield, CheckCircle, XCircle, Clock, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Mail, Phone, Calendar, MapPin, CreditCard, Shield, CheckCircle, XCircle, Clock, Lock, Eye, EyeOff, ImageIcon, Loader2 } from "lucide-react";
 import type { UserProfile } from "@iService";
 import { verifyPassword } from "@/services/auth/user.api";
+import { verificationRequestAPI } from "@/services/auth/verificationRequest.api";
 import { toast } from "sonner";
 
 interface UserDetailsProps {
   userProfile: UserProfile;
 }
 
+// Helper functions
+const formatDate = (date: string | Date | null | undefined): string => {
+  if (!date) return "Chưa có thông tin";
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  } catch {
+    return "Chưa có thông tin";
+  }
+};
+
+const formatDateTime = (date: string | Date | null | undefined): string => {
+  if (!date) return "Chưa có thông tin";
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleString('vi-VN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return "Chưa có thông tin";
+  }
+};
+
 export function UserDetails({ userProfile }: UserDetailsProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(true);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState("");
+  const [idCardImages, setIdCardImages] = useState<{
+    front?: string;
+    back?: string;
+  }>({});
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ url: string; label: string } | null>(null);
+  const [imageErrors, setImageErrors] = useState<{ front?: boolean; back?: boolean; modal?: boolean }>({});
+
+  // Load ID card images from approved verification request
+  useEffect(() => {
+    const loadIdCardImages = async () => {
+      if (!isAuthenticated || !userProfile.isIdVerified) {
+        return;
+      }
+
+      try {
+        setLoadingImages(true);
+        // Get approved verification requests
+        const response = await verificationRequestAPI.getMyVerificationRequests({ status: 'Approved' });
+        
+        console.log("Verification requests response:", response);
+        
+        if (response.code === 200 && response.data && response.data.length > 0) {
+          // Sort by createdAt descending to get the most recent approved request
+          const sortedRequests = [...response.data].sort((a, b) => {
+            const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
+            const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
+            return dateB - dateA; // Most recent first
+          });
+          
+          // Get the most recent approved request
+          const approvedRequest = sortedRequests[0];
+          
+          console.log("Selected approved request:", approvedRequest);
+          console.log("Documents:", approvedRequest.documents);
+          
+          if (approvedRequest.documents && approvedRequest.documents.length > 0) {
+            const images: { front?: string; back?: string } = {};
+            
+            approvedRequest.documents.forEach((doc: { documentType: string; fileUrl: string }) => {
+              console.log("Processing document:", doc.documentType, doc.fileUrl);
+              if (doc.documentType === 'idCardFront') {
+                images.front = doc.fileUrl;
+              } else if (doc.documentType === 'idCardBack') {
+                images.back = doc.fileUrl;
+              }
+            });
+            
+            console.log("Final images object:", images);
+            setIdCardImages(images);
+            setImageErrors({}); // Reset errors when loading new images
+          } else {
+            console.log("No documents found in approved request");
+            setIdCardImages({});
+          }
+        } else {
+          console.log("No approved verification requests found");
+          setIdCardImages({});
+        }
+      } catch (error) {
+        console.error("Error loading ID card images:", error);
+        setIdCardImages({});
+      } finally {
+        setLoadingImages(false);
+      }
+    };
+
+    if (isAuthenticated) {
+      loadIdCardImages();
+    }
+  }, [isAuthenticated, userProfile.isIdVerified]);
 
   const handleVerifyPassword = async () => {
     if (!password.trim()) {
@@ -35,7 +138,7 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
       
       if (result.code === 200) {
         setIsAuthenticated(true);
-        setShowPasswordDialog(false);
+        setPassword(""); // Clear password after successful authentication
         toast.success("Xác thực thành công");
       } else {
         setError(result.message || "Mật khẩu không đúng");
@@ -135,35 +238,6 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
       </div>
     );
   }
-  const formatDate = (date: string | Date | null | undefined): string => {
-    if (!date) return "Chưa có thông tin";
-    try {
-      const d = typeof date === 'string' ? new Date(date) : date;
-      return d.toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    } catch {
-      return "Chưa có thông tin";
-    }
-  };
-
-  const formatDateTime = (date: string | Date | null | undefined): string => {
-    if (!date) return "Chưa có thông tin";
-    try {
-      const d = typeof date === 'string' ? new Date(date) : date;
-      return d.toLocaleString('vi-VN', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return "Chưa có thông tin";
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -188,14 +262,14 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
               <p className="text-gray-900 font-medium">{userProfile.fullName || "Chưa có thông tin"}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                 <Mail className="w-4 h-4" />
                 Email
               </label>
               <p className="text-gray-900">{userProfile.email || "Chưa có thông tin"}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                 <Phone className="w-4 h-4" />
                 Số điện thoại
               </label>
@@ -315,28 +389,28 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                   <CreditCard className="w-4 h-4" />
                   Số căn cước công dân
                 </label>
                 <p className="text-gray-900 font-medium">{userProfile.idCardInfo.idNumber || "Chưa có thông tin"}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                   <User className="w-4 h-4" />
                   Họ và tên
                 </label>
                 <p className="text-gray-900">{userProfile.idCardInfo.fullName || "Chưa có thông tin"}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                   <Calendar className="w-4 h-4" />
                   Ngày tháng năm sinh
                 </label>
                 <p className="text-gray-900">{formatDate(userProfile.idCardInfo.dateOfBirth)}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                   <MapPin className="w-4 h-4" />
                   Địa chỉ thường trú
                 </label>
@@ -344,7 +418,7 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
               </div>
               {userProfile.idCardInfo.extractedAt && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                     <Clock className="w-4 h-4" />
                     Thời gian cập nhật
                   </label>
@@ -360,6 +434,151 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
                 </div>
               )}
             </div>
+
+            {/* Ảnh căn cước công dân */}
+            <div className="md:col-span-2 mt-6 pt-6 border-t border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <ImageIcon className="w-5 h-5 text-indigo-600" />
+                  <h3 className="text-lg font-semibold text-gray-900">Ảnh căn cước công dân</h3>
+                </div>
+                
+                {loadingImages ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                    <span className="ml-2 text-gray-600">Đang tải ảnh...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Mặt trước */}
+                    {idCardImages.front ? (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Mặt trước căn cước công dân
+                        </label>
+                        <div
+                          onClick={() => {
+                            if (idCardImages.front) {
+                              setSelectedImage({ url: idCardImages.front, label: "Mặt trước căn cước công dân" });
+                              setImageErrors(prev => ({ ...prev, modal: false }));
+                            }
+                          }}
+                          className="relative w-full aspect-[85.6/53.98] rounded-lg overflow-hidden border-2 border-gray-200 bg-white group hover:border-indigo-400 transition-colors cursor-pointer shadow-sm hover:shadow-lg"
+                          style={{ minHeight: '200px' }}
+                        >
+                          {!imageErrors.front ? (
+                            <Image
+                              src={idCardImages.front}
+                              alt="Mặt trước căn cước công dân"
+                              fill
+                              className="object-contain"
+                              style={{ backgroundColor: '#ffffff', zIndex: 1 }}
+                              unoptimized
+                              onError={() => {
+                                console.error("Error loading front ID card image:", idCardImages.front);
+                                setImageErrors(prev => ({ ...prev, front: true }));
+                              }}
+                              onLoad={() => {
+                                console.log("Front image loaded successfully:", idCardImages.front);
+                              }}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                              <div className="text-center text-gray-400">
+                                <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                                <p className="text-sm">Không thể tải ảnh</p>
+                              </div>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-transparent group-hover:from-black/20 group-hover:via-black/10 group-hover:to-black/20 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-2">
+                              <Eye className="w-6 h-6 text-white drop-shadow-lg" />
+                              <span className="text-white text-sm font-medium bg-black/70 px-3 py-1 rounded-full">
+                                Click để phóng to
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Mặt trước căn cước công dân
+                        </label>
+                        <div className="relative w-full aspect-[85.6/53.98] rounded-lg overflow-hidden border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
+                          <div className="text-center text-gray-400">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">Chưa có ảnh</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mặt sau */}
+                    {idCardImages.back ? (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Mặt sau căn cước công dân
+                        </label>
+                        <div
+                          onClick={() => {
+                            if (idCardImages.back) {
+                              setSelectedImage({ url: idCardImages.back, label: "Mặt sau căn cước công dân" });
+                              setImageErrors(prev => ({ ...prev, modal: false }));
+                            }
+                          }}
+                          className="relative w-full aspect-[85.6/53.98] rounded-lg overflow-hidden border-2 border-gray-200 bg-white group hover:border-indigo-400 transition-colors cursor-pointer shadow-sm hover:shadow-lg"
+                          style={{ minHeight: '200px' }}
+                        >
+                          {!imageErrors.back ? (
+                            <Image
+                              src={idCardImages.back}
+                              alt="Mặt sau căn cước công dân"
+                              fill
+                              className="object-contain"
+                              style={{ backgroundColor: '#ffffff', zIndex: 1 }}
+                              unoptimized
+                              onError={() => {
+                                console.error("Error loading back ID card image:", idCardImages.back);
+                                setImageErrors(prev => ({ ...prev, back: true }));
+                              }}
+                              onLoad={() => {
+                                console.log("Back image loaded successfully:", idCardImages.back);
+                              }}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                              <div className="text-center text-gray-400">
+                                <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                                <p className="text-sm">Không thể tải ảnh</p>
+                              </div>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-transparent group-hover:from-black/20 group-hover:via-black/10 group-hover:to-black/20 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-2">
+                              <Eye className="w-6 h-6 text-white drop-shadow-lg" />
+                              <span className="text-white text-sm font-medium bg-black/70 px-3 py-1 rounded-full">
+                                Click để phóng to
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Mặt sau căn cước công dân
+                        </label>
+                        <div className="relative w-full aspect-[85.6/53.98] rounded-lg overflow-hidden border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
+                          <div className="text-center text-gray-400">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">Chưa có ảnh</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
           </CardContent>
         </Card>
       )}
@@ -390,25 +609,58 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
                 <p className="text-gray-900 text-sm">{formatDateTime(userProfile.lastLoginAt)}</p>
               </div>
             )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái tài khoản</label>
-              <div className="flex items-center gap-2 mt-1">
-                {userProfile.isActive && !userProfile.isDeleted ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-sm text-green-600">Hoạt động</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-red-600" />
-                    <span className="text-sm text-red-600">Đã bị khóa</span>
-                  </>
-                )}
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal xem ảnh phóng to */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-75"
+          onClick={() => {
+            setSelectedImage(null);
+            setImageErrors(prev => ({ ...prev, modal: false }));
+          }}
+        >
+          <div className="relative max-w-4xl w-full max-h-[90vh] bg-white rounded-lg overflow-hidden">
+            <div className="sticky top-0 bg-gray-900 text-white px-4 py-3 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{selectedImage.label}</h3>
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="text-white hover:text-gray-300 transition-colors"
+                aria-label="Đóng"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="relative w-full aspect-[85.6/53.98] bg-gray-100 flex items-center justify-center">
+              {!imageErrors.modal ? (
+                <Image
+                  src={selectedImage.url}
+                  alt={selectedImage.label}
+                  fill
+                  className="object-contain bg-white"
+                  unoptimized
+                  onError={() => {
+                    console.error("Error loading image in modal:", selectedImage.url);
+                    setImageErrors(prev => ({ ...prev, modal: true }));
+                  }}
+                  onLoad={() => {
+                    setImageErrors(prev => ({ ...prev, modal: false }));
+                  }}
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                  <div className="text-center text-gray-400">
+                    <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-sm">Không thể tải ảnh</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

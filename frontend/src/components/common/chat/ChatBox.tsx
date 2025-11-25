@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
-import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
-import { useRouter } from "next/router";
+import { decodeToken } from '@/utils/jwtHelper';
+import { useRouter } from "next/navigation";
 import {
   connectSocket,
   disconnectSocket,

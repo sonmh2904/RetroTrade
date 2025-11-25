@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { RootState } from '@/store/redux_store';
+import { useAppDispatch } from '@/store/hooks';
 import { addItemToCartAction, fetchCartItemCount } from '@/store/cart/cartActions';
 import { Button } from '@/components/ui/common/button';
 import { Input } from '@/components/ui/common/input';
@@ -27,10 +28,8 @@ const AddToCart: React.FC<AddToCartProps> = ({
   basePrice,
   depositAmount,
   currency,
-  title,
-  ownerId
 }) => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const { accessToken } = useSelector((state: RootState) => state.auth);
   const { loading } = useSelector((state: RootState) => state.cart);
   
@@ -73,7 +72,7 @@ const AddToCart: React.FC<AddToCartProps> = ({
       setQuantity(1);
       setRentalStartDate('');
       setRentalEndDate('');
-    } catch (error) {
+    } catch {
       toast.error('Có lỗi xảy ra khi thêm vào giỏ hàng');
     } finally {
       setIsAdding(false);

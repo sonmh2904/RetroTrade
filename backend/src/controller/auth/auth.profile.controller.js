@@ -1,6 +1,38 @@
 const User = require("../../models/User.model")
 const { hashPasswordWithSalt, comparePasswordWithSalt } = require("../../utils/bcryptHelper")
 const { createNotification } = require("../../middleware/createNotification")
+const { decryptObject } = require("../../utils/cryptoHelper")
+
+// Helper function để giải mã idCardInfo từ user
+const decryptUserIdCardInfo = (user) => {
+    if (!user) return null;
+    
+    // Nếu có dữ liệu mã hóa, giải mã
+    if (user.idCardInfoEncrypted && user.idCardInfoEncrypted.encryptedData && user.idCardInfoEncrypted.iv) {
+        try {
+            const encryptedHex = user.idCardInfoEncrypted.encryptedData.toString("hex");
+            const decrypted = decryptObject(encryptedHex, user.idCardInfoEncrypted.iv);
+            // Chuyển đổi dateOfBirth từ string về Date nếu cần
+            if (decrypted.dateOfBirth) {
+                decrypted.dateOfBirth = new Date(decrypted.dateOfBirth);
+            }
+            if (decrypted.extractedAt) {
+                decrypted.extractedAt = new Date(decrypted.extractedAt);
+            }
+            return decrypted;
+        } catch (decryptError) {
+            console.error('Error decrypting user idCardInfo:', decryptError);
+            return null;
+        }
+    }
+    
+    // Fallback: nếu có dữ liệu cũ chưa mã hóa (tương thích ngược)
+    if (user.idCardInfo) {
+        return user.idCardInfo;
+    }
+    
+    return null;
+};
 
 module.exports.getProfile = async (req, res) => {
     try {
@@ -8,7 +40,7 @@ module.exports.getProfile = async (req, res) => {
 
         const user = await User.findOne({
             email: email
-        }).select("userGuid email fullName displayName avatarUrl bio phone isEmailConfirmed isPhoneConfirmed isIdVerified reputationScore points role wallet lastLoginAt createdAt updatedAt idCardInfo").lean();
+        }).select("userGuid email fullName displayName avatarUrl bio phone isEmailConfirmed isPhoneConfirmed isIdVerified reputationScore points role wallet lastLoginAt createdAt updatedAt idCardInfo idCardInfoEncrypted").lean();
 
         if (!user) {
             return res.json({
@@ -16,6 +48,15 @@ module.exports.getProfile = async (req, res) => {
                 message: "Không tìm thấy người dùng"
             });
         }
+
+        // Giải mã idCardInfo nếu có
+        const decryptedIdCardInfo = decryptUserIdCardInfo(user);
+        if (decryptedIdCardInfo) {
+            user.idCardInfo = decryptedIdCardInfo;
+        }
+
+        // Xóa idCardInfoEncrypted khỏi response để bảo mật
+        delete user.idCardInfoEncrypted;
 
         return res.json({
             code: 200,

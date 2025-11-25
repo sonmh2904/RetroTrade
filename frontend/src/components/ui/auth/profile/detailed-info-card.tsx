@@ -7,7 +7,7 @@ import { useState, forwardRef, useImperativeHandle, useRef } from "react"
 import { toast } from "sonner"
 import type { UserProfile } from "@iService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/common/dialog"
-import PhoneInput from "../verify/PhoneInput"
+import { PhoneVerification } from "@/components/ui/auth/verify/PhoneVerification"
 import OTPInput from "../verify/OTPInput"
 import { sendOtpFirebase, verifyOtpFirebase } from "@/services/auth/auth.api"
 import Script from "next/script"
@@ -227,11 +227,8 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
         
         <div className="space-y-4">
           {step === 1 && (
-            <PhoneInput
-              phoneNumber={phoneNumber}
-              setPhoneNumber={setPhoneNumber}
-              onNext={handleSendOTP}
-              isLoading={isLoading}
+            <PhoneVerification
+              onSuccess={handleSendOTP}
             />
           )}
           

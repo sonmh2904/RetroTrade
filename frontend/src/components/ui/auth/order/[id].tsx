@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import {
   getOrderDetails,
-  confirmOrder,
-  startOrder,
-  renterReturn,
-  ownerComplete,
-  cancelOrder,
+
 } from "@/services/auth/order.api";
 import { format } from "date-fns";
 import {
@@ -24,8 +20,6 @@ import {
   RefreshCw,
   Download,
   Share2,
-  Home,
-  ShoppingBag,
   Eye,
   User,
   Mail,
@@ -35,6 +29,8 @@ import {
 import type { Order } from "@/services/auth/order.api";
 import Image from "next/image";
 import Link from "next/link";
+import { payOrderWithWallet, getMyWallet } from "@/services/wallet/wallet.api"; // Đảm bảo import đúng
+import { toast } from "sonner";
 
 interface TimelineStep {
   status: string;
@@ -56,13 +52,28 @@ const getUnitName = (priceUnit: string | undefined): string => {
   return map[priceUnit] || "đơn vị";
 };
 
-
-const calculateRentalAmount = (order: Order): number => {
-  const basePrice = order.itemSnapshot.basePrice ?? 0;
-  const duration = order.rentalDuration ?? 0;
-  const count = order.unitCount ?? 1;
-  return basePrice * duration * count;
+// Helper function to extract error message from unknown error
+const getErrorMessage = (error: unknown): string => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "message" in error.response.data &&
+    typeof error.response.data.message === "string"
+  ) {
+    return error.response.data.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Đã xảy ra lỗi";
 };
+
 
 
 const getOrderStatusLabel = (status: string): string => {
@@ -91,21 +102,128 @@ const getPaymentStatusLabel = (status: string): string => {
 
 export default function OrderDetail({ id: propId }: { id?: string }) {
   const router = useRouter();
-  const { id: routeId, orderId: queryOrderId } = router.query as { id?: string; orderId?: string };
+  const { id: routeId, orderId: queryOrderId } = router.query as {
+    id?: string;
+    orderId?: string;
+  };
   const id = propId || queryOrderId || routeId;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [pendingAction, setPendingAction] = useState<() => Promise<void>>(
-    () => async () => { }
+  const [pendingAction] = useState<() => Promise<void>>(
+    () => async () => {}
   );
+  const [isPaying, setIsPaying] = useState(false); //Thanh toan
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [loadingBalance, setLoadingBalance] = useState(true);
+  // Thêm vào phần state
+  const [confirmPayModal, setConfirmPayModal] = useState<{
+    isOpen: boolean;
+    requiredAmount: number;
+  }>({
+    isOpen: false,
+    requiredAmount: 0,
+  });
+
+  const [insufficientModal, setInsufficientModal] = useState<{
+    isOpen: boolean;
+    requiredAmount: number;
+    shortage: number;
+  }>({
+    isOpen: false,
+    requiredAmount: 0,
+    shortage: 0,
+  });
   useEffect(() => {
-    if (id) {
-      loadOrder();
+    async function fetchOrder() {
+      if (id) {
+        await loadOrder();
+      }
     }
+    fetchOrder();
   }, [id]);
+
+  // Load ví
+  useEffect(() => {
+    const loadWallet = async () => {
+      try {
+        const res = await getMyWallet();
+        setWalletBalance(res.balance ?? 0);
+      } catch (err) {
+        console.error("Lỗi load ví:", err);
+        setWalletBalance(0);
+      } finally {
+        setLoadingBalance(false);
+      }
+    };
+    loadWallet();
+  }, []);
+
+  // Hàm thanh toán ví - giờ đã an toàn 100%
+const handlePayWithWallet = async () => {
+  if (isPaying || loadingBalance || !order) return;
+
+  const requiredAmount =
+    (order.finalAmount ?? 0) +
+    (order.depositAmount ?? 0) +
+    (order.serviceFee ?? 0);
+  const shortage = requiredAmount - walletBalance;
+
+  // Thiếu tiền → hiện modal đẹp
+  if (walletBalance < requiredAmount) {
+    setInsufficientModal({
+      isOpen: true,
+      requiredAmount,
+      shortage,
+    });
+    return;
+  }
+
+  // Đủ tiền → hiện modal xác nhận
+  setConfirmPayModal({
+    isOpen: true,
+    requiredAmount,
+  });
+};
+
+  // Hàm thực hiện thanh toán (gọi khi người dùng bấm "Xác nhận" trong modal)
+const executeWalletPayment = async () => {
+  if (isPaying || !order) return;
+
+  setIsPaying(true);
+  setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
+
+  try {
+    await payOrderWithWallet(order._id);
+    toast.success("Thanh toán thành công bằng ví!");
+    await loadOrder();
+
+    const updated = await getMyWallet();
+    setWalletBalance(updated.balance ?? 0);
+  } catch (error: unknown) {
+    const msg = getErrorMessage(error) || "Thanh toán thất bại";
+    toast.error(msg);
+
+    if (
+      msg.toLowerCase().includes("không đủ") ||
+      msg.toLowerCase().includes("insufficient")
+    ) {
+      const required =
+        (order.finalAmount ?? 0) +
+        (order.depositAmount ?? 0) +
+        (order.serviceFee ?? 0);
+      setInsufficientModal({
+        isOpen: true,
+        requiredAmount: required,
+        shortage: required - walletBalance,
+      });
+    }
+  } finally {
+    setIsPaying(false);
+  }
+};
 
   const loadOrder = async () => {
     setLoading(true);
@@ -121,18 +239,13 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
     }
   };
 
-  const handleAction = async (action: () => Promise<void>) => {
-    setPendingAction(() => action);
-    setShowConfirm(true);
-  };
-
   const executeAction = async () => {
     setActionLoading(true);
     try {
       await pendingAction();
       await loadOrder();
-    } catch (error) {
-      alert("Thao tác thất bại");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Thao tác thất bại");
     } finally {
       setShowConfirm(false);
       setActionLoading(false);
@@ -198,21 +311,6 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
     },
   ];
 
-  const canConfirm = order.orderStatus === "pending";
-  const canStart = order.orderStatus === "confirmed";
-  const canReturn = order.orderStatus === "progress";
-  const canComplete = order.orderStatus === "returned";
-  const canCancel = ["pending", "confirmed"].includes(order.orderStatus);
-
-  // Breadcrumb data
-  const breadcrumbs = [
-    { label: "Trang chủ", href: "/home", icon: Home },
-    { label: "Đơn hàng", href: "/my-orders", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/my-orders/${id}`, icon: Eye },
-  ];
- 
-  // Breadcrumb removed in inline render
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-8 px-4">
       <div className="max-w-5xl mx-auto">
@@ -254,14 +352,15 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
             <div className="text-right">
               <span
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-                ${order.orderStatus === "completed"
+                ${
+                  order.orderStatus === "completed"
                     ? "bg-green-100 text-green-700"
                     : order.orderStatus === "cancelled"
-                      ? "bg-red-100 text-red-700"
-                      : order.orderStatus === "progress"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-yellow-100 text-yellow-700"
-                  }`}
+                    ? "bg-red-100 text-red-700"
+                    : order.orderStatus === "progress"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-yellow-100 text-yellow-700"
+                }`}
               >
                 {getOrderStatusLabel(order.orderStatus)}
               </span>
@@ -279,9 +378,11 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
               <div className="flex gap-6 items-start">
                 <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
                   {order.itemSnapshot.images[0] ? (
-                    <img
-                      src={order.itemSnapshot.images[0]}
-                      alt={order.itemSnapshot.title}
+                    <Image
+                      src={order.itemSnapshot.images[0] || ""}
+                      alt={order.itemSnapshot.title || "Ảnh sản phẩm"}
+                      width={160}
+                      height={160}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -467,7 +568,9 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                     <XCircle className="w-6 h-6 text-red-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-red-700 mb-1">Đã hủy đơn hàng</p>
+                    <p className="font-semibold text-red-700 mb-1">
+                      Đã hủy đơn hàng
+                    </p>
                     {order.updatedAt && (
                       <p className="text-xs text-red-600 mb-2">
                         {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
@@ -477,7 +580,8 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                       <div className="mt-2 flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-amber-700">
-                          <span className="font-medium">Lý do:</span> {order.cancelReason}
+                          <span className="font-medium">Lý do:</span>{" "}
+                          {order.cancelReason}
                         </p>
                       </div>
                     )}
@@ -489,7 +593,9 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                     <AlertCircle className="w-6 h-6 text-orange-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-orange-700 mb-1">Đang tranh chấp</p>
+                    <p className="font-semibold text-orange-700 mb-1">
+                      Đang tranh chấp
+                    </p>
                     <p className="text-xs text-orange-600 mb-3">
                       {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
                     </p>
@@ -510,7 +616,9 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                         Xem chi tiết tranh chấp
                       </button>
                     ) : (
-                      <p className="text-xs text-orange-500">Đang tải thông tin tranh chấp...</p>
+                      <p className="text-xs text-orange-500">
+                        Đang tải thông tin tranh chấp...
+                      </p>
                     )}
                   </div>
                 </div>
@@ -521,7 +629,10 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
 
                   <div className="relative flex items-start justify-between gap-2 overflow-x-auto pb-4">
                     {timelineSteps
-                      .filter((s) => s.status !== "cancelled" && s.status !== "disputed")
+                      .filter(
+                        (s) =>
+                          s.status !== "cancelled" && s.status !== "disputed"
+                      )
                       .map((step, idx, arr) => {
                         const isLast = idx === arr.length - 1;
                         const getStepIcon = () => {
@@ -558,7 +669,10 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                         const stepDate = getStepDate();
 
                         return (
-                          <div key={idx} className="relative flex flex-col items-center flex-1 min-w-[120px]">
+                          <div
+                            key={idx}
+                            className="relative flex flex-col items-center flex-1 min-w-[120px]"
+                          >
                             {/* Icon */}
                             <div className="relative z-10 mb-3">
                               <div
@@ -573,19 +687,22 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                                 {getStepIcon()}
                               </div>
                             </div>
-                            
+
                             {/* Connecting line - horizontal */}
                             {!isLast && (
-                              <div 
+                              <div
                                 className={`absolute top-6 left-1/2 w-full h-0.5 ${
-                                  arr[idx + 1]?.active 
-                                    ? "bg-emerald-300" 
+                                  arr[idx + 1]?.active
+                                    ? "bg-emerald-300"
                                     : "bg-gray-200"
                                 }`}
-                                style={{ width: 'calc(100% - 48px)', left: 'calc(50% + 24px)' }}
+                                style={{
+                                  width: "calc(100% - 48px)",
+                                  left: "calc(50% + 24px)",
+                                }}
                               ></div>
                             )}
-                            
+
                             {/* Content */}
                             <div className="text-center w-full">
                               <div
@@ -666,25 +783,28 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   // Lấy tất cả giá trị từ backend (đã được tính sẵn)
                   // Tiền thuê (rentalTotal) - totalAmount trong order là tiền thuê
                   const rentalTotal = order.itemSnapshot.basePrice || 0;
-                  
+
                   // Tiền cọc (depositTotal)
                   const depositTotal = order.depositAmount || 0;
-                  
+
                   // Phí dịch vụ (serviceFeeAmount) - đã được tính sẵn trong backend
                   const serviceFeeAmount = order.serviceFee || 0;
-                  
+
                   // Lấy discount info từ order
                   const discount = order.discount;
                   const publicDiscountAmount = discount?.amountApplied || 0;
-                  const privateDiscountAmount = discount?.secondaryAmountApplied || 0;
-                  const totalDiscountAmount = discount?.totalAmountApplied || (publicDiscountAmount + privateDiscountAmount);
-                  
+                  const privateDiscountAmount =
+                    discount?.secondaryAmountApplied || 0;
+                  const totalDiscountAmount =
+                    discount?.totalAmountApplied ||
+                    publicDiscountAmount + privateDiscountAmount;
+
                   // Tổng tiền = tiền tong thuê - discount
                   // finalAmount từ backend là tiền thuê sau discount, nên tổng = finalAmount + deposit + serviceFee
-                  const grandTotal = order.finalAmount 
-                    ? order.finalAmount 
+                  const grandTotal = order.finalAmount
+                    ? order.finalAmount
                     : Math.max(0, rentalTotal - totalDiscountAmount);
-                  
+
                   return (
                     <>
                       {/* 1. Tiền thuê */}
@@ -724,18 +844,25 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                               </span>
                             </div>
                           )}
-                          {privateDiscountAmount > 0 && discount?.secondaryCode && (
-                            <div className="flex justify-between items-center py-1 border-b border-white/10">
-                              <span className="text-emerald-50 text-sm">
-                                Giảm giá riêng tư ({discount.secondaryCode})
-                              </span>
-                              <span className="font-semibold text-emerald-100 text-sm">
-                                -{privateDiscountAmount.toLocaleString("vi-VN")}₫
-                              </span>
-                            </div>
-                          )}
+                          {privateDiscountAmount > 0 &&
+                            discount?.secondaryCode && (
+                              <div className="flex justify-between items-center py-1 border-b border-white/10">
+                                <span className="text-emerald-50 text-sm">
+                                  Giảm giá riêng tư ({discount.secondaryCode})
+                                </span>
+                                <span className="font-semibold text-emerald-100 text-sm">
+                                  -
+                                  {privateDiscountAmount.toLocaleString(
+                                    "vi-VN"
+                                  )}
+                                  ₫
+                                </span>
+                              </div>
+                            )}
                           <div className="flex justify-between items-center py-2 border-b border-white/20">
-                            <span className="text-emerald-50 font-semibold">Tổng giảm giá</span>
+                            <span className="text-emerald-50 font-semibold">
+                              Tổng giảm giá
+                            </span>
                             <span className="font-semibold text-emerald-100">
                               -{totalDiscountAmount.toLocaleString("vi-VN")}₫
                             </span>
@@ -757,67 +884,122 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                       </div>
 
                       {/* Chi tiết mã giảm giá đã sử dụng */}
-                      {discount && (discount.code || discount.secondaryCode) && (
-                        <div className="mt-4 pt-4 border-t border-emerald-400">
-                          <div className="text-xs text-emerald-200/80 space-y-1">
-                            {discount.code && (
-                              <div>
-                                <span className="font-semibold">Mã công khai:</span> {discount.code}{" "}
-                                {discount.type === "percent"
-                                  ? `(${discount.value}%)`
-                                  : `(${(discount.value ?? 0).toLocaleString("vi-VN")}₫)`}{" "}
-                                -{" "}
-                                {(discount.amountApplied || 0).toLocaleString("vi-VN")}₫
-                              </div>
-                            )}
-                            {discount.secondaryCode && (
-                              <div>
-                                <span className="font-semibold">Mã riêng tư:</span> {discount.secondaryCode}{" "}
-                                {discount.secondaryType === "percent"
-                                  ? `(${discount.secondaryValue}%)`
-                                  : `(${(discount.secondaryValue ?? 0).toLocaleString("vi-VN")}₫)`}{" "}
-                                -{" "}
-                                {(discount.secondaryAmountApplied || 0).toLocaleString("vi-VN")}₫
-                              </div>
-                            )}
+                      {discount &&
+                        (discount.code || discount.secondaryCode) && (
+                          <div className="mt-4 pt-4 border-t border-emerald-400">
+                            <div className="text-xs text-emerald-200/80 space-y-1">
+                              {discount.code && (
+                                <div>
+                                  <span className="font-semibold">
+                                    Mã công khai:
+                                  </span>{" "}
+                                  {discount.code}{" "}
+                                  {discount.type === "percent"
+                                    ? `(${discount.value}%)`
+                                    : `(${(discount.value ?? 0).toLocaleString(
+                                        "vi-VN"
+                                      )}₫)`}{" "}
+                                  -{" "}
+                                  {(discount.amountApplied || 0).toLocaleString(
+                                    "vi-VN"
+                                  )}
+                                  ₫
+                                </div>
+                              )}
+                              {discount.secondaryCode && (
+                                <div>
+                                  <span className="font-semibold">
+                                    Mã riêng tư:
+                                  </span>{" "}
+                                  {discount.secondaryCode}{" "}
+                                  {discount.secondaryType === "percent"
+                                    ? `(${discount.secondaryValue}%)`
+                                    : `(${(
+                                        discount.secondaryValue ?? 0
+                                      ).toLocaleString("vi-VN")}₫)`}{" "}
+                                  -{" "}
+                                  {(
+                                    discount.secondaryAmountApplied || 0
+                                  ).toLocaleString("vi-VN")}
+                                  ₫
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                     </>
                   );
                 })()}
               </div>
             </div>
 
+            {/* Trạng thái thanh toán + Nút thanh toán nếu chưa thanh toán */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <CreditCard className="w-6 h-6 text-emerald-600" />
                 Trạng thái thanh toán
               </h2>
-              <div className="flex items-center justify-between">
+
+              <div className="flex items-center justify-between mb-4">
                 <span className="text-gray-700">Thanh toán</span>
                 <span
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-                    ${order.paymentStatus === "paid"
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+                    order.paymentStatus === "paid"
                       ? "bg-green-100 text-green-700"
-                      : order.paymentStatus === "not_paid"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : order.paymentStatus === "refunded"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-700"
-                    }`}
+                      : "bg-red-100 text-red-700"
+                  }`}
                 >
-                  {order.paymentStatus === "paid" && (
+                  {order.paymentStatus === "paid" ? (
                     <CheckCircle2 className="w-4 h-4" />
-                  )}
-                  {order.paymentStatus === "not_paid" && (
+                  ) : (
                     <AlertCircle className="w-4 h-4" />
                   )}
                   {getPaymentStatusLabel(order.paymentStatus)}
                 </span>
               </div>
-            </div>
 
+              {/* Chưa thanh toán → hiện nút ví */}
+              {["pending", "not_paid"].includes(order.paymentStatus) && (
+                <div className="space-y-4">
+                  <button
+                    onClick={handlePayWithWallet}
+                    disabled={isPaying || loadingBalance}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold py-5 rounded-2xl shadow-xl transform transition-all duration-200 hover:scale-105 flex items-center justify-center gap-3 text-lg disabled:opacity-60 disabled:hover:scale-100"
+                  >
+                    {isPaying || loadingBalance ? (
+                      <>
+                        <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-7 h-7" />
+                        Thanh toán ngay
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-center text-xs text-red-600 font-medium animate-pulse">
+                    Vui lòng thanh toán để chủ hàng xác nhận giao hàng
+                  </p>
+                </div>
+              )}
+
+              {/* Đã thanh toán */}
+              {order.paymentStatus === "paid" && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                  <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    Đã thanh toán thành công
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    {order.startAt
+                      ? format(new Date(order.startAt), "dd/MM/yyyy HH:mm")
+                      : "Gần đây"}
+                  </p>
+                </div>
+              )}
+            </div>
             {/* Hợp đồng */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -828,11 +1010,11 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                 <span className="text-gray-700">Hợp đồng</span>
                 <span
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-                    ${
-                      order.isContractSigned
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+        ${
+          order.isContractSigned
+            ? "bg-green-100 text-green-700"
+            : "bg-red-100 text-red-700"
+        }`}
                 >
                   {order.isContractSigned ? (
                     <>
@@ -847,12 +1029,38 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   )}
                 </span>
               </div>
-              {!order.isContractSigned && (
+
+              {/* Chỉ hiện nút ký khi: chưa ký + tổng tiền thuê > 2.000.000 ₫ */}
+              {!order.isContractSigned && order.totalAmount > 2_000_000 && (
                 <Link href={`/auth/contract/sign/${id}`}>
-                  <button className="mt-3 w-full bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 transition">
+                  <button className="mt-4 w-full bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg">
                     Ký hợp đồng ngay
                   </button>
                 </Link>
+              )}
+
+              {/* Thông báo khi đơn hàng dưới 2 triệu */}
+              {!order.isContractSigned && order.totalAmount <= 2_000_000 && (
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800 flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <span>
+                      Đơn hàng dưới <strong>2.000.000₫</strong> không yêu cầu ký
+                      hợp đồng điện tử. Bạn có thể giao dịch trực tiếp với người
+                      thuê.
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {/* Nếu đã ký rồi thì hiển thị thông tin */}
+              {order.isContractSigned && (
+                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <p className="text-sm text-emerald-800 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Hợp đồng đã được cả hai bên ký thành công.</span>
+                  </p>
+                </div>
               )}
             </div>
 
@@ -898,6 +1106,161 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   "Xác nhận"
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Số dư không đủ – PHIÊN BẢN NHỎ GỌN */}
+      {insufficientModal.isOpen && order && (
+        <div className="fixed inset-0 z-1000 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() =>
+              setInsufficientModal((prev) => ({ ...prev, isOpen: false }))
+            }
+          />
+          <div className="relative w-full max-w-sm mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-5 text-center">
+              <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                Ví không đủ tiền
+              </h3>
+
+              <div className="bg-red-50 rounded-xl p-4 text-left text-sm space-y-2 mb-4 font-medium">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Cần thanh toán:</span>
+                  <span className="text-red-600 font-bold">
+                    {insufficientModal.requiredAmount.toLocaleString()}₫
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Số dư ví:</span>
+                  <span>{walletBalance.toLocaleString()}₫</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-red-200">
+                  <span className="text-gray-700 font-semibold">Thiếu:</span>
+                  <span className="text-red-600 font-bold">
+                    {insufficientModal.shortage.toLocaleString()}₫
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-sm">
+                <button
+                  onClick={() =>
+                    setInsufficientModal((prev) => ({ ...prev, isOpen: false }))
+                  }
+                  className="flex-1 py-2.5 border border-gray-300 rounded-xl font-medium hover:bg-gray-50"
+                >
+                  Để sau
+                </button>
+                <button
+                  onClick={() => {
+                    setInsufficientModal((prev) => ({
+                      ...prev,
+                      isOpen: false,
+                    }));
+                    router.push("/wallet");
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700"
+                >
+                  Nạp tiền
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Xác nhận thanh toán – PHIÊN BẢN NHỎ GỌN, CHỮ NHỎ, SIÊU ĐẸP */}
+      {confirmPayModal.isOpen && order && (
+        <div className="fixed inset-0 z-1000 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() =>
+              setConfirmPayModal((prev) => ({ ...prev, isOpen: false }))
+            }
+          />
+
+          <div className="relative w-full max-w-sm mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-5 text-center">
+              <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CreditCard className="w-7 h-7 text-emerald-600" />
+              </div>
+
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                Xác nhận thanh toán
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Đơn hàng #{order.orderGuid.slice(0, 8).toUpperCase()}
+              </p>
+
+              <div className="bg-emerald-50 rounded-xl p-4 text-left text-sm space-y-2 mb-4 font-medium border border-emerald-200">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tiền thuê</span>
+                  <span className="font-semibold">
+                    {(order.itemSnapshot.basePrice ?? 0).toLocaleString()}₫
+                  </span>
+                </div>
+                {(order.serviceFee ?? 0) > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Phí dịch vụ</span>
+                    <span>{(order.serviceFee ?? 0).toLocaleString()}₫</span>
+                  </div>
+                )}
+                {(order.depositAmount ?? 0) > 0 && (
+                  <div className="flex justify-between text-amber-700 text-xs font-medium">
+                    <span>Tiền cọc</span>
+                    <span>{(order.depositAmount ?? 0).toLocaleString()}₫</span>
+                  </div>
+                )}
+                {(order.discount?.totalAmountApplied ?? 0) > 0 && (
+                  <div className="flex justify-between text-green-600 text-xs font-bold">
+                    <span>Giảm giá</span>
+                    <span>
+                      -
+                      {(
+                        order.discount?.totalAmountApplied ?? 0
+                      ).toLocaleString()}
+                      ₫
+                    </span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-emerald-300 flex justify-between font-bold text-base">
+                  <span>Tổng cộng</span>
+                  <span className="text-emerald-600">
+                    {(order.finalAmount ?? 0).toLocaleString()}₫
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl px-4 py-3 text-xs font-medium mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Số dư hiện tại</span>
+                  <span className="text-emerald-600 font-bold">
+                    {walletBalance.toLocaleString()}₫
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-sm">
+                <button
+                  onClick={() =>
+                    setConfirmPayModal((prev) => ({ ...prev, isOpen: false }))
+                  }
+                  className="flex-1 py-2.5 border border-gray-300 rounded-xl font-medium hover:bg-gray-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={executeWalletPayment}
+                  disabled={isPaying}
+                  className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                  {isPaying ? <>Đang xử lý...</> : "Thanh toán"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

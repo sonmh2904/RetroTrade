@@ -16,8 +16,19 @@ import BlogDetail from "@/components/ui/admin/blog/blog-details";
 import AddPostDialog from "@/components/ui/admin/blog/add-blog-form";
 import EditBlogForm from "@/components/ui/admin/blog/edit-blog-form";
 
+interface BlogPost {
+  _id: string;
+  title: string;
+  content: string;
+  author?: {
+    fullName: string;
+  };
+  createdAt: string;
+  views?: number;
+}
+
 export  function BlogManagementTable() {
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null);
@@ -31,7 +42,7 @@ export  function BlogManagementTable() {
       setLoading(true); 
       const res = await getAllPosts(1, 20);
       setPosts(Array.isArray(res) ? res : res?.data || []);
-    } catch (error) {
+    } catch {
       toast.error("Không thể tải danh sách bài viết!");
     } finally {
       setLoading(false);
@@ -48,7 +59,7 @@ export  function BlogManagementTable() {
       await deletePost(id);
       toast.success("Xóa bài viết thành công!");
       fetchPosts();
-    } catch (error) {
+    } catch {
       toast.error("Không thể xóa bài viết!");
     }
   };

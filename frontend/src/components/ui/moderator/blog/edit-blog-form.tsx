@@ -15,15 +15,30 @@ import {
   getAllTags,
   getBlogDetail,
   updatePost,
+  Category,
+  Tag,
 } from "@/services/auth/blog.api";
 import { Switch } from "@/components/ui/common/switch";
 import { Label } from "@/components/ui/common/label";
+
+interface BlogPost {
+  _id: string;
+  title: string;
+  shortDescription?: string;
+  content: string;
+  categoryId?: { _id: string; name: string };
+  tags?: { _id: string; name: string }[];
+  isFeatured: boolean;
+  isActive: boolean;
+  images?: string[];
+  [key: string]: unknown;
+}
 
 interface EditBlogFormProps {
   open: boolean;
   onClose: () => void;
   postId: string | null;
-  onSuccess?: (updatedPost: any) => void;
+  onSuccess?: (updatedPost: BlogPost) => void;
 }
 
 interface BlogFormData {
@@ -56,8 +71,8 @@ const EditBlogForm: React.FC<EditBlogFormProps> = ({
     oldImages: [],
   });
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [tags, setTags] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -98,7 +113,7 @@ const EditBlogForm: React.FC<EditBlogFormProps> = ({
           shortDescription: res.shortDescription || "",
           content: res.content || "",
           categoryId: res.categoryId?._id || "",
-          tags: res.tags?.map((t: any) => t._id) || [],
+          tags: res.tags?.map((t: Tag) => t._id) || [],
           images: [],
           oldImages: res.images || [],
           isActive: res.isActive,
@@ -326,7 +341,7 @@ const EditBlogForm: React.FC<EditBlogFormProps> = ({
               <Label className="flex items-center gap-2">
                 <Switch
                   checked={form.isFeatured}
-                  onCheckedChange={(checked: any) =>
+                  onCheckedChange={(checked: boolean) =>
                     setForm((prev) => ({ ...prev, isFeatured: checked }))
                   }
                 />
@@ -335,7 +350,7 @@ const EditBlogForm: React.FC<EditBlogFormProps> = ({
               <Label className="flex items-center gap-2">
                 <Switch
                   checked={form.isActive}
-                  onCheckedChange={(checked: any) =>
+                  onCheckedChange={(checked: boolean) =>
                     setForm((prev) => ({ ...prev, isActive: checked }))
                   }
                 />

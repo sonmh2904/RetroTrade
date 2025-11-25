@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Script from 'next/script';
-import PhoneInput from '@/components/ui/auth/verify/PhoneInput';
-import OTPInput from '@/components/ui/auth/verify/OTPInput';
-import ResultDisplay from '@/components/ui/auth/verify/ResultDisplay';
+import PhoneInput from "./PhoneInput";
+import OTPInput from "./OTPInput";
+import ResultDisplay from "./ResultDisplay";
 import { sendOtpFirebase, verifyOtpFirebase } from '@/services/auth/auth.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../common/card';
-import { Shield, Phone } from 'lucide-react';
+import { Phone } from 'lucide-react';
 
 interface PhoneVerificationProps {
   onSuccess?: (phoneNumber: string) => void;

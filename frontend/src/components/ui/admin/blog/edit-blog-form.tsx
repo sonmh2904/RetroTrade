@@ -33,40 +33,49 @@ export default function EditBlogForm({ blogId, isOpen, onClose, onSuccess }: Edi
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
+    const fetchBlog = async () => {
+      try {
+        setFetching(true);
+        const blog = await getBlogDetail(blogId);
+        setFormData({
+          title: blog.title || "",
+          content: blog.content || "",
+          excerpt: blog.excerpt || "",
+        });
+      } catch {
+        toast.error("Không thể tải thông tin bài viết!");
+      } finally {
+        setFetching(false);
+      }
+    };
+
     if (isOpen && blogId) {
       fetchBlog();
     }
   }, [isOpen, blogId]);
 
-  const fetchBlog = async () => {
-    try {
-      setFetching(true);
-      const blog = await getBlogDetail(blogId);
-      setFormData({
-        title: blog.title || "",
-        content: blog.content || "",
-        excerpt: blog.excerpt || "",
-      });
-    } catch (error) {
-      toast.error("Không thể tải thông tin bài viết!");
-    } finally {
-      setFetching(false);
-    }
-  };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      await updatePost(blogId, formData);
-      toast.success("Cập nhật bài viết thành công!");
-      onSuccess();
-    } catch (error) {
-      toast.error("Không thể cập nhật bài viết!");
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+
+    const data = new FormData();
+    data.append("title", formData.title);
+    data.append("excerpt", formData.excerpt);
+    data.append("content", formData.content);
+
+    await updatePost(blogId, data);
+
+    toast.success("Cập nhật bài viết thành công!");
+    onSuccess();
+  } catch {
+    toast.error("Không thể cập nhật bài viết!");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleClose = () => {
     setFormData({ title: "", content: "", excerpt: "" });

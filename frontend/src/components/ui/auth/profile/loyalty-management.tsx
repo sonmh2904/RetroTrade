@@ -147,7 +147,7 @@ export function LoyaltyManagement() {
       const res = await listAvailableDiscounts(1, 50);
       if (res.status === "success" && res.data) {
         // Lọc chỉ lấy private discounts (từ quy đổi RT Points)
-        const privateDiscounts = res.data.filter(
+        const privateDiscounts = res.data.public.filter(
           (d) => d.isPublic === false && (d.isClaimed === true || d.isClaimed === undefined)
         );
         setMyDiscounts(privateDiscounts);

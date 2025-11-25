@@ -42,6 +42,8 @@ export default function OwnerRenterRequests() {
 function RenterRequestsContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modal Từ chối
   const [openRejectModal, setOpenRejectModal] = useState(false);
@@ -92,23 +94,34 @@ function RenterRequestsContent() {
     returned: "bg-orange-500",
     completed: "bg-green-600",
     cancelled: "bg-red-600",
-    disputed: "bg-red-700", // ĐỎ ĐẬM - NỔI BẬT
+    disputed: "bg-red-700", 
   };
 
   // Fetch đơn hàng
-  useEffect(() => {
-    const fetchOrders = async () => {
+useEffect(() => {
+  const fetchOrders = async () => {
+    if (refreshKey === 0) {
       setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    try {
       const res = await listOrdersByOwner();
       if (res.code === 200 && Array.isArray(res.data)) {
         setOrders(res.data);
       } else {
         toast.error("Không thể tải danh sách đơn hàng.");
       }
+    } catch (err) {
+      toast.error("Lỗi kết nối, vui lòng thử lại.");
+    } finally {
       setLoading(false);
-    };
-    fetchOrders();
-  }, []);
+      setIsRefreshing(false);
+    }
+  };
+  fetchOrders();
+}, [refreshKey]);
 
   const filteredOrders =
     selectedStatus === "all"
@@ -122,7 +135,8 @@ function RenterRequestsContent() {
     const res = await confirmOrder(orderId);
     if (res.code === 200) {
       toast.success("Đã xác nhận đơn hàng");
-      setOrders((prev) => prev.filter((o) => o._id !== orderId));
+    setRefreshKey((prev) => prev + 1);
+      
     } else {
       toast.error(res.message || "Lỗi khi xác nhận đơn hàng");
     }
@@ -142,31 +156,34 @@ function RenterRequestsContent() {
     const res = await cancelOrder(selectedOrderId, rejectReason);
     if (res.code === 200) {
       toast.success("Đã từ chối đơn hàng");
-      setOrders((prev) => prev.filter((o) => o._id !== selectedOrderId));
+     setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Lỗi khi từ chối đơn hàng");
     }
     setOpenRejectModal(false);
   };
 
-  const handleStartOrder = async (order: Order) => {
-    if (order.paymentStatus !== "paid") {
-      return toast.error("Khách hàng chưa thanh toán. Không thể bắt đầu thuê.");
-    }
+const handleStartOrder = async (order: Order) => {
+  // Kiểm tra thanh toán
+  if (order.paymentStatus !== "paid") {
+    return toast.error("Khách hàng chưa thanh toán. Không thể bắt đầu thuê.");
+  }
 
-    if (!order.isContractSigned) {
-      return toast.error("Hợp đồng chưa được ký. Không thể bắt đầu thuê.");
-    }
+  // Chỉ yêu cầu ký hợp đồng nếu đơn trên 2 triệu
+  if (order.totalAmount > 2_000_000 && !order.isContractSigned) {
+    return toast.error(
+      "Hợp đồng chưa được ký. Không thể bắt đầu thuê với đơn hàng trên 2 triệu."
+    );
+  }
 
-    const res = await startOrder(order._id);
-    if (res.code === 200) {
-      toast.success("Đơn hàng đã bắt đầu thuê");
-      setOrders((prev) => prev.filter((o) => o._id !== order._id));
-    } else {
-      toast.error(res.message || "Không thể bắt đầu thuê");
-    }
-  };
-
+  const res = await startOrder(order._id);
+  if (res.code === 200) {
+    toast.success("Đơn hàng đã bắt đầu thuê thành công!");
+    setRefreshKey((prev) => prev + 1);
+  } else {
+    toast.error(res.message || "Không thể bắt đầu thuê");
+  }
+};
   const handleConfirmReturn = async (orderId: string) => {
     const res = await ownerComplete(orderId, {
       conditionStatus: "Good",
@@ -174,7 +191,7 @@ function RenterRequestsContent() {
     });
     if (res.code === 200) {
       toast.success("Đã xác nhận trả hàng");
-      setOrders((prev) => prev.filter((o) => o._id !== orderId));
+     setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Lỗi khi xác nhận trả hàng");
     }
@@ -200,13 +217,7 @@ function RenterRequestsContent() {
 
     if (res.code === 201) {
       toast.success("Đã gửi yêu cầu tranh chấp thành công!");
-      setOrders((prev) =>
-        prev.map((o) =>
-          o._id === selectedDisputeOrderId
-            ? { ...o, orderStatus: "disputed" }
-            : o
-        )
-      );
+    setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Gửi tranh chấp thất bại.");
     }
@@ -215,9 +226,16 @@ function RenterRequestsContent() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-4 py-6 relative">
       <h1 className="text-2xl font-bold mb-6">Quản lý đơn thuê hàng</h1>
-
+      {isRefreshing && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white px-5 py-3 rounded-full shadow-lg border border-gray-200">
+          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-medium text-gray-700">
+            Đang cập nhật...
+          </span>
+        </div>
+      )}
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
         {tabs.map((tab) => (
@@ -341,6 +359,7 @@ function RenterRequestsContent() {
                 {order.orderStatus === "confirmed" && (
                   <div className="flex justify-between items-center w-full">
                     <div className="flex gap-4 items-center">
+                      {/* Cảnh báo chưa thanh toán */}
                       {order.paymentStatus !== "paid" && (
                         <div className="flex items-center gap-1 text-red-500">
                           <AlertCircle className="w-4 h-4" />
@@ -348,21 +367,36 @@ function RenterRequestsContent() {
                         </div>
                       )}
 
-                      {!order.isContractSigned && (
-                        <div className="flex items-center gap-1 text-red-500">
-                          <AlertCircle className="w-4 h-4" />
-                          <span className="text-xs">Chưa ký hợp đồng</span>
-                        </div>
-                      )}
-                    </div>
+                      {/* Chỉ hiện cảnh báo "Chưa ký hợp đồng" nếu đơn trên 2 triệu */}
+                      {!order.isContractSigned &&
+                        order.totalAmount > 2_000_000 && (
+                          <div className="flex items-center gap-1 text-red-500">
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="text-xs">Chưa ký hợp đồng</span>
+                          </div>
+                        )}
 
-                    {/* Nút bên phải */}
+                      {/* Nếu dưới 2 triệu và chưa ký → hiện thông báo nhẹ (tùy chọn) */}
+                      {!order.isContractSigned &&
+                        order.totalAmount <= 2_000_000 && (
+                          <div className="flex items-center gap-1 text-blue-700 text-xs">
+                            <AlertCircle className="w-4 h-4" />
+                            <span>
+                              Không bắt buộc ký hợp đồng (dưới 2 triệu)
+                            </span>
+                          </div>
+                        )}
+                    </div>
+                    {/* Nút "Bắt đầu thuê" - chỉ bị disable khi:
+        - Chưa thanh toán HOẶC
+        - Đơn trên 2 triệu mà chưa ký hợp đồng */}
                     <Button
                       size="sm"
                       className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
                       disabled={
                         order.paymentStatus !== "paid" ||
-                        !order.isContractSigned
+                        (order.totalAmount > 2_000_000 &&
+                          !order.isContractSigned)
                       }
                       onClick={(e) => {
                         e.stopPropagation();
@@ -373,7 +407,6 @@ function RenterRequestsContent() {
                     </Button>
                   </div>
                 )}
-
                 {/* Progress */}
                 {order.orderStatus === "progress" && (
                   <Button
@@ -444,7 +477,6 @@ function RenterRequestsContent() {
       </Dialog>
 
       {/* Modal Tranh chấp */}
-      {/* Modal Tranh chấp - Tách riêng */}
       <DisputeModal
         open={openDisputeModal}
         onOpenChange={setOpenDisputeModal}
@@ -461,16 +493,11 @@ function RenterRequestsContent() {
 
           if (res.code === 201) {
             toast.success("Đã gửi yêu cầu tranh chấp thành công!");
-            setOrders((prev) =>
-              prev.map((o) =>
-                o._id === selectedDisputeOrderId
-                  ? { ...o, orderStatus: "disputed" }
-                  : o
-              )
-            );
+            setRefreshKey((prev) => prev + 1);
           } else {
             toast.error(res.message || "Gửi tranh chấp thất bại.");
           }
+          setOpenDisputeModal(false); // đóng modal luôn
         }}
       />
     </div>

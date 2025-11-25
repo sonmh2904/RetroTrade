@@ -10,7 +10,7 @@ import {
   MessageCircle,
   Heart,
 } from "lucide-react";
-import styles from "@/pages/TwoLayouts.module.css";
+import styles from "@/styles/TwoLayouts.module.css";
 import HoverCard from "@/components/ui/common/FlipCard";
 import InfiniteMarquee from "@/components/ui/common/InfiniteMarquee";
 export default function Home() {

@@ -26,14 +26,6 @@ export function RevenueChart() {
     fetchData();
   }, [period]);
 
-  const formatCurrency = (value: number) => {
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}M`;
-    } else if (value >= 1000) {
-      return `${(value / 1000).toFixed(1)}K`;
-    }
-    return value.toLocaleString();
-  };
 
   const formatDate = (date: string) => {
     const d = new Date(date);

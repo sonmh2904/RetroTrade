@@ -74,3 +74,7 @@ export const updateTerms = async (
 
 export const deleteTerms = async (id: string): Promise<Response> =>
   instance.delete(`/terms/${id}`);
+
+export const toggleTermsActive = async (id: string): Promise<Response> => {
+  return instance.put(`/terms/${id}/toggle-active`);
+};

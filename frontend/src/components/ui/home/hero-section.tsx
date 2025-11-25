@@ -1,9 +1,7 @@
 "use client";
-import { Button } from "@/components/ui/common/button";
-import { motion, AnimatePresence, Variants } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+
 const heroItems = [
   {
     mainImage: "/banners/kham-pha-san-pham.jpg",
@@ -52,57 +50,24 @@ const heroItems = [
   },
 ];
 
-
-const slideVariants: Variants = {
-  initial: { 
-    opacity: 0, 
-    x: 90, 
-    scale: 1.05, 
-    filter: "blur(10px)" 
-  },
-  animate: {
-    opacity: 1,
-    x: 0,
-    scale: 1,
-    filter: "blur(0px)",
-    transition: { 
-      duration: 0.9, 
-      ease: [0.22, 1, 0.36, 1] as [number, number, number, number] 
-    },
-  },
-  exit: {
-    opacity: 0,
-    x: -90,
-    scale: 0.95,
-    filter: "blur(12px)",
-    transition: { 
-      duration: 0.7, 
-      ease: "easeIn" 
-    },
-  },
-};
-// Ảnh preview bên phải (fade + pop)
-const previewItem = {
-  hidden: { opacity: 0, y: 25, scale: 0.9 },
-  show: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { duration: 0.55 },
-  },
-};
 export function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const timer = useRef<any>(null);
+  const timer = useRef<number | null>(null);
   
   useEffect(() => {
     startAuto();
-    return () => clearInterval(timer.current);
+    return () => {
+      if (timer.current !== null) {
+        clearInterval(timer.current);
+      }
+    };
   }, [currentSlide]);
   
   const startAuto = () => {
-    clearInterval(timer.current);
-    timer.current = setInterval(() => nextSlide(), 5000);
+    if (timer.current !== null) {
+      clearInterval(timer.current);
+    }
+    timer.current = window.setInterval(() => nextSlide(), 5000);
   };
   const nextSlide = () =>
     setCurrentSlide((prev) => (prev + 1) % heroItems.length);
@@ -126,7 +91,6 @@ export function HeroSection() {
         }}
       />
       
-      {/* Dark overlay for better text readability */}
       <div className="absolute inset-0 bg-black/40 z-10" />
 
       <div className="relative z-20 h-full flex items-center justify-center">
@@ -150,11 +114,11 @@ export function HeroSection() {
                     backgroundPosition: 'center',
                   }}
                 >
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent"></div>
+                  
                   <div className="relative z-10 h-full w-full p-8 flex flex-col md:flex-row items-center">
                     <div className="w-full md:w-1/2 flex items-center">
                       <div className="max-w-md relative">
-                        {/* Text shadow container for better readability */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent rounded-lg -m-2 -z-10"></div>
                         
                         <motion.h1 
                           className="text-4xl md:text-5xl font-bold mb-6 text-white drop-shadow-lg font-['Be_Vietnam_Pro',sans-serif]"

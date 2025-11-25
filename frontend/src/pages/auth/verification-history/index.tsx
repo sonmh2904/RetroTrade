@@ -5,7 +5,7 @@ import { useRouter } from "next/router";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import { Card, CardContent } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/common/dialog";
@@ -14,10 +14,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Calendar,
   CreditCard,
   User,
-  MapPin,
   FileText,
   AlertCircle,
   ArrowLeft,

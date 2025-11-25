@@ -777,6 +777,7 @@ function OwnerOrderDetailContent() {
             </div>
 
             {/* Hợp đồng */}
+            {/* Hợp đồng */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <FileText className="w-6 h-6 text-blue-600" />
@@ -786,11 +787,11 @@ function OwnerOrderDetailContent() {
                 <span className="text-gray-700">Hợp đồng</span>
                 <span
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-                    ${
-                      order.isContractSigned
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+        ${
+          order.isContractSigned
+            ? "bg-green-100 text-green-700"
+            : "bg-red-100 text-red-700"
+        }`}
                 >
                   {order.isContractSigned ? (
                     <>
@@ -805,15 +806,40 @@ function OwnerOrderDetailContent() {
                   )}
                 </span>
               </div>
-              {!order.isContractSigned && (
+
+              {/* Chỉ hiện nút ký khi: chưa ký + tổng tiền thuê > 2.000.000 ₫ */}
+              {!order.isContractSigned && order.totalAmount > 2_000_000 && (
                 <Link href={`/auth/contract/sign/${id}`}>
-                  <button className="mt-3 w-full bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700 transition">
+                  <button className="mt-4 w-full bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg">
                     Ký hợp đồng ngay
                   </button>
                 </Link>
               )}
-            </div>
 
+              {/* Thông báo khi đơn hàng dưới 2 triệu */}
+              {!order.isContractSigned && order.totalAmount <= 2_000_000 && (
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800 flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <span>
+                      Đơn hàng dưới <strong>2.000.000₫</strong> không yêu cầu ký
+                      hợp đồng điện tử. Bạn có thể giao dịch trực tiếp với người
+                      thuê.
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {/* Nếu đã ký rồi thì hiển thị thông tin */}
+              {order.isContractSigned && (
+                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <p className="text-sm text-emerald-800 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Hợp đồng đã được cả hai bên ký thành công.</span>
+                  </p>
+                </div>
+              )}
+            </div>
             {/* Tiện ích */}
             <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
               <button className="w-full flex items-center justify-center gap-2 text-gray-700 hover:text-emerald-600 transition text-sm">

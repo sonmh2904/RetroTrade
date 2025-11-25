@@ -72,12 +72,12 @@ const orderSchema = new mongoose.Schema(
     shippingAddress: addressSchema,
     paymentMethod: {
       type: String,
-      enum: ["Wallet", "PayOS"],
+      enum: ["Wallet"],
       default: "Wallet",
     },
     paymentStatus: {
       type: String,
-      enum: ["not_paid", "partial", "paid", "refunded", "failed"],
+      enum: ["not_paid", "paid", "refunded", "failed"],
       default: "not_paid",
       index: true,
     },

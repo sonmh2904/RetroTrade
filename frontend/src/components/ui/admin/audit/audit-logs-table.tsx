@@ -79,22 +79,20 @@ export function AuditLogsTable() {
   const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
-    if (!hasMounted) {
-      setHasMounted(true)
-      fetchAuditLogs(1)
-    }
-  }, [])
+    setHasMounted(true);
+    fetchAuditLogs(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Refetch when filters change
   useEffect(() => {
-    if (hasMounted) {
-      const debounceTimer = setTimeout(() => {
-        fetchAuditLogs(1)
-      }, searchTerm ? 500 : 0)
+    if (!hasMounted) return;
+    const debounceTimer = setTimeout(() => {
+      fetchAuditLogs(1);
+    }, searchTerm ? 500 : 0);
 
-      return () => clearTimeout(debounceTimer)
-    }
-  }, [tableNameFilter, operationFilter, startDate, endDate, hasMounted])
+    return () => clearTimeout(debounceTimer);
+  }, [tableNameFilter, operationFilter, startDate, endDate, searchTerm, hasMounted]);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= paginationState.totalPages) {

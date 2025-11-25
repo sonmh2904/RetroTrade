@@ -22,22 +22,61 @@ import {
   TableRow,
 } from "@/components/ui/common/table";
 import { Terms } from "@/services/terms/terms.api";
-import { deleteTerms } from "@/services/terms/terms.api";
+import { deleteTerms, toggleTermsActive } from "@/services/terms/terms.api";
 import { toast } from "sonner";
 
 interface TermsHistoryModalProps {
   data: Terms[];
   onView: (terms: Terms) => void;
   onDelete: (id: string) => void;
+  onToggle?: (id: string, isActive: boolean) => void;
   onClose: () => void;
 }
 
 type SortOrder = "asc" | "desc";
 
+
+interface ToggleSwitchProps {
+  isActive: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}
+
+function ToggleSwitch({ isActive, onToggle, disabled }: ToggleSwitchProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={`relative inline-flex items-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full transition-all duration-200 ${
+        disabled ? "cursor-not-allowed opacity-50" : ""
+      }`}
+      style={{ width: "60px", height: "30px" }}
+    >
+      <div
+        className={`w-full h-full rounded-full transition-colors duration-200 ${
+          isActive ? "bg-green-500 shadow-lg" : "bg-gray-300"
+        }`}
+      >
+        <div
+          className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 flex items-center justify-center text-xs font-bold ${
+            isActive
+              ? "translate-x-8 text-green-600"
+              : "translate-x-0 text-gray-600"
+          }`}
+        >
+          {isActive ? "ON" : "OFF"}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export function TermsHistoryModal({
   data,
   onView,
   onDelete,
+  onToggle,
   onClose,
 }: TermsHistoryModalProps) {
   const [filteredTerms, setFilteredTerms] = useState<Terms[]>(data);
@@ -50,13 +89,18 @@ export function TermsHistoryModal({
     termsId: string;
     termsTitle: string;
   }>({ show: false, termsId: "", termsTitle: "" });
+  const [toggleConfirm, setToggleConfirm] = useState<{
+    show: boolean;
+    termsId: string;
+    termsTitle: string;
+    toActive: boolean;
+  }>({ show: false, termsId: "", termsTitle: "", toActive: false });
 
   useEffect(() => {
     const filtered = data.filter((t) =>
       t.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // FIXED: Use const and spread to avoid mutation warning
     const sorted = [...filtered].sort((a, b) => {
       const aDate = new Date(a.createdAt).getTime();
       const bDate = new Date(b.createdAt).getTime();
@@ -126,11 +170,86 @@ export function TermsHistoryModal({
     }
   };
 
+  const handleToggle = async (
+    id: string,
+    currentIsActive: boolean
+  ): Promise<void> => {
+    const terms = filteredTerms.find((t) => t._id === id);
+    if (!terms) return;
+
+    try {
+      const toActive = !currentIsActive;
+      const response = await toggleTermsActive(id);
+
+      if (response.ok) {
+        const responseData = await response.json();
+        toast.success(
+          responseData.message ||
+            (toActive ? "Đã bật active thành công" : "Đã tắt active thành công")
+        );
+
+        // Cập nhật state local
+        setFilteredTerms(
+          (prev) =>
+            prev
+              .map(
+                (t) =>
+                  t._id === id
+                    ? { ...t, isActive: toActive }
+                    : { ...t, isActive: false }
+              )
+              .filter((t) => !t.isActive) // Giữ chỉ inactive trong history
+        );
+
+        // Callback nếu có
+        onToggle?.(id, toActive);
+
+        // Nếu tắt active, có thể cần refresh danh sách active ở nơi khác (qua onDelete hoặc event)
+        if (!toActive) {
+          onDelete?.(id); 
+        }
+
+        // Reload trang sau khi toggle thành công
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.message || "Toggle thất bại");
+      }
+    } catch {
+      toast.error("Lỗi khi toggle điều khoản");
+    } finally {
+      setToggleConfirm({
+        show: false,
+        termsId: "",
+        termsTitle: "",
+        toActive: false,
+      });
+    }
+  };
+
   const showDeleteConfirm = (terms: Terms): void => {
     setDeleteConfirm({
       show: true,
       termsId: terms._id,
       termsTitle: terms.title,
+    });
+  };
+
+  const showToggleConfirm = (terms: Terms, toActive: boolean): void => {
+    setToggleConfirm({
+      show: true,
+      termsId: terms._id,
+      termsTitle: terms.title,
+      toActive,
+    });
+  };
+
+  const handleCancelToggle = () => {
+    setToggleConfirm({
+      show: false,
+      termsId: "",
+      termsTitle: "",
+      toActive: false,
     });
   };
 
@@ -160,6 +279,23 @@ export function TermsHistoryModal({
       Xóa
     </Button>
   );
+
+  const renderToggleButton = (terms: Terms) => {
+    const handleLocalToggle = () => {
+      showToggleConfirm(terms, !terms.isActive);
+    };
+
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-600">Active:</span>
+        <ToggleSwitch
+          isActive={terms.isActive || false}
+          onToggle={handleLocalToggle}
+          disabled={false}
+        />
+      </div>
+    );
+  };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -239,6 +375,9 @@ export function TermsHistoryModal({
                         Ngày Tạo
                       </TableHead>
                       <TableHead className="font-semibold text-gray-700">
+                        Trạng Thái
+                      </TableHead>
+                      <TableHead className="font-semibold text-gray-700">
                         Hành Động
                       </TableHead>
                     </TableRow>
@@ -247,7 +386,7 @@ export function TermsHistoryModal({
                     <AnimatePresence>
                       {filteredTerms.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-12">
+                          <TableCell colSpan={7} className="text-center py-12">
                             <div className="flex flex-col items-center">
                               <Search className="w-8 h-8 text-gray-400 mb-3" />
                               <p className="text-gray-500 font-medium">
@@ -286,8 +425,18 @@ export function TermsHistoryModal({
                                 "vi-VN"
                               )}
                             </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  terms.isActive ? "default" : "secondary"
+                                }
+                              >
+                                {terms.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
                             <TableCell className="flex gap-2">
                               {renderViewButton(terms)}
+                              {renderToggleButton(terms)}
                               {renderDeleteButton(terms)}
                             </TableCell>
                           </motion.tr>
@@ -437,6 +586,109 @@ export function TermsHistoryModal({
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
                             Xóa ngay
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </>
+              )}
+            </AnimatePresence>
+
+            {/* Toggle Confirmation Modal */}
+            <AnimatePresence>
+              {toggleConfirm.show && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-60"
+                    onClick={handleCancelToggle}
+                  />
+                  <div className="fixed inset-0 z-60 flex items-center justify-center p-4 pointer-events-none">
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 30,
+                      }}
+                      className="pointer-events-auto w-full max-w-md"
+                    >
+                      <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="relative p-6 bg-gradient-to-br from-yellow-500 via-orange-500 to-red-500">
+                          <div className="absolute inset-0 opacity-20">
+                            <div
+                              className="absolute inset-0"
+                              style={{
+                                backgroundImage:
+                                  "linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px)",
+                                backgroundSize: "20px 20px",
+                              }}
+                            />
+                          </div>
+                          <div className="relative flex items-center gap-4">
+                            <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
+                              <AlertTriangle className="w-8 h-8 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-white">
+                                Xác nhận{" "}
+                                {toggleConfirm.toActive ? "bật" : "tắt"} active
+                              </h3>
+                              <p className="text-white/80 text-sm mt-1">
+                                Hành động này sẽ ảnh hưởng đến điều khoản hiện
+                                tại
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={handleCancelToggle}
+                            className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors"
+                          >
+                            <X className="w-5 h-5 text-white" />
+                          </button>
+                        </div>
+                        <div className="p-6">
+                          <p className="text-gray-700 mb-2">
+                            Bạn có chắc chắn muốn{" "}
+                            {toggleConfirm.toActive ? "bật" : "tắt"} active cho
+                            điều khoản:
+                          </p>
+                          <div className="p-4 bg-gray-50 rounded-lg border-2 border-gray-200 mb-6">
+                            <p className="font-semibold text-gray-900">
+                              {toggleConfirm.termsTitle}
+                            </p>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            {toggleConfirm.toActive
+                              ? "Điều khoản này sẽ có hiệu lực, và điều khoản hiện tại sẽ bị tắt."
+                              : "Điều khoản này sẽ bị tắt active."}
+                          </p>
+                        </div>
+                        <div className="flex gap-3 p-6 bg-gray-50 border-t border-gray-200">
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelToggle}
+                            className="flex-1 border-2 border-gray-300 hover:bg-gray-100 font-semibold"
+                          >
+                            Hủy bỏ
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              handleToggle(
+                                toggleConfirm.termsId,
+                                !toggleConfirm.toActive
+                              )
+                            }
+                            className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold shadow-lg"
+                          >
+                            <AlertTriangle className="w-4 h-4 mr-2" />
+                            Xác nhận
                           </Button>
                         </div>
                       </div>

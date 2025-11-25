@@ -49,7 +49,7 @@ const fetchBlogDetail = async (id: string) => {
     const res = await getBlogDetail(id);
     console.log("🔥 Blog detail response:", res);
     setBlog(res);
-  } catch (err) {
+  } catch {
     toast.error("Không thể tải chi tiết bài viết");
   } finally {
     setLoading(false);
