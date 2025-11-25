@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ModeratorSidebar } from "@/components/ui/moderator/moderator-sidebar";
 import { ModeratorHeader } from "@/components/ui/moderator/moderator-header";
-import { ModeratorStats } from "@/components/ui/moderator/moderator-stats";
 import { OwnerRequestManagement } from "@/components/ui/moderator/ownerRequest/owner-request-management";
 
 import { BlogManagementTable } from "@/components/ui/moderator/blog/blog-management-table";
@@ -12,13 +11,23 @@ import { CommentManagementTable } from "@/components/ui/moderator/blog/comment-m
 
 export default function RequestManagementDashboard() {
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "requests" | "verification" | "blog" | "productManagement" | "messages"
+    | "dashboard"
+    | "requests"
+    | "verification"
+    | "blog"
+    | "productManagement"
+    | "messages"
+    | "userManagement"
+    | "dispute"
+    | "complaints"
   >("requests");
   const [activeBlogTab, setActiveBlogTab] = useState<
     "posts" | "categories" | "comments" | "tags"
   >("posts");
 
-  const handleBlogTabChange = (tab: "posts" | "categories" | "comments" | "tags") => {
+  const handleBlogTabChange = (
+    tab: "posts" | "categories" | "comments" | "tags"
+  ) => {
     setActiveBlogTab(tab);
     setActiveTab("blog");
   };
