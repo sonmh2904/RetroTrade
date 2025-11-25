@@ -29,6 +29,8 @@ const adminComplaintRouter = require("./admin/complaint.routes");
 const adminDashboardRouter = require("./admin/dashboard.routes");
 const moderatorDashboardRouter = require("./moderator/dashboard.routes");
 const termsRouter = require("./terms/terms.routes");
+const privacyRouter = require("./privacy/privacy.routes");
+const privacyTypesRouter = require("./privacy/privacy-types.routes");
 const aiRouter = require("./messages/aiChat.routes")
 module.exports = (app) => {
     const api = "/api/v1";
@@ -37,6 +39,8 @@ module.exports = (app) => {
     app.use(api + "/signature", signatureRouter);
     app.use(api + "/contract", contractRouter);
     app.use(api + "/terms", termsRouter);
+    app.use(api + "/privacy", privacyRouter);
+    app.use(api + "/privacy-types", privacyTypesRouter);
     app.use(api + "/categories", categoryRouter);
     app.use(api + "/products", productRouter);
     app.use(api + "/products/upload", uploadproductRouter);
