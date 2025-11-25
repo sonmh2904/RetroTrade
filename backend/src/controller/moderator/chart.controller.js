@@ -24,8 +24,8 @@ exports.getProductStats = async (req, res) => {
             Item.countDocuments({ StatusId: 1, IsDeleted: { $ne: true } })
         ]);
 
-        // Previous month products for change calculation
-        const previousMonthProducts = await Item.countDocuments({
+        // Previous month NEW products for change calculation
+        const previousMonthNewProducts = await Item.countDocuments({
             CreatedAt: { $gte: previousMonthStart, $lte: previousMonthEnd },
             IsDeleted: { $ne: true }
         });
@@ -36,8 +36,8 @@ exports.getProductStats = async (req, res) => {
             IsDeleted: { $ne: true }
         });
 
-        const productsChange = previousMonthProducts > 0 
-            ? ((currentMonthNewProducts - previousMonthProducts) / previousMonthProducts) * 100 
+        const productsChange = previousMonthNewProducts > 0 
+            ? ((currentMonthNewProducts - previousMonthNewProducts) / previousMonthNewProducts) * 100 
             : 0;
 
         res.json({
@@ -84,8 +84,8 @@ exports.getPostStats = async (req, res) => {
             Post.countDocuments({ isActive: false })
         ]);
 
-        // Previous month posts for change calculation
-        const previousMonthPosts = await Post.countDocuments({
+        // Previous month NEW posts for change calculation
+        const previousMonthNewPosts = await Post.countDocuments({
             createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
 
@@ -94,8 +94,8 @@ exports.getPostStats = async (req, res) => {
             createdAt: { $gte: currentMonthStart }
         });
 
-        const postsChange = previousMonthPosts > 0 
-            ? ((currentMonthNewPosts - previousMonthPosts) / previousMonthPosts) * 100 
+        const postsChange = previousMonthNewPosts > 0 
+            ? ((currentMonthNewPosts - previousMonthNewPosts) / previousMonthNewPosts) * 100 
             : 0;
 
         // New posts today
@@ -148,8 +148,8 @@ exports.getUserStats = async (req, res) => {
             User.countDocuments({ isIdVerified: false })
         ]);
 
-        // Previous month users for change calculation
-        const previousMonthUsers = await User.countDocuments({
+        // Previous month NEW users for change calculation
+        const previousMonthNewUsers = await User.countDocuments({
             createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
 
@@ -158,8 +158,8 @@ exports.getUserStats = async (req, res) => {
             createdAt: { $gte: currentMonthStart }
         });
 
-        const usersChange = previousMonthUsers > 0 
-            ? ((currentMonthNewUsers - previousMonthUsers) / previousMonthUsers) * 100 
+        const usersChange = previousMonthNewUsers > 0 
+            ? ((currentMonthNewUsers - previousMonthNewUsers) / previousMonthNewUsers) * 100 
             : 0;
 
         // New users today
@@ -251,9 +251,9 @@ exports.getVerificationStats = async (req, res) => {
         // Verification requests
         const [totalVerifications, pendingVerifications, approvedVerifications, rejectedVerifications] = await Promise.all([
             VerificationRequest.countDocuments(),
-            VerificationRequest.countDocuments({ status: "pending" }),
-            VerificationRequest.countDocuments({ status: "approved" }),
-            VerificationRequest.countDocuments({ status: "rejected" })
+            VerificationRequest.countDocuments({ status: "Pending" }),
+            VerificationRequest.countDocuments({ status: "Approved" }),
+            VerificationRequest.countDocuments({ status: "Rejected" })
         ]);
 
         // New verifications today
@@ -349,10 +349,12 @@ exports.getComplaintStats = async (req, res) => {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         // Complaints
-        const [totalComplaints, pendingComplaints, resolvedComplaints] = await Promise.all([
+        const [totalComplaints, pendingComplaints, reviewingComplaints, resolvedComplaints, rejectedComplaints] = await Promise.all([
             Complaint.countDocuments(),
             Complaint.countDocuments({ status: "pending" }),
-            Complaint.countDocuments({ status: "resolved" })
+            Complaint.countDocuments({ status: "reviewing" }),
+            Complaint.countDocuments({ status: "resolved" }),
+            Complaint.countDocuments({ status: "rejected" })
         ]);
 
         // New complaints today
@@ -371,9 +373,17 @@ exports.getComplaintStats = async (req, res) => {
                     value: pendingComplaints.toLocaleString(),
                     rawValue: pendingComplaints
                 },
+                reviewingComplaints: {
+                    value: reviewingComplaints.toLocaleString(),
+                    rawValue: reviewingComplaints
+                },
                 resolvedComplaints: {
                     value: resolvedComplaints.toLocaleString(),
                     rawValue: resolvedComplaints
+                },
+                rejectedComplaints: {
+                    value: rejectedComplaints.toLocaleString(),
+                    rawValue: rejectedComplaints
                 },
                 newComplaintsToday: {
                     value: newComplaintsToday.toLocaleString(),
@@ -394,10 +404,13 @@ exports.getReportStats = async (req, res) => {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         // Reports
-        const [totalReports, pendingReports, resolvedReports] = await Promise.all([
+        const [totalReports, pendingReports, inProgressReports, reviewedReports, resolvedReports, rejectedReports] = await Promise.all([
             Report.countDocuments(),
             Report.countDocuments({ status: "Pending" }),
-            Report.countDocuments({ status: { $ne: "Pending" } })
+            Report.countDocuments({ status: "In Progress" }),
+            Report.countDocuments({ status: "Reviewed" }),
+            Report.countDocuments({ status: "Resolved" }),
+            Report.countDocuments({ status: "Rejected" })
         ]);
 
         // New reports today
@@ -416,9 +429,21 @@ exports.getReportStats = async (req, res) => {
                     value: pendingReports.toLocaleString(),
                     rawValue: pendingReports
                 },
+                inProgressReports: {
+                    value: inProgressReports.toLocaleString(),
+                    rawValue: inProgressReports
+                },
+                reviewedReports: {
+                    value: reviewedReports.toLocaleString(),
+                    rawValue: reviewedReports
+                },
                 resolvedReports: {
                     value: resolvedReports.toLocaleString(),
                     rawValue: resolvedReports
+                },
+                rejectedReports: {
+                    value: rejectedReports.toLocaleString(),
+                    rawValue: rejectedReports
                 },
                 newReportsToday: {
                     value: newReportsToday.toLocaleString(),

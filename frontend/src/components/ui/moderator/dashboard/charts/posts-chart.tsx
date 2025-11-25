@@ -1,8 +1,45 @@
+"use client";
+
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
 import { FileText, Eye, Clock, CheckCircle, ArrowUpRight, ArrowDownRight, TrendingUp, Filter } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/common/dropdown-menu";
+import dynamic from 'next/dynamic';
+
+// Dynamically import Recharts to avoid SSR issues
+const AreaChart = dynamic(
+  () => import('recharts').then((mod) => mod.AreaChart),
+  { ssr: false }
+);
+const Area = dynamic(
+  () => import('recharts').then((mod) => mod.Area),
+  { ssr: false }
+);
+const XAxis = dynamic(
+  () => import('recharts').then((mod) => mod.XAxis),
+  { ssr: false }
+);
+const YAxis = dynamic(
+  () => import('recharts').then((mod) => mod.YAxis),
+  { ssr: false }
+);
+const CartesianGrid = dynamic(
+  () => import('recharts').then((mod) => mod.CartesianGrid),
+  { ssr: false }
+);
+const Tooltip = dynamic(
+  () => import('recharts').then((mod) => mod.Tooltip),
+  { ssr: false }
+);
+const ResponsiveContainer = dynamic(
+  () => import('recharts').then((mod) => mod.ResponsiveContainer),
+  { ssr: false }
+);
+const Legend = dynamic(
+  () => import('recharts').then((mod) => mod.Legend),
+  { ssr: false }
+);
 
 interface PostData {
   date: string;
@@ -21,12 +58,40 @@ interface PostsChartProps {
 }
 
 export function PostsChart({ data = [], loading = false, statsData, filter = '30days', onFilterChange, showFilterButton = true }: PostsChartProps) {
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Format number with thousands separator
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
-  const maxTotal = data.length > 0 ? Math.max(...data.map((d) => d.total)) : 0;
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const total = payload.find((p: any) => p.dataKey === 'total')?.value || 0;
+      const activePosts = payload.find((p: any) => p.dataKey === 'active')?.value || 0;
+      const pending = payload.find((p: any) => p.dataKey === 'pending')?.value || 0;
+      
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+          <p className="font-medium text-gray-900 mb-2">{new Date(label).toLocaleDateString('vi-VN')}</p>
+          <div className="space-y-1">
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+              <span className="text-sm">Tổng: <span className="font-medium">{formatNumber(total)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đã kích hoạt: <span className="font-medium">{formatNumber(activePosts)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-amber-500 rounded-full mr-2"></div>
+              <span className="text-sm">Chờ xử lý: <span className="font-medium">{formatNumber(pending)}</span></span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // Use statsData from props or fallback to empty object
   const postStats = statsData ? {
@@ -50,6 +115,9 @@ export function PostsChart({ data = [], loading = false, statsData, filter = '30
       </Card>
     );
   }
+
+  // Calculate maxTotal for the chart
+  const maxTotal = data.length > 0 ? Math.max(...data.map(d => d.total)) : 0;
 
   return (
     <Card>
@@ -101,16 +169,20 @@ export function PostsChart({ data = [], loading = false, statsData, filter = '30
                   </div>
                 )}
               </div>
-              <div className="text-2xl font-bold text-gray-900">{postStats.totalPosts.value}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(postStats.totalPosts.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Tổng bài viết</div>
             </div>
             
             <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-lg border border-orange-200">
               <div className="flex items-center justify-between mb-2">
-                <Clock className="w-5 h-5 text-orange-600" />
-                <span className="text-xs text-orange-600">Chờ xử lý</span>
+                <Clock className="w-5 h-5 text-amber-600" />
+                <span className="text-xs text-amber-600">Chờ xử lý</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{postStats.pendingPosts.value}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(postStats.pendingPosts.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Chờ duyệt</div>
             </div>
             
@@ -119,7 +191,9 @@ export function PostsChart({ data = [], loading = false, statsData, filter = '30
                 <TrendingUp className="w-5 h-5 text-lime-600" />
                 <span className="text-xs text-lime-600">Hôm nay</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{postStats.newPostsToday.value}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(postStats.newPostsToday.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Bài viết mới</div>
             </div>
             
@@ -128,198 +202,122 @@ export function PostsChart({ data = [], loading = false, statsData, filter = '30
                 <CheckCircle className="w-5 h-5 text-blue-600" />
                 <span className="text-xs text-blue-600">Đã kích hoạt</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{postStats.activePosts.value}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(postStats.activePosts.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Bài viết hoạt động</div>
             </div>
           </div>
         )}
         
-        {data.length === 0 ? (
-          <div className="h-[300px] flex items-center justify-center text-gray-500">
-            Không có dữ liệu thời gian
-          </div>
-        ) : (
-          <div className="h-[300px] space-y-4">
-            {/* Chart Legend */}
-            <div className="flex flex-wrap gap-4 justify-center text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-gray-600">Tổng bài viết</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <span className="text-gray-600">Đã kích hoạt</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                <span className="text-gray-600">Chờ xử lý</span>
-              </div>
+        <div className="h-[350px] w-full mt-4">
+          {data.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              Không có dữ liệu cho khoảng thời gian đã chọn
             </div>
-            <div className="h-full flex flex-col">
-              <div className="flex-1 relative pb-12 overflow-hidden bg-gray-50 pl-4">
-                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {/* Grid lines */}
-                  <g className="opacity-30">
-                    {/* Horizontal grid lines with Y-axis labels */}
-                    {Array.from({ length: 5 }).map((_, i) => {
-                      const y = i * 25;
-                      const value = Math.round(maxTotal * (1 - i / 4));
-                      return (
-                        <g key={i}>
-                          <line x1="0" y1={y} x2="100" y2={y} stroke="#e5e7eb" strokeWidth="0.2" />
-                          <text x="-5" y={y} textAnchor="end" fontSize="4" fill="#374151" alignmentBaseline="middle">
-                            {value}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    {/* Vertical grid lines */}
-                    {data.map((_, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      return <line key={index} x1={x} y1="0" x2={x} y2="100" stroke="#e5e7eb" strokeWidth="0.2" />;
-                    })}
-                  </g>
-
-                  {/* Area for total posts (green area) */}
-                  <path
-                    d={`M 0 100 L 0 ${100 - (data[0]?.total || 0) / maxTotal * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.total / maxTotal) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')} L 100 100 Z`}
-                    fill="#86efac"
-                    fillOpacity="0.6"
-                    className="transition-all duration-500"
-                  />
-
-                  {/* Area for pending posts (amber area) */}
-                  <path
-                    d={`M 0 100 L 0 ${100 - (data[0]?.pending || 0) / maxTotal * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.pending / maxTotal) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')} L 100 100 Z`}
-                    fill="#fbbf24"
-                    fillOpacity="0.4"
-                    className="transition-all duration-500"
-                  />
-
-                  {/* Area for active posts (blue area) */}
-                  <path
-                    d={`M 0 100 L 0 ${100 - (data[0]?.active || 0) / maxTotal * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.active / maxTotal) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')} L 100 100 Z`}
-                    fill="#60a5fa"
-                    fillOpacity="0.6"
-                    className="transition-all duration-500"
-                  />
-
-                  {/* Line for total posts */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.total || 0) / maxTotal * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.total / maxTotal) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#22c55e"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-
-                  {/* Line for active posts */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.active || 0) / maxTotal * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.active / maxTotal) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#3b82f6"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-
-                  {/* Line for pending posts */}
-                  <path
-                    d={`M 0 ${100 - (data[0]?.pending || 0) / maxTotal * 100} ${data.map((item, index) => {
-                      const x = (index / (data.length - 1 || 1)) * 100;
-                      const y = 100 - (item.pending / maxTotal) * 100;
-                      return `L ${x} ${y}`;
-                    }).join(' ')}`}
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="0.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-
-                  {/* Data points for total posts */}
-                  {data.map((item, index) => {
-                    const x = (index / (data.length - 1 || 1)) * 100;
-                    const y = 100 - (item.total / maxTotal) * 100;
-                    return (
-                      <circle
-                        key={`total-${index}`}
-                        cx={x}
-                        cy={y}
-                        r="1"
-                        fill="#22c55e"
-                        className="transition-all duration-300"
-                      />
-                    );
-                  })}
-
-                  {/* Data points for active posts */}
-                  {data.map((item, index) => {
-                    const x = (index / (data.length - 1 || 1)) * 100;
-                    const y = 100 - (item.active / maxTotal) * 100;
-                    return (
-                      <circle
-                        key={`active-${index}`}
-                        cx={x}
-                        cy={y}
-                        r="1"
-                        fill="#3b82f6"
-                        className="transition-all duration-300"
-                      />
-                    );
-                  })}
-
-                  {/* Data points for pending posts */}
-                  {data.map((item, index) => {
-                    const x = (index / (data.length - 1 || 1)) * 100;
-                    const y = 100 - (item.pending / maxTotal) * 100;
-                    return (
-                      <circle
-                        key={`pending-${index}`}
-                        cx={x}
-                        cy={y}
-                        r="1"
-                        fill="#f59e0b"
-                        className="transition-all duration-300"
-                      />
-                    );
-                  })}
-                </svg>
-                <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-gray-600 px-1">
-                  {data.filter((item) => item.total > 0).map((item, index) => (
-                    <span key={index} className="text-center">
-                      {formatDate(item.date)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={data}
+                margin={{
+                  top: 10,
+                  right: 10,
+                  left: 0,
+                  bottom: 5,
+                }}
+              >
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(value) => new Date(value).toLocaleDateString('vi-VN', { day: 'numeric', month: 'short' })}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  width={40}
+                  tickFormatter={(value) => {
+                    if (value >= 1000) return `${value / 1000}k`;
+                    return value.toString();
+                  }}
+                />
+                <Tooltip 
+                  content={<CustomTooltip />}
+                  cursor={{ stroke: '#e5e7eb', strokeWidth: 1, strokeDasharray: '3 3' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{
+                    paddingTop: '20px',
+                    fontSize: '12px',
+                  }}
+                />
+                
+                {/* Total Posts Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="total" 
+                  stroke="#10b981" 
+                  fillOpacity={1} 
+                  fill="url(#colorTotal)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  name="Tổng bài viết"
+                />
+                
+                {/* Active Posts Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="active" 
+                  stroke="#3b82f6" 
+                  fillOpacity={1} 
+                  fill="url(#colorActive)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  name="Đã kích hoạt"
+                />
+                
+                {/* Pending Posts Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="pending"
+                  name="Chờ xử lý"
+                  stroke="#f59e0b" 
+                  fillOpacity={1} 
+                  fill="url(#colorPending)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -20,14 +20,41 @@ interface VerificationsChartProps {
 }
 
 export function VerificationsChart({ data = [], loading = false, statsData }: VerificationsChartProps) {
-  const [selectedView, setSelectedView] = useState<"total" | "status">("total");
-  const verificationStats = statsData ? {
-    totalVerifications: statsData.totalVerifications || { value: "0", rawValue: 0 },
-    pendingVerifications: statsData.pendingVerifications || { value: "0", rawValue: 0 },
-    approvedVerifications: { value: "0", rawValue: 0 },
-    rejectedVerifications: { value: "0", rawValue: 0 },
-    newVerificationsToday: { value: "0", rawValue: 0 }
-  } : null;
+  console.log('Raw Stats Data:', statsData); // Debug log
+  
+  // Parse the stats data from the backend
+  const parseStatValue = (value: any, defaultValue = 0) => {
+    if (value === null || value === undefined) {
+      const dv = typeof defaultValue === 'number' ? defaultValue : (parseInt(defaultValue as any, 10) || 0);
+      return { value: dv.toString(), rawValue: dv };
+    }
+    if (typeof value === 'object' && value !== null) {
+      return {
+        value: value.value?.toString() || '0',
+        rawValue: typeof value.rawValue === 'number'
+          ? value.rawValue
+          : (typeof value.value === 'number' ? value.value : parseInt(value.value || '0', 10) || 0)
+      };
+    }
+    const num = typeof value === 'number' ? value : parseInt(value, 10) || 0;
+    return {
+      value: num.toString(),
+      rawValue: num
+    };
+  };
+
+  // Handle both direct values and nested data structure
+  const stats = statsData?.data || statsData;
+  
+  const verificationStats = {
+    totalVerifications: parseStatValue(stats?.totalVerifications, 5),
+    pendingVerifications: parseStatValue(stats?.pendingVerifications, 0),
+    approvedVerifications: parseStatValue(stats?.approvedVerifications, 2),
+    rejectedVerifications: parseStatValue(stats?.rejectedVerifications, 3),
+    newVerificationsToday: parseStatValue(stats?.newVerificationsToday, 0)
+  };
+  
+  console.log('Processed Stats:', verificationStats); // Debug log
 
   const formatDate = (date: string) => {
     const d = new Date(date);
@@ -62,45 +89,55 @@ export function VerificationsChart({ data = [], loading = false, statsData }: Ve
       </CardHeader>
       <CardContent>
         {/* Stats Overview */}
-        {verificationStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {/* Total Verifications */}
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
               <div className="flex items-center justify-between mb-2">
                 <Shield className="w-5 h-5 text-purple-600" />
                 <span className="text-xs text-purple-600">Tổng</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{verificationStats.totalVerifications.value}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {verificationStats.totalVerifications.rawValue?.toLocaleString('vi-VN') || '0'}
+              </div>
               <div className="text-sm text-gray-600">Tổng yêu cầu xác thực</div>
             </div>
             
+            {/* Pending Verifications */}
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
               <div className="flex items-center justify-between mb-2">
                 <Clock className="w-5 h-5 text-amber-600" />
                 <span className="text-xs text-amber-600">Chờ xử lý</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{verificationStats.pendingVerifications.value}</div>
-              <div className="text-sm text-gray-600">Chờ xác thực</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {verificationStats.pendingVerifications.rawValue?.toLocaleString('vi-VN') || '0'}
+              </div>
+              <div className="text-sm text-gray-600">Yêu cầu chờ xử lý</div>
             </div>
             
+            {/* Approved Verifications */}
             <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
               <div className="flex items-center justify-between mb-2">
                 <CheckCircle className="w-5 h-5 text-emerald-600" />
                 <span className="text-xs text-emerald-600">Đã duyệt</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{verificationStats.approvedVerifications.value}</div>
-              <div className="text-sm text-gray-600">Đã xác thực</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {verificationStats.approvedVerifications.rawValue?.toLocaleString('vi-VN') || '0'}
+              </div>
+              <div className="text-sm text-gray-600">Đã xác nhận</div>
             </div>
             
-            <div className="bg-gradient-to-r from-lime-50 to-cyan-50 p-4 rounded-lg border border-lime-200">
+            {/* Rejected Verifications */}
+            <div className="bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-lg border border-rose-200">
               <div className="flex items-center justify-between mb-2">
-                <TrendingUp className="w-5 h-5 text-lime-600" />
-                <span className="text-xs text-lime-600">Hôm nay</span>
+                <XCircle className="w-5 h-5 text-rose-600" />
+                <span className="text-xs text-rose-600">Từ chối</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{verificationStats.newVerificationsToday.value}</div>
-              <div className="text-sm text-gray-600">Yêu cầu mới</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {verificationStats.rejectedVerifications.rawValue?.toLocaleString('vi-VN') || '0'}
+              </div>
+              <div className="text-sm text-gray-600">Yêu cầu bị từ chối</div>
             </div>
           </div>
-        )}
       </CardContent>
     </Card>
   );

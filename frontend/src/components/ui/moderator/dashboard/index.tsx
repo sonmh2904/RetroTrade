@@ -119,6 +119,11 @@ const ModeratorDashboard = () => {
   const [userChartData, setUserChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   
+  // Individual stats data for charts
+  const [ownerRequestStats, setOwnerRequestStats] = useState<any>(null);
+  const [complaintStats, setComplaintStats] = useState<any>(null);
+  const [reportStats, setReportStats] = useState<any>(null);
+  
   // Filter states for charts
   const [productFilter, setProductFilter] = useState<'30days' | 'all'>('30days');
   const [postFilter, setPostFilter] = useState<'30days' | 'all'>('30days');
@@ -157,25 +162,25 @@ const ModeratorDashboard = () => {
     },
     {
       id: "verifications",
-      label: "Xác thực",
+      label: "Xác thực tài khoản",
       icon: Shield,
       color: "text-purple-600",
     },
     {
       id: "owner-requests",
-      label: "Yêu cầu Owner",
+      label: "Yêu cầu cấp quyền Owner",
       icon: FileCheck,
       color: "text-violet-600",
     },
     {
       id: "complaints",
-      label: "Khiếu nại",
+      label: "Khiếu nại khóa tài khoản",
       icon: AlertCircle,
       color: "text-pink-600",
     },
     {
       id: "reports",
-      label: "Báo cáo",
+      label: "Báo cáo xử lí tranh chấp",
       icon: AlertTriangle,
       color: "text-red-600",
     },
@@ -190,34 +195,27 @@ const ModeratorDashboard = () => {
         setDashboardData(statsData);
 
         // Use the data from the main dashboard API instead of individual calls
+        // TỔNG QUAN HỆ THỐNG - 5 items đầu tiên
         const statsCards: StatCard[] = [
           {
-            id: "pendingProducts",
-            label: "Sản phẩm chờ duyệt",
-            value: statsData.pendingProducts.value,
+            id: "totalProducts",
+            label: "Tổng sản phẩm",
+            value: statsData.totalProducts.value,
             change: statsData.totalProducts.change,
             changeType: statsData.totalProducts.changeType,
-            icon: Clock,
-            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
-            iconColor: "text-amber-600"
+            icon: Package,
+            bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+            iconColor: "text-blue-600"
           },
           {
-            id: "pendingPosts",
-            label: "Bài viết chờ duyệt",
-            value: statsData.pendingPosts.value,
+            id: "totalPosts",
+            label: "Tổng bài viết",
+            value: statsData.totalPosts.value,
             change: statsData.totalPosts.change,
             changeType: statsData.totalPosts.changeType,
             icon: FileText,
-            bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
-            iconColor: "text-orange-600"
-          },
-          {
-            id: "pendingVerifications",
-            label: "Yêu cầu xác minh",
-            value: statsData.pendingVerifications.value,
-            icon: Shield,
-            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-            iconColor: "text-purple-600"
+            bgColor: "bg-gradient-to-r from-green-50 to-emerald-50",
+            iconColor: "text-green-600"
           },
           {
             id: "totalUsers",
@@ -226,8 +224,40 @@ const ModeratorDashboard = () => {
             change: statsData.totalUsers.change,
             changeType: statsData.totalUsers.changeType,
             icon: Users,
-            bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-            iconColor: "text-blue-600"
+            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+            iconColor: "text-purple-600"
+          },
+          {
+            id: "totalReports",
+            label: "Báo cáo xử lí tranh chấp",
+            value: statsData.totalDisputes.value,
+            icon: AlertCircle,
+            bgColor: "bg-gradient-to-r from-red-50 to-orange-50",
+            iconColor: "text-red-600"
+          },
+          
+          // HOẠT ĐỘNG CẦN XỬ LÝ - 5 items tiếp theo
+          {
+            id: "pendingProducts",
+            label: "Sản phẩm chờ duyệt",
+            value: statsData.pendingProducts.value,
+            // Không hiển thị change cho pending items - chỉ hiển thị cho tổng số
+            change: undefined,
+            changeType: undefined,
+            icon: Clock,
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            iconColor: "text-amber-600"
+          },
+          {
+            id: "pendingPosts",
+            label: "Bài viết chờ duyệt",
+            value: statsData.pendingPosts.value,
+            // Không hiển thị change cho pending items
+            change: undefined,
+            changeType: undefined,
+            icon: FileText,
+            bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
+            iconColor: "text-orange-600"
           },
           {
             id: "pendingComments",
@@ -238,6 +268,14 @@ const ModeratorDashboard = () => {
             iconColor: "text-yellow-600"
           },
           {
+            id: "pendingVerifications",
+            label: "Yêu cầu xác minh",
+            value: statsData.pendingVerifications.value,
+            icon: Shield,
+            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+            iconColor: "text-purple-600"
+          },
+          {
             id: "pendingOwnerRequests",
             label: "Yêu cầu Owner chờ duyệt",
             value: statsData.pendingOwnerRequests.value,
@@ -245,6 +283,8 @@ const ModeratorDashboard = () => {
             bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
             iconColor: "text-violet-600"
           },
+          
+          // KHIẾU NẠI VÀ BÁO CÁO - 3 items cuối
           {
             id: "pendingComplaints",
             label: "Khiếu nại chờ xử lý",
@@ -252,14 +292,6 @@ const ModeratorDashboard = () => {
             icon: AlertCircle,
             bgColor: "bg-gradient-to-r from-pink-50 to-rose-50",
             iconColor: "text-pink-600"
-          },
-          {
-            id: "totalReports",
-            label: "Tổng báo cáo",
-            value: statsData.totalDisputes.value,
-            icon: AlertCircle,
-            bgColor: "bg-gradient-to-r from-red-50 to-orange-50",
-            iconColor: "text-red-600"
           }
         ];
         setStats(statsCards);
@@ -274,6 +306,30 @@ const ModeratorDashboard = () => {
 
     fetchData();
   }, []);
+
+  // Fetch individual stats data for charts
+  const fetchIndividualStats = useCallback(async () => {
+    try {
+      const { chartApi } = await import("@/services/moderator/chart.api");
+      
+      const [ownerRequestsData, complaintsData, reportsData] = await Promise.all([
+        chartApi.getOwnerRequestStats(),
+        chartApi.getComplaintStats(),
+        chartApi.getReportStats()
+      ]);
+      
+      setOwnerRequestStats(ownerRequestsData);
+      setComplaintStats(complaintsData);
+      setReportStats(reportsData);
+    } catch (error) {
+      console.error("Error fetching individual stats:", error);
+    }
+  }, []);
+
+  // Fetch individual stats when component mounts
+  useEffect(() => {
+    fetchIndividualStats();
+  }, [fetchIndividualStats]);
 
   // Fetch chart data
   const fetchChartData = useCallback(async (productFilterValue?: '30days' | 'all', postFilterValue?: '30days' | 'all', userFilterValue?: '30days' | 'all') => {
@@ -363,8 +419,8 @@ const ModeratorDashboard = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Stats Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-8">
+        {/* Stats Cards Grid - 5 items per row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6 mb-8">
           {stats.map((stat, index) => {
             const Icon = stat.icon;
             const isClickable = true;
@@ -681,7 +737,7 @@ const ModeratorDashboard = () => {
                 <OwnerRequestsChart 
                   data={[]} 
                   loading={false}
-                  statsData={dashboardData}
+                  statsData={ownerRequestStats}
                 />
               </div>
             )}
@@ -691,7 +747,7 @@ const ModeratorDashboard = () => {
                 <ComplaintsChart 
                   data={[]} 
                   loading={false}
-                  statsData={dashboardData}
+                  statsData={complaintStats}
                 />
               </div>
             )}
@@ -701,7 +757,7 @@ const ModeratorDashboard = () => {
                 <ReportsChart 
                   data={[]} 
                   loading={false}
-                  statsData={dashboardData}
+                  statsData={reportStats}
                 />
               </div>
             )}

@@ -2,14 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
-import { AlertTriangle, Clock, CheckCircle, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { AlertTriangle, Clock, CheckCircle, TrendingUp, ArrowUpRight, ArrowDownRight, Eye, XCircle } from "lucide-react";
 import { chartApi, ReportStats } from "@/services/moderator/chart.api";
 
 interface ReportData {
   date: string;
   total: number;
   pending: number;
+  inProgress: number;
   resolved: number;
+  rejected: number;
 }
 
 interface ReportsChartProps {
@@ -21,10 +23,12 @@ interface ReportsChartProps {
 export function ReportsChart({ data = [], loading = false, statsData }: ReportsChartProps) {
   const [selectedView, setSelectedView] = useState<"total" | "status">("total");
   const reportStats = statsData ? {
-    totalReports: statsData.totalDisputes || { value: "0", rawValue: 0 },
-    pendingReports: statsData.pendingDisputes || { value: "0", rawValue: 0 },
-    resolvedReports: { value: "0", rawValue: 0 },
-    newReportsToday: { value: "0", rawValue: 0 }
+    totalReports: statsData.totalReports || { value: "0", rawValue: 0 },
+    pendingReports: statsData.pendingReports || { value: "0", rawValue: 0 },
+    inProgressReports: statsData.inProgressReports || { value: "0", rawValue: 0 },
+    resolvedReports: statsData.resolvedReports || { value: "0", rawValue: 0 },
+    rejectedReports: statsData.rejectedReports || { value: "0", rawValue: 0 },
+    newReportsToday: statsData.newReportsToday || { value: "0", rawValue: 0 }
   } : null;
 
   const formatDate = (date: string) => {
@@ -60,7 +64,7 @@ export function ReportsChart({ data = [], loading = false, statsData }: ReportsC
       <CardContent>
         {/* Stats Overview */}
         {reportStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <div className="bg-gradient-to-r from-red-50 to-rose-50 p-4 rounded-lg border border-red-200">
               <div className="flex items-center justify-between mb-2">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -79,6 +83,15 @@ export function ReportsChart({ data = [], loading = false, statsData }: ReportsC
               <div className="text-sm text-gray-600">Báo cáo chờ xử lý</div>
             </div>
             
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <Eye className="w-5 h-5 text-blue-600" />
+                <span className="text-xs text-blue-600">Đang xử lý</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{reportStats.inProgressReports.value}</div>
+              <div className="text-sm text-gray-600">Báo cáo đang xử lý</div>
+            </div>
+            
             <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
               <div className="flex items-center justify-between mb-2">
                 <CheckCircle className="w-5 h-5 text-emerald-600" />
@@ -86,6 +99,15 @@ export function ReportsChart({ data = [], loading = false, statsData }: ReportsC
               </div>
               <div className="text-2xl font-bold text-gray-900">{reportStats.resolvedReports.value}</div>
               <div className="text-sm text-gray-600">Báo cáo đã giải quyết</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-red-50 to-rose-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between mb-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                <span className="text-xs text-red-600">Đã từ chối</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{reportStats.rejectedReports.value}</div>
+              <div className="text-sm text-gray-600">Báo cáo đã từ chối</div>
             </div>
             
             <div className="bg-gradient-to-r from-lime-50 to-cyan-50 p-4 rounded-lg border border-lime-200">

@@ -55,14 +55,18 @@ export interface OwnerRequestStats {
 export interface ComplaintStats {
   totalComplaints: StatItem;
   pendingComplaints: StatItem;
+  reviewingComplaints: StatItem;
   resolvedComplaints: StatItem;
+  rejectedComplaints: StatItem;
   newComplaintsToday: StatItem;
 }
 
 export interface ReportStats {
   totalReports: StatItem;
   pendingReports: StatItem;
+  inProgressReports: StatItem;
   resolvedReports: StatItem;
+  rejectedReports: StatItem;
   newReportsToday: StatItem;
 }
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
-import { AlertCircle, Clock, CheckCircle, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle, XCircle, TrendingUp, ArrowUpRight, ArrowDownRight, Eye } from "lucide-react";
 import { chartApi, ComplaintStats } from "@/services/moderator/chart.api";
 
 interface ComplaintData {
@@ -23,8 +23,10 @@ export function ComplaintsChart({ data = [], loading = false, statsData }: Compl
   const complaintStats = statsData ? {
     totalComplaints: statsData.totalComplaints || { value: "0", rawValue: 0 },
     pendingComplaints: statsData.pendingComplaints || { value: "0", rawValue: 0 },
-    resolvedComplaints: { value: "0", rawValue: 0 },
-    newComplaintsToday: { value: "0", rawValue: 0 }
+    reviewingComplaints: statsData.reviewingComplaints || { value: "0", rawValue: 0 },
+    resolvedComplaints: statsData.resolvedComplaints || { value: "0", rawValue: 0 },
+    rejectedComplaints: statsData.rejectedComplaints || { value: "0", rawValue: 0 },
+    newComplaintsToday: statsData.newComplaintsToday || { value: "0", rawValue: 0 }
   } : null;
 
   const formatDate = (date: string) => {
@@ -61,7 +63,7 @@ export function ComplaintsChart({ data = [], loading = false, statsData }: Compl
       <CardContent>
         {/* Stats Overview */}
         {complaintStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             <div className="bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-lg border border-pink-200">
               <div className="flex items-center justify-between mb-2">
                 <AlertCircle className="w-5 h-5 text-pink-600" />
@@ -80,6 +82,15 @@ export function ComplaintsChart({ data = [], loading = false, statsData }: Compl
               <div className="text-sm text-gray-600">Khiếu nại chờ xử lý</div>
             </div>
             
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <Eye className="w-5 h-5 text-blue-600" />
+                <span className="text-xs text-blue-600">Đang xem xét</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{complaintStats.reviewingComplaints.value}</div>
+              <div className="text-sm text-gray-600">Khiếu nại đang xem xét</div>
+            </div>
+            
             <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
               <div className="flex items-center justify-between mb-2">
                 <CheckCircle className="w-5 h-5 text-emerald-600" />
@@ -87,6 +98,15 @@ export function ComplaintsChart({ data = [], loading = false, statsData }: Compl
               </div>
               <div className="text-2xl font-bold text-gray-900">{complaintStats.resolvedComplaints.value}</div>
               <div className="text-sm text-gray-600">Khiếu nại đã giải quyết</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-red-50 to-pink-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between mb-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                <span className="text-xs text-red-600">Đã từ chối</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{complaintStats.rejectedComplaints.value}</div>
+              <div className="text-sm text-gray-600">Khiếu nại bị từ chối</div>
             </div>
             
             <div className="bg-gradient-to-r from-lime-50 to-cyan-50 p-4 rounded-lg border border-lime-200">

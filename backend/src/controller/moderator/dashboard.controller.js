@@ -46,10 +46,15 @@ module.exports.getDashboardStats = async (req, res) => {
             pendingVerifications,
             totalVerifications,
             pendingOwnerRequests,
+            approvedOwnerRequests,
+            rejectedOwnerRequests,
             totalOwnerRequests,
             pendingDisputes,
             totalDisputes,
             pendingComplaints,
+            reviewingComplaints,
+            resolvedComplaints,
+            rejectedComplaints,
             totalComplaints,
             newUsersToday,
             newUsersThisMonth,
@@ -78,6 +83,8 @@ module.exports.getDashboardStats = async (req, res) => {
             
             // Owner requests
             OwnerRequest.countDocuments({ status: "pending" }),
+            OwnerRequest.countDocuments({ status: "approved" }),
+            OwnerRequest.countDocuments({ status: "rejected" }),
             OwnerRequest.countDocuments({}),
             
             // Disputes/Reports
@@ -86,6 +93,9 @@ module.exports.getDashboardStats = async (req, res) => {
             
             // Complaints
             Complaint.countDocuments({ status: "pending" }),
+            Complaint.countDocuments({ status: "reviewing" }),
+            Complaint.countDocuments({ status: "resolved" }),
+            Complaint.countDocuments({ status: "rejected" }),
             Complaint.countDocuments({}),
             
             // Users
@@ -99,27 +109,37 @@ module.exports.getDashboardStats = async (req, res) => {
             Comment.countDocuments({ createdAt: { $gte: todayStart, $lte: todayEnd } })
         ]);
 
-        // Calculate changes
-        const previousMonthProducts = await Item.countDocuments({
+        // Calculate changes - SO SÁNH SẢN PHẨM MỚI THÁNG NAY vs THÁNG TRƯỚC
+        const previousMonthNewProducts = await Item.countDocuments({
             IsDeleted: { $ne: true },
             CreatedAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
-        const productsChange = previousMonthProducts > 0 
-            ? ((totalProducts - previousMonthProducts) / previousMonthProducts) * 100 
+        const currentMonthNewProducts = await Item.countDocuments({
+            IsDeleted: { $ne: true },
+            CreatedAt: { $gte: currentMonthStart }
+        });
+        const productsChange = previousMonthNewProducts > 0 
+            ? ((currentMonthNewProducts - previousMonthNewProducts) / previousMonthNewProducts) * 100 
             : 0;
 
-        const previousMonthUsers = await User.countDocuments({
+        const previousMonthNewUsers = await User.countDocuments({
             createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
-        const usersChange = previousMonthUsers > 0 
-            ? ((totalUsers - previousMonthUsers) / previousMonthUsers) * 100 
+        const currentMonthNewUsers = await User.countDocuments({
+            createdAt: { $gte: currentMonthStart }
+        });
+        const usersChange = previousMonthNewUsers > 0 
+            ? ((currentMonthNewUsers - previousMonthNewUsers) / previousMonthNewUsers) * 100 
             : 0;
 
-        const previousMonthPosts = await Post.countDocuments({
+        const previousMonthNewPosts = await Post.countDocuments({
             createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
         });
-        const postsChange = previousMonthPosts > 0 
-            ? ((totalPosts - previousMonthPosts) / previousMonthPosts) * 100 
+        const currentMonthNewPosts = await Post.countDocuments({
+            createdAt: { $gte: currentMonthStart }
+        });
+        const postsChange = previousMonthNewPosts > 0 
+            ? ((currentMonthNewPosts - previousMonthNewPosts) / previousMonthNewPosts) * 100 
             : 0;
 
         // Time series data for charts - Daily data for last 7 days
@@ -303,6 +323,14 @@ module.exports.getDashboardStats = async (req, res) => {
                     value: pendingOwnerRequests.toLocaleString(),
                     rawValue: pendingOwnerRequests
                 },
+                approvedOwnerRequests: {
+                    value: approvedOwnerRequests.toLocaleString(),
+                    rawValue: approvedOwnerRequests
+                },
+                rejectedOwnerRequests: {
+                    value: rejectedOwnerRequests.toLocaleString(),
+                    rawValue: rejectedOwnerRequests
+                },
                 totalOwnerRequests: {
                     value: totalOwnerRequests.toLocaleString(),
                     rawValue: totalOwnerRequests
@@ -322,6 +350,18 @@ module.exports.getDashboardStats = async (req, res) => {
                 pendingComplaints: {
                     value: pendingComplaints.toLocaleString(),
                     rawValue: pendingComplaints
+                },
+                reviewingComplaints: {
+                    value: reviewingComplaints.toLocaleString(),
+                    rawValue: reviewingComplaints
+                },
+                resolvedComplaints: {
+                    value: resolvedComplaints.toLocaleString(),
+                    rawValue: resolvedComplaints
+                },
+                rejectedComplaints: {
+                    value: rejectedComplaints.toLocaleString(),
+                    rawValue: rejectedComplaints
                 },
                 totalComplaints: {
                     value: totalComplaints.toLocaleString(),
