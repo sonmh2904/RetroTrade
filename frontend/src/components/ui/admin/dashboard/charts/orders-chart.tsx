@@ -2,46 +2,130 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import { ShoppingCart, Clock, CheckCircle, XCircle, ArrowUpRight, ArrowDownRight, Filter } from "lucide-react";
 import { dashboardApi, OrderStats } from "@/services/admin/dashboard.api";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/common/select";
+import { Button } from "@/components/ui/common/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/common/dropdown-menu";
+import dynamic from 'next/dynamic';
+
+// Dynamically import Recharts to avoid SSR issues
+const AreaChart = dynamic(
+  () => import('recharts').then((mod) => mod.AreaChart),
+  { ssr: false }
+);
+const Area = dynamic(
+  () => import('recharts').then((mod) => mod.Area),
+  { ssr: false }
+);
+const XAxis = dynamic(
+  () => import('recharts').then((mod) => mod.XAxis),
+  { ssr: false }
+);
+const YAxis = dynamic(
+  () => import('recharts').then((mod) => mod.YAxis),
+  { ssr: false }
+);
+const CartesianGrid = dynamic(
+  () => import('recharts').then((mod) => mod.CartesianGrid),
+  { ssr: false }
+);
+const Tooltip = dynamic(
+  () => import('recharts').then((mod) => mod.Tooltip),
+  { ssr: false }
+);
+const ResponsiveContainer = dynamic(
+  () => import('recharts').then((mod) => mod.ResponsiveContainer),
+  { ssr: false }
+);
+const Legend = dynamic(
+  () => import('recharts').then((mod) => mod.Legend),
+  { ssr: false }
+);
+
+interface OrderData {
+  date: string;
+  orders: number;
+  pending: number;
+  completed: number;
+  cancelled: number;
+}
 
 export function OrdersChart() {
-  const [data, setData] = useState<OrderStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [orderData, setOrderData] = useState<OrderData[]>([]);
+  const [orderStats, setOrderStats] = useState<any>(null);
   const [period, setPeriod] = useState("30d");
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
       try {
-        const orderStats = await dashboardApi.getOrderStats(period);
-        setData(orderStats);
+        const orderStatsData = await dashboardApi.getOrderStats(period);
+        setOrderStats(orderStatsData);
+        
+        // Transform timeline data to match OrderData interface
+        const transformedData = orderStatsData.timeline.map((item: any) => ({
+          date: item.date,
+          orders: item.orders,
+          pending: item.pending || 0,
+          completed: item.completed || 0,
+          cancelled: item.cancelled || 0
+        }));
+        setOrderData(transformedData);
       } catch (error) {
         console.error("Error fetching order data:", error);
-      } finally {
-        setLoading(false);
       }
     };
 
     fetchData();
   }, [period]);
 
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    return `${d.getDate()}/${d.getMonth() + 1}`;
+  // Format number with thousands separator
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
-  const maxOrders = data && data.timeline.length > 0
-    ? Math.max(...data.timeline.map((d) => d.orders))
-    : 0;
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const orders = payload.find((p: any) => p.dataKey === 'orders')?.value || 0;
+      const pending = payload.find((p: any) => p.dataKey === 'pending')?.value || 0;
+      const completed = payload.find((p: any) => p.dataKey === 'completed')?.value || 0;
+      const cancelled = payload.find((p: any) => p.dataKey === 'cancelled')?.value || 0;
+      
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+          <p className="font-medium text-gray-900 mb-2">{new Date(label).toLocaleDateString('vi-VN')}</p>
+          <div className="space-y-1">
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+              <span className="text-sm">Tổng: <span className="font-medium">{formatNumber(orders)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+              <span className="text-sm">Hoàn thành: <span className="font-medium">{formatNumber(completed)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-amber-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đang xử lý: <span className="font-medium">{formatNumber(pending)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đã hủy: <span className="font-medium">{formatNumber(cancelled)}</span></span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
-  const totalByStatus = data ? Object.values(data.byStatus).reduce((a, b) => a + b, 0) : 0;
-
-  if (loading) {
+  if (!orderStats) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Biểu đồ Đơn hàng</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-blue-600" />
+            Thống kê Đơn hàng
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px] flex items-center justify-center">
@@ -52,184 +136,189 @@ export function OrdersChart() {
     );
   }
 
-  if (!data) {
-    return null;
-  }
-
-  const statusColors: Record<string, { bg: string; gradient: string; text: string }> = {
-    pending: { 
-      bg: "bg-yellow-500", 
-      gradient: "from-yellow-400 via-amber-500 to-orange-500",
-      text: "text-yellow-700"
-    },
-    confirmed: { 
-      bg: "bg-blue-500", 
-      gradient: "from-blue-400 via-cyan-500 to-teal-500",
-      text: "text-blue-700"
-    },
-    in_progress: { 
-      bg: "bg-purple-500", 
-      gradient: "from-purple-400 via-violet-500 to-indigo-500",
-      text: "text-purple-700"
-    },
-    completed: { 
-      bg: "bg-green-500", 
-      gradient: "from-green-400 via-emerald-500 to-teal-500",
-      text: "text-green-700"
-    },
-    cancelled: { 
-      bg: "bg-red-500", 
-      gradient: "from-red-400 via-rose-500 to-pink-500",
-      text: "text-red-700"
-    },
-  };
-
-  // Color variations for timeline bars
-  const barColors = [
-    "from-orange-500 via-amber-500 to-yellow-500",
-    "from-red-500 via-rose-500 to-pink-500",
-    "from-amber-500 via-orange-500 to-red-500",
-    "from-yellow-500 via-amber-500 to-orange-500",
-  ];
-
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Biểu đồ Đơn hàng (Gradient Bars)</CardTitle>
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Chọn khoảng thời gian" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">7 ngày qua</SelectItem>
-              <SelectItem value="30d">30 ngày qua</SelectItem>
-              <SelectItem value="90d">90 ngày qua</SelectItem>
-              <SelectItem value="1y">1 năm qua</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[400px] space-y-4">
-            {data.timeline.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                Không có dữ liệu
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2">
+          <ShoppingCart className="w-5 h-5 text-blue-600" />
+          Thống kê Đơn hàng
+        </CardTitle>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              {period === '7d' ? '7 ngày qua' : period === '30d' ? '30 ngày qua' : period === '90d' ? '90 ngày qua' : period === '1y' ? '1 năm qua' : '30 ngày qua'}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setPeriod('7d')}>
+              7 ngày qua
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPeriod('30d')}>
+              30 ngày qua
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPeriod('90d')}>
+              90 ngày qua
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPeriod('1y')}>
+              1 năm qua
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </CardHeader>
+      <CardContent>
+        {/* Stats Overview - 3 per row like moderator */}
+        {orderStats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <ShoppingCart className="w-5 h-5 text-blue-600" />
+                <span className="text-xs text-blue-600">Tổng</span>
               </div>
-            ) : (
-              <div className="h-full flex flex-col">
-                <div className="flex-1 flex items-stretch gap-2 pb-10">
-                  {data.timeline.map((item, index) => {
-                    const heightPercent = maxOrders > 0 ? (item.orders / maxOrders) * 100 : 0;
-                    const colorIndex = index % barColors.length;
-                    return (
-                      <div key={index} className="flex-1 flex flex-col items-center group relative">
-                        <div className="flex-1 w-full flex items-end justify-center">
-                          <div
-                            className={`w-full bg-gradient-to-t ${barColors[colorIndex]} rounded-t-lg transition-all duration-300 hover:scale-105 hover:shadow-xl relative border-t-2 border-white/50`}
-                            style={{ height: `${heightPercent}%` }}
-                          >
-                            <div className="absolute -top-9 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-50 shadow-xl pointer-events-none">
-                              {item.orders} đơn
-                            </div>
-                            <div className="absolute inset-0 bg-white/10 rounded-t-lg" />
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30 rounded-b-lg" />
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-600 mt-2 text-center font-medium truncate w-full px-1">
-                          {formatDate(item.date)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Phân bố Đơn hàng theo Trạng thái (Pie Chart Style)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Progress bars */}
-            <div className="space-y-4">
-              {Object.entries(data.byStatus).map(([status, count]) => {
-                const percentage = totalByStatus > 0 ? (count / totalByStatus) * 100 : 0;
-                const colorInfo = statusColors[status.toLowerCase()] || { 
-                  bg: "bg-gray-500", 
-                  gradient: "from-gray-400 to-gray-500",
-                  text: "text-gray-700"
-                };
-                return (
-                  <div key={status} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className={`text-sm font-medium capitalize ${colorInfo.text}`}>
-                        {status}
-                      </span>
-                      <span className="text-sm text-gray-600 font-semibold">
-                        {count} ({percentage.toFixed(1)}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
-                      <div
-                        className={`h-full bg-gradient-to-r ${colorInfo.gradient} transition-all duration-700 rounded-full relative overflow-hidden`}
-                        style={{ width: `${percentage}%` }}
-                      >
-                        <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/50" />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              <div className="text-2xl font-bold text-gray-900">{orderStats.totals.total?.toLocaleString() || '0'}</div>
+              <div className="text-sm text-gray-600">Tổng đơn hàng</div>
             </div>
             
-            {/* Visual pie representation */}
-            <div className="flex items-center justify-center">
-              <div className="relative w-48 h-48">
-                {Object.entries(data.byStatus).map(([status, count], index) => {
-                  const colorInfo = statusColors[status.toLowerCase()] || { 
-                    bg: "bg-gray-500",
-                    gradient: "from-gray-400 to-gray-500"
-                  };
-                  
-                  // Calculate angles for pie segments
-                  let startAngle = 0;
-                  for (let i = 0; i < index; i++) {
-                    const prevStatus = Object.keys(data.byStatus)[i];
-                    const prevCount = data.byStatus[prevStatus];
-                    startAngle += (prevCount / totalByStatus) * 360;
-                  }
-                  const angle = (count / totalByStatus) * 360;
-                  
-                  return (
-                    <div
-                      key={status}
-                      className="absolute inset-0 rounded-full overflow-hidden"
-                      style={{
-                        clipPath: `polygon(50% 50%, ${50 + 50 * Math.cos((startAngle - 90) * Math.PI / 180)}% ${50 + 50 * Math.sin((startAngle - 90) * Math.PI / 180)}%, ${50 + 50 * Math.cos((startAngle + angle - 90) * Math.PI / 180)}% ${50 + 50 * Math.sin((startAngle + angle - 90) * Math.PI / 180)}%)`,
-                      }}
-                    >
-                      <div className={`w-full h-full bg-gradient-to-br ${colorInfo.gradient}`} />
-                    </div>
-                  );
-                })}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="bg-white rounded-full w-24 h-24 flex items-center justify-center shadow-lg">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-800">{totalByStatus}</div>
-                      <div className="text-xs text-gray-500">Tổng</div>
-                    </div>
-                  </div>
-                </div>
+            <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
+              <div className="flex items-center justify-between mb-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <span className="text-xs text-emerald-600">Hoàn thành</span>
               </div>
+              <div className="text-2xl font-bold text-gray-900">{orderStats.totals.completed?.toLocaleString() || '0'}</div>
+              <div className="text-sm text-gray-600">Đơn hàng hoàn thành</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
+              <div className="flex items-center justify-between mb-2">
+                <Clock className="w-5 h-5 text-amber-600" />
+                <span className="text-xs text-amber-600">Đang xử lý</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{orderStats.totals.pending?.toLocaleString() || '0'}</div>
+              <div className="text-sm text-gray-600">Đơn hàng đang xử lý</div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+
+        {/* Chart Section */}
+        <div className="h-[400px]">
+          {orderData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              Không có dữ liệu cho khoảng thời gian đã chọn
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={orderData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorCancelled" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(value) => new Date(value).toLocaleDateString('vi-VN', { day: 'numeric', month: 'short' })}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  width={40}
+                  tickFormatter={(value) => {
+                    if (value >= 1000) return `${value / 1000}k`;
+                    return value.toString();
+                  }}
+                />
+                <Tooltip 
+                  content={<CustomTooltip />}
+                  cursor={{ stroke: '#e5e7eb', strokeWidth: 1, strokeDasharray: '3 3' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{
+                    paddingTop: '20px',
+                    fontSize: '12px',
+                  }}
+                />
+                
+                {/* Total Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="orders" 
+                  stroke="#3b82f6" 
+                  fillOpacity={1} 
+                  fill="url(#colorTotal)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  name="Tổng đơn hàng"
+                />
+                
+                {/* Completed Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="completed" 
+                  stroke="#10b981" 
+                  fillOpacity={1} 
+                  fill="url(#colorCompleted)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  name="Hoàn thành"
+                />
+                
+                {/* Pending Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="pending"
+                  name="Đang xử lý"
+                  stroke="#f59e0b" 
+                  fillOpacity={1} 
+                  fill="url(#colorPending)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+                
+                {/* Cancelled Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="cancelled"
+                  name="Đã hủy"
+                  stroke="#ef4444" 
+                  fillOpacity={1} 
+                  fill="url(#colorCancelled)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

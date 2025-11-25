@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
 import { Package, Clock, CheckCircle, XCircle, ArrowUpRight, ArrowDownRight, Filter } from "lucide-react";
-import { dashboardApi, ProductStats } from "@/services/admin/dashboard.api";
+import { ProductStats } from "@/services/moderator/chart.api";
 import { Button } from "@/components/ui/common/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/common/dropdown-menu";
 import dynamic from 'next/dynamic';
@@ -46,37 +46,29 @@ interface ProductData {
   date: string;
   total: number;
   pending: number;
-  active: number;
+  approved: number;
   rejected: number;
 }
 
-export function ProductsChart() {
-  const [productData, setProductData] = useState<ProductData[]>([]);
-  const [productStats, setProductStats] = useState<any>(null);
-  const [period, setPeriod] = useState("30d");
+interface ProductsChartProps {
+  data?: ProductData[];
+  loading?: boolean;
+  statsData?: any; 
+  onViewAll?: () => void;
+  showViewAllButton?: boolean;
+  filter?: '30days' | 'all';
+  onFilterChange?: (filter: '30days' | 'all') => void;
+  showFilterButton?: boolean;
+}
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const productStatsData = await dashboardApi.getProductStats(period);
-        setProductStats(productStatsData);
-        
-        // Transform timeline data to match moderator format
-        const transformedData = productStatsData.timeline.map((item: any) => ({
-          date: item.date,
-          total: item.products,
-          pending: item.pending || 0,
-          active: item.active || 0,
-          rejected: item.rejected || 0
-        }));
-        setProductData(transformedData);
-      } catch (error) {
-        console.error("Error fetching product data:", error);
-      }
-    };
-
-    fetchData();
-  }, [period]);
+export function ProductsChart({ data = [], loading = false, statsData, onViewAll, showViewAllButton = true, filter = '30days', onFilterChange, showFilterButton = true }: ProductsChartProps) {
+  // Use statsData from props or fallback to empty object
+  const productStats = statsData ? {
+    totalProducts: statsData.totalProducts || { value: "0", rawValue: 0, change: 0, changeType: "increase" },
+    approvedProducts: statsData.approvedProducts || { value: "0", rawValue: 0 },
+    rejectedProducts: statsData.rejectedProducts || { value: "0", rawValue: 0 },
+    pendingProducts: statsData.pendingProducts || { value: "0", rawValue: 0 }
+  } : null;
 
   // Format number with thousands separator
   const formatNumber = (num: number) => {
@@ -87,7 +79,7 @@ export function ProductsChart() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const total = payload.find((p: any) => p.dataKey === 'total')?.value || 0;
-      const active = payload.find((p: any) => p.dataKey === 'active')?.value || 0;
+      const approved = payload.find((p: any) => p.dataKey === 'approved')?.value || 0;
       const pending = payload.find((p: any) => p.dataKey === 'pending')?.value || 0;
       const rejected = payload.find((p: any) => p.dataKey === 'rejected')?.value || 0;
       
@@ -101,7 +93,7 @@ export function ProductsChart() {
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-              <span className="text-sm">Đã duyệt: <span className="font-medium">{formatNumber(active)}</span></span>
+              <span className="text-sm">Đã duyệt: <span className="font-medium">{formatNumber(approved)}</span></span>
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 bg-amber-500 rounded-full mr-2"></div>
@@ -118,17 +110,12 @@ export function ProductsChart() {
     return null;
   };
 
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    return `${d.getDate()}/${d.getMonth() + 1}`;
-  };
-
-  if (!productStats) {
+  if (loading) {
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5 text-blue-600" />
+            <Package className="w-5 h-5 text-orange-600" />
             Thống kê Sản phẩm
           </CardTitle>
         </CardHeader>
@@ -145,81 +132,117 @@ export function ProductsChart() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <Package className="w-5 h-5 text-blue-600" />
+          <Package className="w-5 h-5 text-orange-600" />
           Thống kê Sản phẩm
         </CardTitle>
-        
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              {period === '7d' ? '7 ngày qua' : period === '30d' ? '30 ngày qua' : period === '90d' ? '90 ngày qua' : period === '1y' ? '1 năm qua' : '30 ngày qua'}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setPeriod('7d')}>
-              7 ngày qua
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriod('30d')}>
-              30 ngày qua
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriod('90d')}>
-              90 ngày qua
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriod('1y')}>
-              1 năm qua
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          {showFilterButton && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 text-xs"
+                >
+                  <Filter className="w-3 h-3" />
+                  {filter === 'all' ? 'Tất cả' : '30 ngày gần nhất'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onFilterChange?.('30days')}>
+                  30 ngày gần nhất
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onFilterChange?.('all')}>
+                  Tất cả
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
-        {/* Stats Overview - 3 per row like moderator */}
+        {/* Stats Overview */}
         {productStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-lg border border-orange-200">
               <div className="flex items-center justify-between mb-2">
-                <Package className="w-5 h-5 text-blue-600" />
-                <span className="text-xs text-blue-600">Tổng</span>
+                <Package className="w-5 h-5 text-orange-600" />
+                {productStats.totalProducts.change !== undefined && (
+                  <div className={`flex items-center text-xs ${
+                    productStats.totalProducts.changeType === "increase" ? "text-green-600" : "text-red-600"
+                  }`}>
+                    {productStats.totalProducts.changeType === "increase" ? (
+                      <ArrowUpRight className="w-3 h-3 mr-1" />
+                    ) : (
+                      <ArrowDownRight className="w-3 h-3 mr-1" />
+                    )}
+                    {Math.abs(productStats.totalProducts.change)}%
+                  </div>
+                )}
               </div>
-              <div className="text-2xl font-bold text-gray-900">{productStats.totals.total.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(productStats.totalProducts.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Tổng sản phẩm</div>
             </div>
             
-            <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
               <div className="flex items-center justify-between mb-2">
-                <CheckCircle className="w-5 h-5 text-emerald-600" />
-                <span className="text-xs text-emerald-600">Đã duyệt</span>
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-xs text-green-600">Đã duyệt</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{productStats.totals.active.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(productStats.approvedProducts.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Sản phẩm đã duyệt</div>
             </div>
             
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 p-4 rounded-lg border border-amber-200">
               <div className="flex items-center justify-between mb-2">
                 <Clock className="w-5 h-5 text-amber-600" />
                 <span className="text-xs text-amber-600">Chờ duyệt</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{productStats.totals.pending?.toLocaleString() || '0'}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(productStats.pendingProducts.value).toLocaleString('vi-VN')}
+              </div>
               <div className="text-sm text-gray-600">Sản phẩm chờ duyệt</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-red-50 to-rose-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between mb-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                <span className="text-xs text-red-600">Bị từ chối</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {parseInt(productStats.rejectedProducts.value).toLocaleString('vi-VN')}
+              </div>
+              <div className="text-sm text-gray-600">Sản phẩm bị từ chối</div>
             </div>
           </div>
         )}
-
-        {/* Chart Section */}
-        <div className="h-[400px]">
-          {productData.length === 0 ? (
+        
+        <div className="h-[350px] w-full mt-4">
+          {data.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">
               Không có dữ liệu cho khoảng thời gian đã chọn
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={productData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+              <AreaChart
+                data={data}
+                margin={{
+                  top: 10,
+                  right: 10,
+                  left: 0,
+                  bottom: 5,
+                }}
+              >
                 <defs>
                   <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
                   </linearGradient>
-                  <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6}/>
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
                   </linearGradient>
@@ -281,13 +304,13 @@ export function ProductsChart() {
                   name="Tổng sản phẩm"
                 />
                 
-                {/* Active Products Area */}
+                {/* Approved Products Area */}
                 <Area 
                   type="monotone" 
-                  dataKey="active" 
+                  dataKey="approved" 
                   stroke="#3b82f6" 
                   fillOpacity={1} 
-                  fill="url(#colorActive)"
+                  fill="url(#colorApproved)"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
@@ -326,4 +349,6 @@ export function ProductsChart() {
       </CardContent>
     </Card>
   );
-}
+};
+
+export default ProductsChart;

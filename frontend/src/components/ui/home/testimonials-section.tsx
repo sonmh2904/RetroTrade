@@ -6,26 +6,29 @@ import { useRef, useState } from "react"
 
 const testimonials = [
   {
-    name: "Nguyễn Văn A",
-    role: "Khách hàng",
-    content: "Dịch vụ tuyệt vời, tiết kiệm được rất nhiều chi phí!",
-    avatar: "/professional-woman-portrait.png",
-    rating: 5,
-  },
-  {
-    name: "Đỗ Xuân Duy",
-    role: "Người cho thuê",
-    content: "Nền tảng dễ sử dụng, giao dịch nhanh chóng và an toàn.",
-    avatar: "/professional-man-portrait.png",
-    rating: 5,
-  },
-  {
-    name: "Lê Văn C",
-    role: "Khách hàng",
-    content: "Rất hài lòng với chất lượng sản phẩm và dịch vụ.",
-    avatar: "/young-professional-portrait.png",
-    rating: 5,
-  },
+  name: "Đinh Đức Linh",
+  role: "Người cho thuê",
+  content:
+    "Tôi đã đăng cho thuê nhiều món đồ trên RetroTrade và rất bất ngờ vì lượng khách tìm đến. Nền tảng giúp tôi tận dụng lại những đồ ít dùng, vừa có thêm thu nhập vừa giảm lãng phí. Quy trình duyệt, giao nhận và thanh toán đều minh bạch, hỗ trợ khách hàng cực kỳ nhanh. Rất đáng trải nghiệm!",
+  avatar: "/avatar_user/linhdd.jpg",
+  rating: 5,
+},
+{
+  name: "Đỗ Xuân Duy",
+  role: "Khách hàng",
+  content:
+    "Tôi thường xuyên thuê thiết bị quay chụp cho công việc và RetroTrade là lựa chọn số một. Giao diện dễ dùng, tìm kiếm nhanh, giá thuê hợp lý và có bảo đảm an toàn nên hoàn toàn yên tâm. Quá trình đặt thuê và trả đồ diễn ra trơn tru chỉ trong vài phút, rất tiện lợi!",
+  avatar: "/avatar_user/duydx.jpg",
+  rating: 5,
+},
+{
+  name: "Lưu Minh Đức",
+  role: "Người cho thuê",
+  content:
+    "RetroTrade giúp tôi kết nối với nhiều khách hàng mà trước đây không thể tiếp cận. Các sản phẩm được kiểm duyệt rõ ràng, phản hồi từ khách cũng minh bạch nên tạo cảm giác rất chuyên nghiệp. Từ khi sử dụng nền tảng, hiệu suất cho thuê của tôi tăng lên đáng kể. Hoàn toàn hài lòng!",
+  avatar: "/avatar_user/duclm.jpg",
+  rating: 5,
+}
 ]
 
 const containerVariants: Variants = {
