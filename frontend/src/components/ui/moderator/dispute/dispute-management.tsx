@@ -5,7 +5,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
 import { decodeToken } from '@/utils/jwtHelper';
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Input } from "@/components/ui/common/input";
@@ -76,6 +76,8 @@ export function DisputeManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // all, unassigned, assigned, assignedToMe
+  const [sortBy, setSortBy] = useState<string>("newest"); // newest, oldest, status
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -101,16 +103,21 @@ export function DisputeManagement() {
   // Dispute details for detail dialog
   const [detailDisputeData, setDetailDisputeData] = useState<Dispute | null>(null);
   const [loadingDetailData, setLoadingDetailData] = useState(false);
+  
+  // Image modal state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
 
-  const orderTotalForRefund =
-    orderDetails?.totalAmount ??
-    (typeof disputeDetails?.orderId === "object"
-      ? disputeDetails?.orderId?.totalAmount
+  // Tính tiền hoàn chỉ dựa trên tiền cọc (depositAmount), không động vào tổng tiền
+  const depositAmountForRefund =
+    orderDetails?.depositAmount ??
+    (typeof disputeDetails?.orderId === "object" && disputeDetails?.orderId !== null && "depositAmount" in disputeDetails.orderId
+      ? (disputeDetails.orderId as Order).depositAmount
       : 0) ??
     0;
   const computedRefundPreview =
-    refundPercentage && orderTotalForRefund
-      ? Math.round((orderTotalForRefund * Number(refundPercentage)) / 100)
+    refundPercentage && depositAmountForRefund
+      ? Math.round((depositAmountForRefund * Number(refundPercentage)) / 100)
       : 0;
 
   useEffect(() => {
@@ -122,7 +129,7 @@ export function DisputeManagement() {
     fetchDisputes();
     // Reset pagination when filter changes
     setPagination({ currentPage: 1, itemsPerPage: pagination.itemsPerPage });
-  }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, assigneeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchDisputes = async () => {
     setLoading(true);
@@ -190,7 +197,9 @@ export function DisputeManagement() {
       // Get orderId from dispute - ensure it's always a string
       let orderIdValue: string | null = null;
       if (typeof dispute.orderId === "object" && dispute.orderId !== null) {
-        orderIdValue = dispute.orderId._id || null;
+        // Type guard: check if it's an Order-like object
+        const orderObj = dispute.orderId as { _id?: string };
+        orderIdValue = orderObj._id || null;
       } else if (typeof dispute.orderId === "string") {
         orderIdValue = dispute.orderId;
       }
@@ -306,36 +315,68 @@ export function DisputeManagement() {
   };
 
   const filteredDisputes = disputes.filter((dispute) => {
+    // Search filter
     const matchesSearch =
       dispute.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (typeof dispute.orderId === "object" && dispute.orderId?.orderGuid?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      dispute.reporterId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      dispute.reportedUserId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+      (typeof dispute.orderId === "object" && dispute.orderId !== null && "orderGuid" in dispute.orderId
+        ? (dispute.orderId as { orderGuid?: string }).orderGuid?.toLowerCase().includes(searchTerm.toLowerCase())
+        : false) ||
+      (typeof dispute.reporterId === "object" && dispute.reporterId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (typeof dispute.reportedUserId === "object" && dispute.reportedUserId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    if (!matchesSearch) return false;
+
+    // Status filter
+    if (statusFilter !== "all" && dispute.status !== statusFilter) {
+      return false;
+    }
+
+    // Assignee filter
+    if (assigneeFilter === "unassigned" && dispute.assignedBy) {
+      return false;
+    }
+    if (assigneeFilter === "assigned" && !dispute.assignedBy) {
+      return false;
+    }
+    if (assigneeFilter === "assignedToMe" && !isAssignedToMe(dispute)) {
+      return false;
+    }
+
+    return true;
   });
 
-  // Sort disputes: Pending first, then by createdAt (oldest first)
+  // Sort disputes based on sortBy option
   const sortedDisputes = [...filteredDisputes].sort((a, b) => {
-    // Priority order: Pending > In Progress > Others
-    const statusPriority: { [key: string]: number } = {
-      Pending: 1,
-      "In Progress": 2,
-      Reviewed: 3,
-      Resolved: 4,
-      Rejected: 5,
-    };
-    
-    const priorityA = statusPriority[a.status] || 99;
-    const priorityB = statusPriority[b.status] || 99;
-    
-    // If same priority, sort by createdAt (oldest first)
-    if (priorityA === priorityB) {
+    if (sortBy === "oldest") {
+      // Oldest first
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
-      return dateA - dateB; // Oldest first
+      return dateA - dateB;
+    } else if (sortBy === "status") {
+      // Sort by status priority: Pending > In Progress > Others
+      const statusPriority: { [key: string]: number } = {
+        Pending: 1,
+        "In Progress": 2,
+        Reviewed: 3,
+        Resolved: 4,
+        Rejected: 5,
+      };
+      const priorityA = statusPriority[a.status] || 99;
+      const priorityB = statusPriority[b.status] || 99;
+      
+      if (priorityA === priorityB) {
+        // If same priority, sort by createdAt (newest first)
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      }
+      return priorityA - priorityB;
+    } else {
+      // Default: newest first
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
     }
-    
-    return priorityA - priorityB;
   });
 
   // Pagination calculations
@@ -344,10 +385,10 @@ export function DisputeManagement() {
   const endIndex = startIndex + pagination.itemsPerPage;
   const paginatedDisputes = sortedDisputes.slice(startIndex, endIndex);
 
-  // Reset page when search term changes
+  // Reset page when search term or sort changes
   useEffect(() => {
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
-  }, [searchTerm]);
+  }, [searchTerm, sortBy]);
 
   const handlePageChange = (page: number) => {
     setPagination((prev) => ({ ...prev, currentPage: page }));
@@ -387,8 +428,7 @@ export function DisputeManagement() {
       <Card className="bg-white border border-gray-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-gray-900">Danh sách tranh chấp</CardTitle>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 <Input
@@ -399,15 +439,34 @@ export function DisputeManagement() {
                 />
               </div>
               <select
-                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900"
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="all">Tất cả</option>
+                <option value="all">Tất cả trạng thái</option>
                 <option value="Pending">Chờ xử lý</option>
                 <option value="In Progress">Đang xử lý</option>
                 <option value="Resolved">Đã xử lý</option>
                 <option value="Rejected">Đã từ chối</option>
+              </select>
+              <select
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm"
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+              >
+                <option value="all">Tất cả người xử lý</option>
+                <option value="unassigned">Chưa được gán</option>
+                <option value="assigned">Đã được gán</option>
+                <option value="assignedToMe">Được gán cho tôi</option>
+              </select>
+              <select
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="newest">Mới nhất</option>
+                <option value="oldest">Cũ nhất</option>
+                <option value="status">Theo trạng thái</option>
               </select>
               <Button onClick={fetchDisputes} variant="ghost" size="icon" className="text-gray-900">
                 <RefreshCw className="h-4 w-4" />
@@ -424,7 +483,9 @@ export function DisputeManagement() {
               </div>
             ) : (
               paginatedDisputes.map((dispute) => {
-                const orderGuid = typeof dispute.orderId === "object" ? dispute.orderId?.orderGuid : "N/A";
+                const orderGuid = typeof dispute.orderId === "object" && dispute.orderId !== null && "orderGuid" in dispute.orderId
+                  ? (dispute.orderId as { orderGuid?: string }).orderGuid || "N/A"
+                  : "N/A";
                 const assignedToMe = isAssignedToMe(dispute);
                 const canAssign = dispute.status === "Pending" && !dispute.assignedBy;
                 const canResolve = dispute.status === "In Progress" && assignedToMe;
@@ -459,13 +520,17 @@ export function DisputeManagement() {
                           <div className="flex items-center gap-1">
                             <User className="w-4 h-4" />
                             <span>
-                              Người báo cáo: {dispute.reporterId?.fullName || dispute.reporterId?.email}
+                              Người báo cáo: {typeof dispute.reporterId === "object" 
+                                ? (dispute.reporterId.fullName || dispute.reporterId.email || "N/A")
+                                : "N/A"}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
                             <User className="w-4 h-4" />
                             <span>
-                              Người bị báo cáo: {dispute.reportedUserId?.fullName || dispute.reportedUserId?.email}
+                              Người bị báo cáo: {typeof dispute.reportedUserId === "object"
+                                ? (dispute.reportedUserId.fullName || dispute.reportedUserId.email || "N/A")
+                                : "N/A"}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
@@ -676,7 +741,9 @@ export function DisputeManagement() {
                     <div>
                       <label className="text-sm font-medium text-gray-700">Đơn hàng</label>
                       <p className="text-gray-900">
-                        #{typeof dispute.orderId === "object" ? dispute.orderId?.orderGuid : "N/A"}
+                        #{typeof dispute.orderId === "object" && dispute.orderId !== null && "orderGuid" in dispute.orderId
+                          ? (dispute.orderId as { orderGuid?: string }).orderGuid || "N/A"
+                          : "N/A"}
                       </p>
                     </div>
                     <div>
@@ -694,12 +761,14 @@ export function DisputeManagement() {
                         <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                           {dispute.evidence.map((url: string, index: number) => (
-                              <a
+                              <button
                                 key={`evidence-${index}`}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
+                                type="button"
+                                onClick={() => {
+                                  setSelectedImage(url);
+                                  setImageModalOpen(true);
+                                }}
+                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors cursor-pointer"
                               >
                                 <img
                                   src={url}
@@ -709,7 +778,7 @@ export function DisputeManagement() {
                                     (e.target as HTMLImageElement).src = "/file.svg";
                                   }}
                                 />
-                              </a>
+                              </button>
                             ))}
                         </div>
                       </div>
@@ -830,45 +899,137 @@ export function DisputeManagement() {
                         </p>
                       </div>
                       {orderDetails.itemSnapshot && (
-                        <>
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Sản phẩm</label>
-                            <p className="text-gray-900">{orderDetails.itemSnapshot.title || "N/A"}</p>
+                        <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                          <label className="text-sm font-medium text-gray-700 mb-3 block">Thông tin sản phẩm</label>
+                          <div className="flex gap-4">
+                            {/* Hình ảnh sản phẩm */}
+                            {orderDetails.itemSnapshot.images && orderDetails.itemSnapshot.images.length > 0 ? (
+                              <div className="flex-shrink-0">
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedImage(orderDetails.itemSnapshot.images[0]);
+                                      setImageModalOpen(true);
+                                    }}
+                                    className="group relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-200 hover:border-indigo-500 transition-all cursor-pointer"
+                                  >
+                                    <img
+                                      src={orderDetails.itemSnapshot.images[0]}
+                                      alt={orderDetails.itemSnapshot.title || "Ảnh sản phẩm"}
+                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = "/file.svg";
+                                      }}
+                                    />
+                                    {orderDetails.itemSnapshot.images.length > 1 && (
+                                      <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                                        +{orderDetails.itemSnapshot.images.length - 1}
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                      <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                  </button>
+                                  {orderDetails.itemSnapshot.images.length > 1 && (
+                                    <div className="mt-2 flex gap-1 overflow-x-auto max-w-[128px]">
+                                      {orderDetails.itemSnapshot.images.slice(1, 4).map((img, idx) => (
+                                        <button
+                                          key={idx}
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedImage(img);
+                                            setImageModalOpen(true);
+                                          }}
+                                          className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 hover:border-indigo-500 overflow-hidden"
+                                        >
+                                          <img
+                                            src={img}
+                                            alt={`Ảnh ${idx + 2}`}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                              (e.target as HTMLImageElement).src = "/file.svg";
+                                            }}
+                                          />
+                                        </button>
+                                      ))}
+                                      {orderDetails.itemSnapshot.images.length > 4 && (
+                                        <div className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 bg-gray-100 flex items-center justify-center text-xs text-gray-600">
+                                          +{orderDetails.itemSnapshot.images.length - 4}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex-shrink-0 w-32 h-32 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+                                <FileText className="w-8 h-8 text-gray-400" />
+                              </div>
+                            )}
+                            
+                            {/* Thông tin sản phẩm */}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 mb-3 line-clamp-2">
+                                {orderDetails.itemSnapshot.title || "N/A"}
+                              </h4>
+                              <div className="space-y-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-gray-600 whitespace-nowrap">Giá thuê:</span>
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {orderDetails.itemSnapshot.basePrice?.toLocaleString("vi-VN") || "0"} VNĐ
+                                  </span>
+                                  {orderDetails.itemSnapshot.priceUnit && (
+                                    <span className="text-sm text-gray-500">
+                                      / {orderDetails.itemSnapshot.priceUnit}
+                                    </span>
+                                  )}
+                                </div>
+                                {orderDetails.unitCount && (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm text-gray-600 whitespace-nowrap">Số lượng:</span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {orderDetails.unitCount} {orderDetails.itemSnapshot.priceUnit || ""}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-gray-600 whitespace-nowrap">Tiền cọc / Tổng tiền:</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-semibold text-gray-900">
+                                      {orderDetails.depositAmount?.toLocaleString("vi-VN") || "0"} {orderDetails.currency || "VNĐ"}
+                                    </span>
+                                    <span className="text-gray-400">/</span>
+                                    <span className="text-sm font-semibold text-blue-600">
+                                      {orderDetails.totalAmount?.toLocaleString("vi-VN") || "0"} {orderDetails.currency || "VNĐ"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-gray-600 whitespace-nowrap">Trạng thái thanh toán:</span>
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {getPaymentStatusLabel(orderDetails.paymentStatus)}
+                                  </span>
+                                </div>
+                                {(orderDetails.startAt || orderDetails.endAt) && (
+                                  <div className="flex flex-wrap items-start gap-2">
+                                    <span className="text-sm text-gray-600 whitespace-nowrap">Thời gian thuê:</span>
+                                    <div className="text-sm text-gray-900">
+                                      {orderDetails.startAt && (
+                                        <div>Bắt đầu: {new Date(orderDetails.startAt).toLocaleString("vi-VN")}</div>
+                                      )}
+                                      {orderDetails.startAt && orderDetails.endAt && (
+                                        <div className="mt-1">Kết thúc: {new Date(orderDetails.endAt).toLocaleString("vi-VN")}</div>
+                                      )}
+                                      {!orderDetails.startAt && orderDetails.endAt && (
+                                        <div>Kết thúc: {new Date(orderDetails.endAt).toLocaleString("vi-VN")}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Giá thuê</label>
-                            <p className="text-gray-900">
-                              {orderDetails.itemSnapshot.basePrice?.toLocaleString("vi-VN") || "0"} {orderDetails.itemSnapshot.priceUnit || "VNĐ"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Tổng tiền</label>
-                        <p className="text-gray-900 font-semibold">
-                          {orderDetails.totalAmount?.toLocaleString("vi-VN") || "0"} {orderDetails.currency || "VNĐ"}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Trạng thái thanh toán</label>
-                        <p className="text-gray-900">
-                          {getPaymentStatusLabel(orderDetails.paymentStatus)}
-                        </p>
-                      </div>
-                      {orderDetails.startAt && (
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Thời gian bắt đầu</label>
-                          <p className="text-gray-900">
-                            {new Date(orderDetails.startAt).toLocaleString("vi-VN")}
-                          </p>
-                        </div>
-                      )}
-                      {orderDetails.endAt && (
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Thời gian kết thúc</label>
-                          <p className="text-gray-900">
-                            {new Date(orderDetails.endAt).toLocaleString("vi-VN")}
-                          </p>
                         </div>
                       )}
                       {orderDetails.shippingAddress && (
@@ -906,13 +1067,17 @@ export function DisputeManagement() {
                       <div>
                         <label className="text-sm font-medium text-gray-700">Người báo cáo</label>
                         <p className="text-gray-900">
-                          {disputeDetails.reporterId?.fullName || disputeDetails.reporterId?.email || "N/A"}
+                          {typeof disputeDetails.reporterId === "object"
+                            ? (disputeDetails.reporterId.fullName || disputeDetails.reporterId.email || "N/A")
+                            : "N/A"}
                         </p>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-700">Người bị báo cáo</label>
                         <p className="text-gray-900">
-                          {disputeDetails.reportedUserId?.fullName || disputeDetails.reportedUserId?.email || "N/A"}
+                          {typeof disputeDetails.reportedUserId === "object"
+                            ? (disputeDetails.reportedUserId.fullName || disputeDetails.reportedUserId.email || "N/A")
+                            : "N/A"}
                         </p>
                       </div>
                       <div>
@@ -930,12 +1095,14 @@ export function DisputeManagement() {
                           <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
                           <div className="grid grid-cols-2 gap-2">
                             {disputeDetails.evidence.map((url: string, index: number) => (
-                              <a
+                              <button
                                 key={index}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
+                                type="button"
+                                onClick={() => {
+                                  setSelectedImage(url);
+                                  setImageModalOpen(true);
+                                }}
+                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors cursor-pointer"
                               >
                                 <img
                                   src={url}
@@ -945,7 +1112,7 @@ export function DisputeManagement() {
                                     (e.target as HTMLImageElement).src = "/file.svg";
                                   }}
                                 />
-                              </a>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -994,11 +1161,26 @@ export function DisputeManagement() {
                         }
                       >
                         <option value="">Không hoàn / Không áp dụng</option>
-                        {REFUND_TARGET_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
+                        {REFUND_TARGET_OPTIONS.map((option) => {
+                          // Lấy tên người dùng từ disputeDetails hoặc orderDetails
+                          let userName = "";
+                          if (disputeDetails) {
+                            if (option.value === "reporter") {
+                              userName = typeof disputeDetails.reporterId === "object"
+                                ? (disputeDetails.reporterId.fullName || disputeDetails.reporterId.email || "")
+                                : "";
+                            } else if (option.value === "reported") {
+                              userName = typeof disputeDetails.reportedUserId === "object"
+                                ? (disputeDetails.reportedUserId.fullName || disputeDetails.reportedUserId.email || "")
+                                : "";
+                            }
+                          }
+                          return (
+                            <option key={option.value} value={option.value}>
+                              {option.label}{userName ? ` - ${userName}` : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div>
@@ -1019,15 +1201,32 @@ export function DisputeManagement() {
                       </select>
                     </div>
                   </div>
-                  {refundPercentage && (
+                  {refundPercentage && refundTarget && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                      <p className="text-sm text-emerald-700">
-                        Số tiền dự kiến hoàn trả
+                      <p className="text-sm text-emerald-700 mb-1">
+                        Số tiền dự kiến hoàn trả (từ tiền cọc)
                       </p>
-                      <p className="text-2xl font-bold text-emerald-900">
+                      <p className="text-2xl font-bold text-emerald-900 mb-2">
                         {computedRefundPreview
                           ? `${computedRefundPreview.toLocaleString("vi-VN")} VNĐ`
                           : "0 VNĐ"}
+                      </p>
+                      {disputeDetails && (
+                        <p className="text-sm text-emerald-600">
+                          Sẽ hoàn cho:{" "}
+                          <span className="font-semibold">
+                            {refundTarget === "reporter"
+                              ? (typeof disputeDetails.reporterId === "object"
+                                  ? (disputeDetails.reporterId.fullName || disputeDetails.reporterId.email || "Người khiếu nại")
+                                  : "Người khiếu nại")
+                              : (typeof disputeDetails.reportedUserId === "object"
+                                  ? (disputeDetails.reportedUserId.fullName || disputeDetails.reportedUserId.email || "Người bị khiếu nại")
+                                  : "Người bị khiếu nại")}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-xs text-emerald-600 mt-1">
+                        Tiền cọc: {depositAmountForRefund.toLocaleString("vi-VN")} VNĐ
                       </p>
                     </div>
                   )}
@@ -1088,6 +1287,32 @@ export function DisputeManagement() {
             </Button>
             <Button onClick={handleUnassign} className="bg-orange-600 hover:bg-orange-700">
               Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Modal */}
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Xem bằng chứng</DialogTitle>
+          </DialogHeader>
+          {selectedImage && (
+            <div className="flex items-center justify-center">
+              <img
+                src={selectedImage}
+                alt="Bằng chứng"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/file.svg";
+                }}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImageModalOpen(false)}>
+              Đóng
             </Button>
           </DialogFooter>
         </DialogContent>

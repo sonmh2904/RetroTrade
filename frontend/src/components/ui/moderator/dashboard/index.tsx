@@ -114,14 +114,20 @@ const ModeratorDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   
   // Chart data states
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [productChartData, setProductChartData] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [postChartData, setPostChartData] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [userChartData, setUserChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   
   // Individual stats data for charts
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [ownerRequestStats, setOwnerRequestStats] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [complaintStats, setComplaintStats] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reportStats, setReportStats] = useState<any>(null);
   
   // Filter states for charts
@@ -168,7 +174,7 @@ const ModeratorDashboard = () => {
     },
     {
       id: "owner-requests",
-      label: "Yêu cầu cấp quyền Owner",
+      label: "Yêu cầu cấp quyền Cho thuê sản phẩmphẩm",
       icon: FileCheck,
       color: "text-violet-600",
     },

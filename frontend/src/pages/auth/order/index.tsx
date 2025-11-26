@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useRouter } from "next/router";
 import { createOrderAction } from "@/store/order/orderActions";
@@ -52,36 +52,12 @@ import {
   CheckoutPhoneInput,
   validateVietnamesePhone,
 } from "@/components/ui/auth/checkout-phone-input";
+import {
+  getExactRentalUnits,
+  getBillableUnits,
+  validateRentalDuration,
+} from "@/utils/rentalTimeCalculator";
 
-// const calculateRentalDays = (item: CartItem): number => {
-//   if (!item.rentalStartDate || !item.rentalEndDate) return 0;
-//   const start = new Date(item.rentalStartDate);
-//   const end = new Date(item.rentalEndDate);
-//   const totalHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-
-//   let unitCount: number;
-//   switch (item.priceUnit.toLowerCase()) {
-//     case "hour":
-//     case "giờ":
-//       unitCount = Math.ceil(totalHours);
-//       break;
-//     case "day":
-//     case "ngày":
-//       unitCount = Math.ceil(totalHours / 24);
-//       break;
-//     case "week":
-//     case "tuần":
-//       unitCount = Math.ceil(totalHours / (24 * 7));
-//       break;
-//     case "month":
-//     case "tháng":
-//       unitCount = Math.ceil(totalHours / (24 * 30));
-//       break;
-//     default:
-//       unitCount = Math.ceil(totalHours / 24);
-//   }
-//   return Math.max(1, unitCount);
-// };
 
 type ApiError = {
   response?: {
@@ -105,6 +81,7 @@ export default function Checkout() {
     fullName: "",
     street: "",
     ward: "",
+    district: "",
     province: "",
     phone: "",
   });
@@ -175,41 +152,7 @@ export default function Checkout() {
     "pay_now"
   ); //Option payment
 
-const getExactRentalUnits = (item: CartItem): number => {
-  if (!item.rentalStartDate || !item.rentalEndDate) return 0;
 
-  const start = new Date(item.rentalStartDate);
-  const end = new Date(item.rentalEndDate);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
-
-  const totalHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-  if (totalHours <= 0) return 0;
-
-  // CHUẨN 100% CHO TIẾNG VIỆT: "Theo giờ", "theo giờ", "Giờ", "giờ", "Hour"...
-  const unit = item.priceUnit.toLowerCase().trim();
-
-  if (unit.includes("giờ") || unit.includes("hour") || unit.includes("theo")) {
-    return totalHours;
-  }
-  if (unit.includes("ngày") || unit.includes("day")) return totalHours / 24;
-  if (unit.includes("tuần") || unit.includes("week"))
-    return totalHours / (24 * 7);
-  if (unit.includes("tháng") || unit.includes("month"))
-    return totalHours / (24 * 30.4375);
-
-  return totalHours / 24; // fallback an toàn
-};
-
-const getBillableUnits = (item: CartItem): number => {
-  const exact = getExactRentalUnits(item);
-  if (exact <= 0) return 0;
-
-  const min = item.minRentalDuration ?? 1;
-  const max = item.maxRentalDuration ?? 99999;
-
-  const rounded = Math.ceil(exact);
-  return Math.max(min, Math.min(max, rounded));
-};
   // Lấy từ sessionStorage
   useEffect(() => {
     // CHẶN ADMIN & MODERATOR THUÊ ĐỒ
@@ -433,39 +376,94 @@ const getBillableUnits = (item: CartItem): number => {
     };
   }, [showDiscountList]);
 
-  // Pagination calculations
-  const totalPages = Math.ceil(cartItems.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentItems = cartItems.slice(startIndex, endIndex);
-  const selectedCartItems = cartItems.filter((item) =>
-    selectedItemIds.includes(item._id)
+  // Cache tính toán billableUnits và exactUnits cho tất cả items (chỉ tính 1 lần)
+  const itemsCalculations = useMemo(() => {
+    const calculations = new Map<string, { billableUnits: number; exactUnits: number }>();
+    
+    cartItems.forEach((item) => {
+      const exactUnits = getExactRentalUnits(item);
+      const billableUnits = getBillableUnits(item);
+      calculations.set(item._id, { billableUnits, exactUnits });
+    });
+    
+    return calculations;
+  }, [cartItems]);
+
+  // Helper function để lấy billableUnits từ cache
+  const getCachedBillableUnits = useCallback((item: CartItem): number => {
+    return itemsCalculations.get(item._id)?.billableUnits ?? getBillableUnits(item);
+  }, [itemsCalculations]);
+
+  // Memoize selectedItemIds as Set for O(1) lookup
+  const selectedItemIdsSet = useMemo(
+    () => new Set(selectedItemIds),
+    [selectedItemIds]
   );
 
-  const rentalTotal = selectedCartItems.reduce((sum, item) => {
-    const days = getBillableUnits(item);
-    return sum + item.basePrice * item.quantity * days;
-  }, 0);
-  // Tính depositTotal
-  const depositTotal = selectedCartItems.reduce(
-    (sum, item) => sum + item.depositAmount * item.quantity,
-    0
+  // Memoize selected cart items
+  const selectedCartItems = useMemo(
+    () => cartItems.filter((item) => selectedItemIdsSet.has(item._id)),
+    [cartItems, selectedItemIdsSet]
   );
-  // Tính serviceFee trên tiền thuê
-  const serviceFeeAmount = (rentalTotal * serviceFeeRate) / 100;
 
-  // Tính totalDiscountAmount từ public và private discount (chỉ áp dụng khi có sản phẩm được chọn)
-  const effectivePublicDiscountAmount =
-    selectedCartItems.length > 0 ? publicDiscountAmount : 0;
-  const effectivePrivateDiscountAmount =
-    selectedCartItems.length > 0 ? privateDiscountAmount : 0;
-  const totalDiscountAmount =
-    effectivePublicDiscountAmount + effectivePrivateDiscountAmount;
+  // Memoize pagination calculations
+  const totalPages = useMemo(
+    () => Math.ceil(cartItems.length / itemsPerPage),
+    [cartItems.length, itemsPerPage]
+  );
 
-  // Tính grandTotal: Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
-  const grandTotal = Math.max(
-    0,
-    rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount
+  const currentItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return cartItems.slice(startIndex, endIndex);
+  }, [cartItems, currentPage, itemsPerPage]);
+
+  // Memoize rental calculations
+  const rentalTotal = useMemo(() => {
+    return selectedCartItems.reduce((sum, item) => {
+      const days = getCachedBillableUnits(item);
+      return sum + item.basePrice * item.quantity * days;
+    }, 0);
+  }, [selectedCartItems, getCachedBillableUnits]);
+
+  const depositTotal = useMemo(
+    () =>
+      selectedCartItems.reduce(
+        (sum, item) => sum + item.depositAmount * item.quantity,
+        0
+      ),
+    [selectedCartItems]
+  );
+
+  const serviceFeeAmount = useMemo(
+    () => (rentalTotal * serviceFeeRate) / 100,
+    [rentalTotal, serviceFeeRate]
+  );
+
+  // Memoize discount calculations
+  const effectivePublicDiscountAmount = useMemo(
+    () => (selectedCartItems.length > 0 ? publicDiscountAmount : 0),
+    [selectedCartItems.length, publicDiscountAmount]
+  );
+
+  const effectivePrivateDiscountAmount = useMemo(
+    () => (selectedCartItems.length > 0 ? privateDiscountAmount : 0),
+    [selectedCartItems.length, privateDiscountAmount]
+  );
+
+  const totalDiscountAmount = useMemo(
+    () => effectivePublicDiscountAmount + effectivePrivateDiscountAmount,
+    [effectivePublicDiscountAmount, effectivePrivateDiscountAmount]
+  );
+
+  // Memoize grand total
+  const grandTotal = useMemo(
+    () =>
+      Math.max(
+        0,
+        rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount
+      ),
+    [rentalTotal, totalDiscountAmount, depositTotal, serviceFeeAmount]
   );
 
   // Kiểm tra minOrderAmount cho public discount (chỉ kiểm tra trên tiền thuê)
@@ -500,43 +498,53 @@ const getBillableUnits = (item: CartItem): number => {
     }
   }, [privateDiscount, rentalTotal, publicDiscountAmount]);
 
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
+  const goToPage = useCallback(
+    (page: number) => {
+      if (page >= 1 && page <= totalPages) {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [totalPages]
+  );
 
-  const handleToggleItemSelection = (itemId: string) => {
-    setSelectedItemIds((prev) =>
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId]
-    );
-  };
+  const handleToggleItemSelection = useCallback((itemId: string) => {
+    setSelectedItemIds((prev) => {
+      const prevSet = new Set(prev);
+      if (prevSet.has(itemId)) {
+        prevSet.delete(itemId);
+      } else {
+        prevSet.add(itemId);
+      }
+      return Array.from(prevSet);
+    });
+  }, []);
 
-  const handleSelectAllItems = () => {
+  const handleSelectAllItems = useCallback(() => {
     setSelectedItemIds(cartItems.map((item) => item._id));
-  };
+  }, [cartItems]);
 
-  const handleDeselectAllItems = () => {
+  const handleDeselectAllItems = useCallback(() => {
     setSelectedItemIds([]);
-  };
+  }, []);
 
   // Helper function to calculate discount amount (same logic as backend)
-  const calculateDiscountAmount = (
-    type: "percent" | "fixed",
-    value: number,
-    baseAmount: number,
-    maxDiscountAmount?: number
-  ): number => {
-    let amount = type === "percent" ? (baseAmount * value) / 100 : value;
-    if (maxDiscountAmount && maxDiscountAmount > 0) {
-      amount = Math.min(amount, maxDiscountAmount);
-    }
-    amount = Math.max(0, Math.min(baseAmount, Math.floor(amount)));
-    return amount;
-  };
+  const calculateDiscountAmount = useCallback(
+    (
+      type: "percent" | "fixed",
+      value: number,
+      baseAmount: number,
+      maxDiscountAmount?: number
+    ): number => {
+      let amount = type === "percent" ? (baseAmount * value) / 100 : value;
+      if (maxDiscountAmount && maxDiscountAmount > 0) {
+        amount = Math.min(amount, maxDiscountAmount);
+      }
+      amount = Math.max(0, Math.min(baseAmount, Math.floor(amount)));
+      return amount;
+    },
+    []
+  );
 
   // Handle discount code
   const handleApplyDiscount = async (code?: string) => {
@@ -934,28 +942,36 @@ const getBillableUnits = (item: CartItem): number => {
     debouncedUpdate(cartItemId, newQuantity);
   };
 
-  // Dates editing - mượn logic từ cart page
-const startEditingDates = useCallback(
-  (cartItemId: string, rentalStartDate?: string, rentalEndDate?: string) => {
-    // CHUẨN HÓA CHUỖI NGÀY ISO → yyyy-MM-ddThh:mm
-    const formatToDateTimeLocal = (isoString?: string) => {
-      if (!isoString) return "";
-      const date = new Date(isoString);
-      if (isNaN(date.getTime())) return "";
-      return date.toISOString().slice(0, 16); // Đảm bảo đúng định dạng: 2025-11-27T01:00
-    };
+  // Helper function to format date to datetime-local format
+  const formatToDateTimeLocal = useCallback((isoString?: string): string => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
 
-    setEditingDates((prev) => ({
-      ...prev,
-      [cartItemId]: {
-        rentalStartDateTime: formatToDateTimeLocal(rentalStartDate),
-        rentalEndDateTime: formatToDateTimeLocal(rentalEndDate),
-      },
-    }));
-    setItemErrors((prev) => ({ ...prev, [cartItemId]: {} }));
-  },
-  []
-);
+    // Lấy giá trị local time thay vì UTC để tránh nhảy thời gian
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }, []);
+
+  // Dates editing - mượn logic từ cart page
+  const startEditingDates = useCallback(
+    (cartItemId: string, rentalStartDate?: string, rentalEndDate?: string) => {
+      setEditingDates((prev) => ({
+        ...prev,
+        [cartItemId]: {
+          rentalStartDateTime: formatToDateTimeLocal(rentalStartDate),
+          rentalEndDateTime: formatToDateTimeLocal(rentalEndDate),
+        },
+      }));
+      setItemErrors((prev) => ({ ...prev, [cartItemId]: {} }));
+    },
+    [formatToDateTimeLocal]
+  );
 
   const cancelEditingDates = useCallback((cartItemId: string) => {
     setEditingDates((prev) => {
@@ -1017,30 +1033,28 @@ const updateRentalDates = useCallback(
     const item = cartItems.find((i) => i._id === cartItemId);
     if (!item) return;
 
-    // VALIDATE CHÍNH XÁC THEO ĐƠN VỊ GIÁ (giờ/ngày/tuần/tháng)
-    const exactUnits = getExactRentalUnits(item);
-    const min = item.minRentalDuration ?? 1;
-    const max = item.maxRentalDuration ?? 99999;
+    // Tạo item tạm với thời gian mới để validate
+    const tempItemForValidation = {
+      ...item,
+      rentalStartDate: rentalStartDateTime,
+      rentalEndDate: rentalEndDateTime,
+    };
 
-    const unitName = item.priceUnit.toLowerCase().includes("giờ")
-      ? "giờ"
-      : item.priceUnit.toLowerCase().includes("ngày")
-      ? "ngày"
-      : item.priceUnit.toLowerCase().includes("tuần")
-      ? "tuần"
-      : "tháng";
+    // VALIDATE CHÍNH XÁC THEO ĐƠN VỊ GIÁ (giờ/ngày/tuần/tháng) với thời gian mới
+    const validation = validateRentalDuration(tempItemForValidation);
 
-    if (exactUnits < min) {
-      toast.error(
-        `"${item.title}" yêu cầu thuê tối thiểu ${min} ${unitName}.\n` +
-          `Bạn chỉ chọn ${exactUnits.toFixed(1)} ${unitName}.`,
-        { duration: 8000, }
-      );
-      return;
-    }
-
-    if (exactUnits > max) {
-      toast.error(`"${item.title}" chỉ cho thuê tối đa ${max} ${unitName}.`);
+    if (!validation.isValid) {
+      if (validation.exactUnits < validation.min) {
+        toast.error(
+          `"${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
+            `Bạn chỉ chọn ${validation.exactUnits.toFixed(1)} ${validation.unitName}.`,
+          { duration: 8000, }
+        );
+      } else if (validation.exactUnits > validation.max) {
+        toast.error(`"${item.title}" chỉ cho thuê tối đa ${validation.max} ${validation.unitName}.`);
+      } else {
+        toast.error(`"${item.title}" có thời gian thuê không hợp lệ.`);
+      }
       return;
     }
 
@@ -1071,8 +1085,11 @@ const updateRentalDates = useCallback(
           rentalEndDate: rentalEndDateTime,
         })
       );
+      
+      // Fetch lại từ server để đảm bảo dữ liệu chính xác
       await dispatch(fetchCartItems());
 
+      // Cập nhật với giá trị đã lưu thành công (giữ nguyên format từ input)
       const updatedItems = cartItems.map((i) =>
         i._id === cartItemId
           ? {
@@ -1087,7 +1104,7 @@ const updateRentalDates = useCallback(
 
       toast.success("Đã cập nhật thời gian thuê thành công");
       cancelEditingDates(cartItemId);
-    } catch (err) {
+    } catch {
       toast.error("Có lỗi xảy ra khi cập nhật thời gian thuê");
       dispatch(fetchCartItems());
     } finally {
@@ -1117,7 +1134,7 @@ const updateRentalDates = useCallback(
       // Tính trước grandTotal cho từng sản phẩm riêng (rất quan trọng!)
       const getItemGrandTotal = (item: CartItem) => {
         const itemRental =
-          item.basePrice * item.quantity * getBillableUnits(item);
+          item.basePrice * item.quantity * getCachedBillableUnits(item);
         const itemDeposit = item.depositAmount * item.quantity;
         const itemServiceFee = (itemRental * serviceFeeRate) / 100;
 
@@ -1137,18 +1154,30 @@ const updateRentalDates = useCallback(
       for (const item of itemsToProcess) {
         console.log("Bắt đầu xử lý cho:", item.title);
 
+        // Validate rental dates
+        if (!item.rentalStartDate || !item.rentalEndDate) {
+          toast.error(
+            `Vui lòng chọn thời gian thuê cho sản phẩm: ${item.title}`
+          );
+          failedItemMessages.push(item.title);
+          failedItemIds.push(item._id);
+          continue;
+        }
+
         // Tạo đơn hàng
         const result = await dispatch(
           createOrderAction({
             itemId: item.itemId,
-            quantity: item.quantity,
+            unitCount: getCachedBillableUnits(item),
             startAt: item.rentalStartDate,
             endAt: item.rentalEndDate,
-            shippingAddress: shipping,
+            shippingAddress: {
+              ...shipping,
+              district: shipping.ward || "",
+            },
             paymentMethod: "Wallet",
             note,
-            publicDiscountCode: publicDiscount?.code || null,
-            privateDiscountCode: privateDiscount?.code || null,
+            discountCode: privateDiscount?.code || publicDiscount?.code,
           })
         );
 
@@ -1188,10 +1217,10 @@ const updateRentalDates = useCallback(
         }
 
         // CHỈ VÀO ĐÂY KHI CHỌN "THANH TOÁN NGAY"
-        try {
-          // Tính số tiền cần trừ cho chính xác từng đơn (không dùng grandTotal chung!)
-          const amountToPay = getItemGrandTotal(item);
+        // Tính số tiền cần trừ cho chính xác từng đơn (không dùng grandTotal chung!)
+        const amountToPay = getItemGrandTotal(item);
 
+        try {
           const paymentResult = await payOrderWithWallet(orderId);
 
           if (!paymentResult?.success) {
@@ -1203,23 +1232,30 @@ const updateRentalDates = useCallback(
 
             // Đặc biệt: nếu ví không đủ → hiện modal + dừng toàn bộ
             if (msg.includes("không đủ") || msg.includes("insufficient")) {
-              const balance = paymentResult?.balance || 0;
-              const required = paymentResult?.required || amountToPay;
+              const balance = paymentResult?.balance ?? 0;
+              const required = paymentResult?.required ?? amountToPay;
               const shortage = required - balance;
 
-              setErrorModalTitle("Ví không đủ tiền");
-              setErrorModalMessage(
-                `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
-                  `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
-                  `Thiếu: ${shortage.toLocaleString("vi-VN")}₫\n\n` +
-                  `Vui lòng nạp thêm tiền để tiếp tục.`
-              );
-              setIsErrorModalOpen(true);
+              // Chỉ hiển thị modal nếu thực sự thiếu tiền (shortage > 0 và required > 0)
+              if (shortage > 0 && required > 0) {
+                setErrorModalTitle("Ví không đủ tiền");
+                setErrorModalMessage(
+                  `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
+                    `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
+                    `Thiếu: ${shortage.toLocaleString("vi-VN")}₫\n\n` +
+                    `Vui lòng nạp thêm tiền để tiếp tục.`
+                );
+                setIsErrorModalOpen(true);
 
-              // DỪNG LUÔN vòng lặp khi thiếu tiền
-              failedItemIds.push(item._id);
-              failedItemMessages.push(item.title + " (thiếu tiền ví)");
-              break; // ← QUAN TRỌNG: Không xử lý các đơn tiếp theo
+                // DỪNG LUÔN vòng lặp khi thiếu tiền
+                failedItemIds.push(item._id);
+                failedItemMessages.push(item.title + " (thiếu tiền ví)");
+                break; // ← QUAN TRỌNG: Không xử lý các đơn tiếp theo
+              } else {
+                // Nếu không thực sự thiếu tiền, chỉ log lỗi thông thường
+                failedItemIds.push(item._id);
+                failedItemMessages.push(item.title);
+              }
             } else {
               failedItemIds.push(item._id);
               failedItemMessages.push(item.title);
@@ -1234,21 +1270,29 @@ const updateRentalDates = useCallback(
           // Xử lý lỗi không đủ tiền
           const apiError = err as ApiError;
           if (apiError?.response?.data?.balance !== undefined) {
-            const balance = apiError.response.data.balance || 0;
-            const required = apiError.response.data.required || 0;
+            const balance = apiError.response.data.balance ?? 0;
+            const required = apiError.response.data.required ?? amountToPay;
             const shortage = required - balance;
 
-            setErrorModalTitle("Ví không đủ tiền");
-            setErrorModalMessage(
-              `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
-                `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
-                `Thiếu: ${shortage.toLocaleString("vi-VN")}₫`
-            );
-            setIsErrorModalOpen(true);
+            // Chỉ hiển thị modal nếu thực sự thiếu tiền (shortage > 0 và required > 0)
+            if (shortage > 0 && required > 0) {
+              setErrorModalTitle("Ví không đủ tiền");
+              setErrorModalMessage(
+                `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
+                  `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
+                  `Thiếu: ${shortage.toLocaleString("vi-VN")}₫`
+              );
+              setIsErrorModalOpen(true);
 
-            failedItemIds.push(item._id);
-            failedItemMessages.push(item.title + " (thiếu tiền ví)");
-            break; // Dừng luôn
+              failedItemIds.push(item._id);
+              failedItemMessages.push(item.title + " (thiếu tiền ví)");
+              break; // Dừng luôn
+            } else {
+              // Nếu không thực sự thiếu tiền, chỉ log lỗi thông thường
+              toast.error(`Thanh toán thất bại: ${item.title}`);
+              failedItemIds.push(item._id);
+              failedItemMessages.push(item.title);
+            }
           } else {
             toast.error(`Thanh toán thất bại: ${item.title}`);
             failedItemIds.push(item._id);
@@ -1346,32 +1390,25 @@ const updateRentalDates = useCallback(
     }
 
     for (const item of selectedCartItems) {
-      const exactUnits = getExactRentalUnits(item);
-      const min = item.minRentalDuration ?? 1;
-      const max = item.maxRentalDuration ?? 99999;
+      const validation = validateRentalDuration(item);
 
-      const unitName = item.priceUnit.toLowerCase().includes("giờ")
-        ? "giờ"
-        : item.priceUnit.toLowerCase().includes("ngày")
-        ? "ngày"
-        : item.priceUnit.toLowerCase().includes("tuần")
-        ? "tuần"
-        : "tháng";
-
-      if (exactUnits < min) {
-        toast.error(
-          `Sản phẩm "${item.title}" yêu cầu thuê tối thiểu ${min} ${unitName}.\n` +
-            `Bạn chỉ chọn ${
-              exactUnits === 0 ? "0" : exactUnits.toFixed(1)
-            } ${unitName}.`
-        );
-        return;
-      }
-
-      if (exactUnits > max) {
-        toast.error(
-          `Sản phẩm "${item.title}" chỉ cho thuê tối đa ${max} ${unitName}.`
-        );
+      if (!validation.isValid) {
+        if (validation.exactUnits < validation.min) {
+          toast.error(
+            `Sản phẩm "${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
+              `Bạn chỉ chọn ${
+                validation.exactUnits === 0 ? "0" : validation.exactUnits.toFixed(1)
+              } ${validation.unitName}.`
+          );
+        } else if (validation.exactUnits > validation.max) {
+          toast.error(
+            `Sản phẩm "${item.title}" chỉ cho thuê tối đa ${validation.max} ${validation.unitName}.`
+          );
+        } else {
+          toast.error(
+            `Sản phẩm "${item.title}" có thời gian thuê không hợp lệ.`
+          );
+        }
         return;
       }
     }
@@ -1414,6 +1451,21 @@ const updateRentalDates = useCallback(
     });
   };
 
+  // Kiểm tra xem có pop-up nào đang mở không
+  const isAnyModalOpen = confirmPopup.isOpen || modal.open || isErrorModalOpen;
+
+  // Ngăn scroll body khi pop-up mở
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isAnyModalOpen]);
+
   if (!cartItems.length) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -1432,7 +1484,11 @@ const updateRentalDates = useCallback(
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
+      <div 
+        className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6 transition-opacity duration-300 ${
+          isAnyModalOpen ? "pointer-events-none opacity-50" : ""
+        }`}
+      >
         <div className="max-w-7xl mx-auto">
           {/* Breadcrumb Navigation */}
           <nav className="mb-6">
@@ -1535,8 +1591,8 @@ const updateRentalDates = useCallback(
 
                 <div className="space-y-4">
                   {currentItems.map((item) => {
-                    const isSelected = selectedItemIds.includes(item._id);
-                    const billableUnits = getBillableUnits(item);
+                    const isSelected = selectedItemIdsSet.has(item._id);
+                    const billableUnits = getCachedBillableUnits(item);
                     const itemTotal =
                       item.basePrice * item.quantity * billableUnits;
                     const itemDeposit = item.depositAmount * item.quantity;
@@ -1716,7 +1772,7 @@ const updateRentalDates = useCallback(
 
                             {/* ==================== EDIT MODE ==================== */}
                             {editingDates[item._id] ? (
-                              <div className="space-y-4">
+                              <div className="space-y-3">
                                 <RentalDatePicker
                                   rentalStartDate={
                                     editingDates[item._id].rentalStartDateTime
@@ -1750,7 +1806,7 @@ const updateRentalDates = useCallback(
                                   itemId={item.itemId}
                                 />
 
-                                {/* THÔNG TIN + CẢNH BÁO REAL-TIME */}
+                                {/* VALIDATION MESSAGE - Gộp vào cùng form */}
                                 {(() => {
                                   const tempItem = {
                                     ...item,
@@ -1762,68 +1818,18 @@ const updateRentalDates = useCallback(
                                         .rentalEndDateTime || "",
                                   };
 
-                                  const exactUnits =
-                                    getExactRentalUnits(tempItem);
-                                  const billableUnits =
-                                    getBillableUnits(tempItem);
-                                  const min = item.minRentalDuration ?? 1;
-                                  const max = item.maxRentalDuration ?? 99999;
-
-                                  const unitName = item.priceUnit
-                                    .toLowerCase()
-                                    .includes("giờ")
-                                    ? "giờ"
-                                    : item.priceUnit
-                                        .toLowerCase()
-                                        .includes("ngày")
-                                    ? "ngày"
-                                    : item.priceUnit
-                                        .toLowerCase()
-                                        .includes("tuần")
-                                    ? "tuần"
-                                    : "tháng";
-
-                                 const isValid =
-                                   exactUnits >= min && exactUnits <= max;
+                                  const validation = validateRentalDuration(tempItem);
                                    
                                   return (
-                                    <div className="text-xs space-y-2 bg-white/70 p-3 rounded-lg border">
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">
-                                          Đã chọn:
-                                        </span>
-                                        <span className="font-semibold">
-                                          {exactUnits.toFixed(1)} {unitName}
-                                        </span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">
-                                          Sẽ tính tiền:
-                                        </span>
-                                        <span className="font-bold text-emerald-600">
-                                          {billableUnits} {unitName}
-                                        </span>
-                                      </div>
-
+                                    <>
                                       {/* CẢNH BÁO */}
-                                     {exactUnits > 0 && (exactUnits < min || exactUnits > max) && (
-                                        <div className="mt-3 p-3 bg-red-50 border border-red-300 rounded-lg text-red-700 font-medium flex items-center gap-2 animate-pulse">
-                                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                                          {exactUnits < min
-                                            ? `Yêu cầu thuê tối thiểu ${min} ${unitName} (hiện chỉ ${exactUnits.toFixed(
-                                                1
-                                              )})`
-                                            : `Chỉ được thuê tối đa ${max} ${unitName}`}
+                                      {validation.exactUnits > 0 && !validation.isValid && validation.errorMessage && (
+                                        <div className="p-2.5 bg-red-50 border border-red-300 rounded-lg text-red-700 text-xs font-medium flex items-center gap-2 animate-pulse">
+                                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                          {validation.errorMessage}
                                         </div>
                                       )}
-
-                                      {isValid && (
-                                        <div className="mt-3 p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-700 font-medium flex items-center gap-2">
-                                          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                                          Thời gian hợp lệ
-                                        </div>
-                                      )}
-                                    </div>
+                                    </>
                                   );
                                 })()}
 
@@ -2703,10 +2709,10 @@ const updateRentalDates = useCallback(
 
       {/* Confirm Popup */}
       {confirmPopup.isOpen && (
-        <div className="fixed inset-0 z-1000 flex items-center justify-center p-4">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop - ngăn chặn tương tác với phần còn lại */}
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
             onClick={() =>
               setConfirmPopup({
                 isOpen: false,
@@ -2715,6 +2721,7 @@ const updateRentalDates = useCallback(
                 onConfirm: () => {},
               })
             }
+            onMouseDown={(e) => e.preventDefault()}
           />
 
           {/* Popup */}
@@ -2771,8 +2778,14 @@ const updateRentalDates = useCallback(
         </div>
       )}
       {modal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+            onClick={() => setModal({ ...modal, open: false })}
+            onMouseDown={(e) => e.preventDefault()}
+          />
+          <div className="relative bg-white rounded-2xl p-6 max-w-sm w-full text-center z-10">
             <h3 className="font-bold text-lg mb-4 text-emerald-700">
               {modal.title}
             </h3>

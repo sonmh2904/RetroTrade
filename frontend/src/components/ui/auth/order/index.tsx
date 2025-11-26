@@ -1110,6 +1110,7 @@ export default function OrderListPage({
                           "Không thể gửi tranh chấp, vui lòng thử lại"
                       );
                     }
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } catch (err: any) {
                     console.error("Create dispute error:", err);
                     toast.error(

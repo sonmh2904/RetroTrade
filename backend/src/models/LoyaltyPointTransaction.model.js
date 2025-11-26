@@ -3,7 +3,7 @@ const { Types } = mongoose;
 
 const loyaltyPointTransactionSchema = new mongoose.Schema(
   {
-    userId: { type: Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Types.ObjectId, ref: "User", required: true },
     points: { type: Number, required: true }, // Số điểm cộng/trừ (có thể âm)
     balance: { type: Number, required: true }, // Số dư sau transaction
     type: {

@@ -62,13 +62,17 @@ type RefundTargetOption = "reporter" | "reported";
 
 interface DisputeResolutionFormProps {
   disputeId: string;
-  totalAmount: number;
+  depositAmount: number; // Chỉ tính hoàn tiền từ tiền cọc
+  reporterName?: string; // Tên người khiếu nại
+  reportedName?: string; // Tên người bị khiếu nại
   onSuccess?: () => void;
 }
 
 export default function DisputeResolutionForm({
   disputeId,
-  totalAmount,
+  depositAmount, // Chỉ tính hoàn tiền từ tiền cọc
+  reporterName,
+  reportedName,
   onSuccess,
 }: DisputeResolutionFormProps) {
   const router = useRouter();
@@ -79,9 +83,10 @@ export default function DisputeResolutionForm({
   const [refundPercentage, setRefundPercentage] = useState<string>("");
 
   const requiresRefund = ["refund_full", "refund_partial"].includes(decision);
+  // Tính hoàn tiền chỉ dựa trên tiền cọc, không động vào tổng tiền
   const calculatedRefund =
     refundPercentage && requiresRefund
-      ? Math.round((totalAmount * Number(refundPercentage)) / 100)
+      ? Math.round((depositAmount * Number(refundPercentage)) / 100)
       : 0;
 
   const handleRefundTargetChange = (value: string) => {
@@ -200,15 +205,18 @@ const handleSubmit = async () => {
                     <SelectValue placeholder="Chọn người nhận..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {REFUND_TARGETS.map((option) => (
-                      <SelectItem
-                        key={option.value}
-                        value={option.value}
-                        className="text-lg py-3"
-                      >
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    {REFUND_TARGETS.map((option) => {
+                      const userName = option.value === "reporter" ? reporterName : reportedName;
+                      return (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          className="text-lg py-3"
+                        >
+                          {option.label}{userName ? ` - ${userName}` : ""}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -245,11 +253,24 @@ const handleSubmit = async () => {
               </div>
 
               <div className="mt-4 bg-orange-50 rounded-2xl p-4 border border-orange-200">
-                <p className="text-sm text-gray-600">Số tiền dự kiến</p>
-                <p className="text-3xl font-bold text-orange-600">
+                <p className="text-sm text-gray-600 mb-1">Số tiền dự kiến hoàn trả (từ tiền cọc)</p>
+                <p className="text-3xl font-bold text-orange-600 mb-2">
                   {calculatedRefund
                     ? `${calculatedRefund.toLocaleString()}₫`
                     : "0₫"}
+                </p>
+                {refundTarget && (
+                  <p className="text-sm text-orange-700">
+                    Sẽ hoàn cho:{" "}
+                    <span className="font-semibold">
+                      {refundTarget === "reporter"
+                        ? reporterName || "Người khiếu nại"
+                        : reportedName || "Người bị khiếu nại"}
+                    </span>
+                  </p>
+                )}
+                <p className="text-xs text-orange-600 mt-1">
+                  Tiền cọc: {depositAmount.toLocaleString("vi-VN")}₫
                 </p>
               </div>
             </div>

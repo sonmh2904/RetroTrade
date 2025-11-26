@@ -5,10 +5,11 @@ import type { ApiResponse } from "@iService";
 
 export interface Dispute {
   _id: string;
-  orderId: string;
+  orderId: string | { _id: string; orderGuid?: string; depositAmount?: number; totalAmount?: number };
   orderGuid: string;
-  reporterId: string; 
-  reportedUserId: string;
+  reporterId: string | { _id: string; fullName?: string; email?: string };
+  reportedUserId: string | { _id: string; fullName?: string; email?: string };
+  assignedBy?: string | { _id: string; fullName?: string; email?: string };
   reason: string;
   description?: string;
   evidence: string[]; // bạn đang trả về "evidence" trong response
