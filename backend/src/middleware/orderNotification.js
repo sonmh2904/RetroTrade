@@ -54,6 +54,55 @@ const notifyOrderConfirmed = async (order) => {
   }
 };
 
+const notifyOrderDelivery = async (order) => {
+  try {
+    // Gửi cho người thuê
+    await createNotification(
+      order.renterId,
+      "Order Delivery",
+      "Đơn hàng đang được giao",
+      `Đơn hàng "${order.itemSnapshot.title}" đang trong quá trình giao.`,
+      { orderId: order._id, deliveryAt: order.lifecycle.deliveryAt }
+    );
+
+    // Gửi cho chủ sở hữu sản phẩm
+    await createNotification(
+      order.ownerId,
+      "Order Delivery",
+      "Đơn hàng dã giao cho khách",
+      `Bạn đã bắt đầu giao sản phẩm "${order.itemSnapshot.title}".`,
+      { orderId: order._id, deliveryAt: order.lifecycle.deliveryAt }
+    );
+  } catch (error) {
+    console.error("Error notifying order delivery:", error);
+  }
+};
+
+const notifyOrderReceived = async (order) => {
+  try {
+    // Gửi cho người thuê
+    await createNotification(
+      order.renterId,
+      "Order Received",
+      "Bạn đã nhận hàng",
+      `Bạn đã nhận sản phẩm "${order.itemSnapshot.title}".`,
+      { orderId: order._id, receivedAt: order.lifecycle.receivedAt }
+    );
+
+    // Gửi cho chủ sở hữu sản phẩm
+    await createNotification(
+      order.ownerId,
+      "Order Received",
+      "Khách đã nhận hàng",
+      `Khách hàng đã nhận sản phẩm "${order.itemSnapshot.title}".`,
+      { orderId: order._id, receivedAt: order.lifecycle.receivedAt }
+    );
+  } catch (error) {
+    console.error("Error notifying order received:", error);
+  }
+};
+
+
 /**
  * Gửi thông báo khi đơn hàng hoàn thành
  * @param {Object} order - order document
@@ -188,5 +237,7 @@ module.exports = {
   notifyOrderStarted,
   notifyOrderReturned,
   notifyOrderCancelled,
-  notifyOrderDisputed
+  notifyOrderDisputed,
+  notifyOrderDelivery,
+  notifyOrderReceived
 };

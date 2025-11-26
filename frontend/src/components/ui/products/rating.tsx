@@ -13,6 +13,7 @@ import { RootState } from "@/store/redux_store";
 import {jwtDecode} from "jwt-decode";
 import { toast } from "sonner";
 
+
 interface Rating {
   _id: string;
   orderId: string;
@@ -92,6 +93,7 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   useEffect(() => {
     fetchRatings();
   }, [itemId]);
+  
 
   // Check if user can review
   const canReview = useMemo(() => {
@@ -120,7 +122,7 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
     const order = orders.find(
       (o) =>
         o.itemId === itemId &&
-        o.orderStatus === "completed" &&
+        o.orderStatus.toLowerCase() === "completed" &&
         o.renterId._id === currentUser._id
     );
     return order?._id || null;
@@ -219,6 +221,21 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   const countByStar = [5, 4, 3, 2, 1].map(
     (star) => ratings.filter((r) => r.rating === star).length
   );
+useEffect(() => {
+  console.log({
+    currentUser,
+    canReview,
+    editingRatingId,
+    orders,
+    reviewableOrderId,
+  });
+}, [currentUser, canReview, editingRatingId, orders, reviewableOrderId]);
+useEffect(() => {
+  console.log("All orders received:", orders.length);
+  console.log(
+    orders.map((o) => ({ id: o._id, itemId: o.itemId, status: o.orderStatus }))
+  );
+}, [orders]);
 
   return (
     <div className="mt-6 border-t pt-4">

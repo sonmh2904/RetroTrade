@@ -30,6 +30,8 @@ export interface CartItem {
   quantity: number;
   createdAt: string;
   updatedAt: string;
+  minRentalDuration: number;
+  maxRentalDuration: number;
 }
 
 export interface AddToCartRequest {

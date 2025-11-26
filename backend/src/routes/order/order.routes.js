@@ -14,6 +14,9 @@ router.post("/:id/return", authenticateToken,OrderController.renterReturn);
 router.post("/:id/complete", authenticateToken,OrderController.ownerComplete);
 router.post("/:id/cancel",authenticateToken, OrderController.cancelOrder);
 router.post("/:id/dispute", authenticateToken,OrderController.disputeOrder);
+router.post("/:id/delivery", authenticateToken, OrderController.startDelivery);
+router.post("/:id/received", authenticateToken, OrderController.receiveOrder);
+
 
 
 module.exports = router;
