@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSelector, useDispatch } from "react-redux";
 import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
 import { toast } from "sonner";
-import { Home, Package, ShoppingBag, Wallet, Settings } from "lucide-react";
+import { Home, Package, ShoppingBag, Wallet, Settings, BarChart3 } from "lucide-react";
 import OwnerHeader from "@/components/ui/owner/owner-header";
 import { RootState } from "@/store/redux_store";
 import { logout } from "@/store/auth/authReducer";
@@ -76,6 +76,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 
   const menus = [
     { icon: Home, label: "Trang chủ", key: "home", href: "/home" },
+    { icon: BarChart3, label: "Dashboard", key: "dashboard", href: "/owner/dashboard" },
     { icon: Package, label: "Sản phẩm của tôi", key: "products", href: "/owner/myproducts" },
     { icon: ShoppingBag, label: "Yêu cầu thuê hàng", key: "requests", href: "/owner/renter-requests" },
     { icon: Wallet, label: "Ví của tôi", key: "wallet", href: "/owner/mywallet" },

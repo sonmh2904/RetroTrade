@@ -54,7 +54,7 @@ export function ModeratorHeader() {
     setUserInfo(null);
     dispatch(logout());
     toast.success("Đăng xuất thành công");
-    router.push('/');
+    router.push('/auth/login');
   };
 
   const handleGoToProfile = () => {
