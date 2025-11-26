@@ -8,6 +8,8 @@ import {
   cancelOrder,
   startOrder,
   ownerComplete,
+  startDelivery,
+  receiveOrder
 } from "@/services/auth/order.api";
 import type { Order } from "@/services/auth/order.api";
 import {
@@ -70,6 +72,8 @@ function RenterRequestsContent() {
     { key: "all", label: "Tất cả" },
     { key: "pending", label: "Yêu cầu đơn hàng" },
     { key: "confirmed", label: "Đã xác nhận" },
+    { key: "delivery", label: "Đã giao hàng" },
+    { key: "received", label: "Đã nhận hàng" },
     { key: "progress", label: "Đang thuê" },
     { key: "returned", label: "Chờ xác nhận trả hàng" },
     { key: "completed", label: "Hoàn tất" },
@@ -80,6 +84,8 @@ function RenterRequestsContent() {
   const statusLabel: Record<string, string> = {
     pending: "Đang chờ xác nhận",
     confirmed: "Đã xác nhận",
+    delivery: "Đã giao hàng",
+    received: "Đã nhận hàng",
     progress: "Đang thuê",
     returned: "Chờ xác nhận trả hàng",
     completed: "Hoàn tất",
@@ -90,38 +96,40 @@ function RenterRequestsContent() {
   const statusColor: Record<string, string> = {
     pending: "bg-yellow-500",
     confirmed: "bg-blue-500",
+    delivery: "bg-green-500",
+    received: "bg-blue-400",
     progress: "bg-purple-500",
     returned: "bg-orange-500",
     completed: "bg-green-600",
     cancelled: "bg-red-600",
-    disputed: "bg-red-700", 
+    disputed: "bg-red-700",
   };
 
   // Fetch đơn hàng
-useEffect(() => {
-  const fetchOrders = async () => {
-    if (refreshKey === 0) {
-      setLoading(true);
-    } else {
-      setIsRefreshing(true);
-    }
-
-    try {
-      const res = await listOrdersByOwner();
-      if (res.code === 200 && Array.isArray(res.data)) {
-        setOrders(res.data);
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (refreshKey === 0) {
+        setLoading(true);
       } else {
-        toast.error("Không thể tải danh sách đơn hàng.");
+        setIsRefreshing(true);
       }
-    } catch (err) {
-      toast.error("Lỗi kết nối, vui lòng thử lại.");
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-    }
-  };
-  fetchOrders();
-}, [refreshKey]);
+
+      try {
+        const res = await listOrdersByOwner();
+        if (res.code === 200 && Array.isArray(res.data)) {
+          setOrders(res.data);
+        } else {
+          toast.error("Không thể tải danh sách đơn hàng.");
+        }
+      } catch (err) {
+        toast.error("Lỗi kết nối, vui lòng thử lại.");
+      } finally {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
+    };
+    fetchOrders();
+  }, [refreshKey]);
 
   const filteredOrders =
     selectedStatus === "all"
@@ -135,8 +143,7 @@ useEffect(() => {
     const res = await confirmOrder(orderId);
     if (res.code === 200) {
       toast.success("Đã xác nhận đơn hàng");
-    setRefreshKey((prev) => prev + 1);
-      
+      setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Lỗi khi xác nhận đơn hàng");
     }
@@ -156,34 +163,49 @@ useEffect(() => {
     const res = await cancelOrder(selectedOrderId, rejectReason);
     if (res.code === 200) {
       toast.success("Đã từ chối đơn hàng");
-     setRefreshKey((prev) => prev + 1);
+      setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Lỗi khi từ chối đơn hàng");
     }
     setOpenRejectModal(false);
   };
 
-const handleStartOrder = async (order: Order) => {
+  // Bắt đầu giao hàng (Owner)
+const handleStartDelivery = async (order: Order) => {
   // Kiểm tra thanh toán
   if (order.paymentStatus !== "paid") {
-    return toast.error("Khách hàng chưa thanh toán. Không thể bắt đầu thuê.");
+    return toast.error("Khách hàng chưa thanh toán. Không thể giao hàng.");
   }
 
   // Chỉ yêu cầu ký hợp đồng nếu đơn trên 2 triệu
   if (order.totalAmount > 2_000_000 && !order.isContractSigned) {
     return toast.error(
-      "Hợp đồng chưa được ký. Không thể bắt đầu thuê với đơn hàng trên 2 triệu."
+      "Hợp đồng chưa được ký. Không thể giao hàng với đơn trên 2 triệu."
     );
   }
 
-  const res = await startOrder(order._id);
+  const res = await startDelivery(order._id);
   if (res.code === 200) {
-    toast.success("Đơn hàng đã bắt đầu thuê thành công!");
+    toast.success("Đơn hàng đang giao!");
     setRefreshKey((prev) => prev + 1);
   } else {
-    toast.error(res.message || "Không thể bắt đầu thuê");
+    toast.error(res.message || "Không thể bắt đầu giao hàng");
   }
 };
+
+
+
+  const handleStartOrder = async (order: Order) => {
+    // Kiểm tra thanh toán
+
+    const res = await startOrder(order._id);
+    if (res.code === 200) {
+      toast.success("Đơn hàng đã bắt đầu thuê thành công!");
+      setRefreshKey((prev) => prev + 1);
+    } else {
+      toast.error(res.message || "Không thể bắt đầu thuê");
+    }
+  };
   const handleConfirmReturn = async (orderId: string) => {
     const res = await ownerComplete(orderId, {
       conditionStatus: "Good",
@@ -191,7 +213,7 @@ const handleStartOrder = async (order: Order) => {
     });
     if (res.code === 200) {
       toast.success("Đã xác nhận trả hàng");
-     setRefreshKey((prev) => prev + 1);
+      setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Lỗi khi xác nhận trả hàng");
     }
@@ -217,7 +239,7 @@ const handleStartOrder = async (order: Order) => {
 
     if (res.code === 201) {
       toast.success("Đã gửi yêu cầu tranh chấp thành công!");
-    setRefreshKey((prev) => prev + 1);
+      setRefreshKey((prev) => prev + 1);
     } else {
       toast.error(res.message || "Gửi tranh chấp thất bại.");
     }
@@ -281,7 +303,10 @@ const handleStartOrder = async (order: Order) => {
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 border-b border-blue-200">
                 <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
                   <ClipboardList className="w-4 h-4" />
-                  Mã đơn: <span className="font-mono">{order.orderGuid}</span>
+                  Mã đơn:{" "}
+                  <span className="font-mono">
+                    #{order.orderGuid.slice(0, 8).toUpperCase()}
+                  </span>
                 </div>
               </div>
 
@@ -367,7 +392,7 @@ const handleStartOrder = async (order: Order) => {
                         </div>
                       )}
 
-                      {/* Chỉ hiện cảnh báo "Chưa ký hợp đồng" nếu đơn trên 2 triệu */}
+                      {/* Cảnh báo hợp đồng nếu > 2 triệu */}
                       {!order.isContractSigned &&
                         order.totalAmount > 2_000_000 && (
                           <div className="flex items-center gap-1 text-red-500">
@@ -376,7 +401,7 @@ const handleStartOrder = async (order: Order) => {
                           </div>
                         )}
 
-                      {/* Nếu dưới 2 triệu và chưa ký → hiện thông báo nhẹ (tùy chọn) */}
+                      {/* Thông báo nhẹ nếu dưới 2 triệu */}
                       {!order.isContractSigned &&
                         order.totalAmount <= 2_000_000 && (
                           <div className="flex items-center gap-1 text-blue-700 text-xs">
@@ -387,26 +412,40 @@ const handleStartOrder = async (order: Order) => {
                           </div>
                         )}
                     </div>
-                    {/* Nút "Bắt đầu thuê" - chỉ bị disable khi:
-        - Chưa thanh toán HOẶC
-        - Đơn trên 2 triệu mà chưa ký hợp đồng */}
-                    <Button
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-                      disabled={
-                        order.paymentStatus !== "paid" ||
-                        (order.totalAmount > 2_000_000 &&
-                          !order.isContractSigned)
-                      }
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartOrder(order);
-                      }}
-                    >
-                      Bắt đầu thuê
-                    </Button>
+
+                    <div className="flex gap-2">
+                      {/* Nút "Giao hàng" */}
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                        disabled={
+                          order.paymentStatus !== "paid" ||
+                          (order.totalAmount > 2_000_000 &&
+                            !order.isContractSigned)
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartDelivery(order);
+                        }}
+                      >
+                        Giao hàng
+                      </Button>
+                    </div>
                   </div>
                 )}
+                {order.orderStatus === "received" && (
+                  <Button
+                    size="sm"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartOrder(order);
+                    }}
+                  >
+                    Bắt đầu thuê
+                  </Button>
+                )}
+
                 {/* Progress */}
                 {order.orderStatus === "progress" && (
                   <Button

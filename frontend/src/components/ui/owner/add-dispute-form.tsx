@@ -27,9 +27,7 @@ const REASON_OPTIONS = [
   "Hàng không đúng mô tả",
   "Hàng bị hư hỏng / mất linh kiện",
   "Không nhận được hàng",
-  "Giao hàng trễ / sai địa chỉ",
   "Người thuê không trả đúng hạn",
-  "Chủ nhà từ chối nhận lại hàng",
   "Khác (mô tả chi tiết bên dưới)",
 ] as const;
 

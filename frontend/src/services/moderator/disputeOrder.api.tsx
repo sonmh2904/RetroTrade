@@ -1,15 +1,17 @@
+
 import api from "@/services/customizeAPI";
 import type { ApiResponse } from "@iService";
-import type { Order } from "@/services/auth/order.api";
+
+
 export interface Dispute {
   _id: string;
-  orderId: Order
-  reporterId: { _id: string; fullName: string; email: string };
-  reportedUserId: { _id: string; fullName: string; email: string };
+  orderId: string;
+  orderGuid: string;
+  reporterId: string; 
+  reportedUserId: string;
   reason: string;
   description?: string;
-  evidence?: string[];
-  type: "dispute";
+  evidence: string[]; // bạn đang trả về "evidence" trong response
   status: "Pending" | "In Progress" | "Reviewed" | "Resolved" | "Rejected";
   resolution?: {
     decision: string;
@@ -18,13 +20,8 @@ export interface Dispute {
     refundPercentage?: number;
     refundTarget?: "reporter" | "reported";
   };
-  assignedBy?: { _id: string; fullName: string; email: string };
-  assignedAt?: string;
-  handledBy?: { _id: string; fullName: string };
-  handledAt?: string;
   createdAt: string;
 }
-
 
 export interface CreateDisputeRequest {
   orderId: string;
@@ -33,6 +30,7 @@ export interface CreateDisputeRequest {
   evidence?: File[];
 }
 
+// Helper parse response (giữ nguyên, rất tốt)
 const parseResponse = async <T,>(
   response: Response
 ): Promise<ApiResponse<T>> => {
@@ -48,6 +46,7 @@ const parseResponse = async <T,>(
   };
 };
 
+// CREATE DISPUTE
 export const createDispute = async (
   payload: CreateDisputeRequest
 ): Promise<ApiResponse<Dispute>> => {
@@ -66,13 +65,17 @@ export const createDispute = async (
 
     payload.evidence.forEach((file) => {
       if (file.size > 10 * 1024 * 1024) {
-        throw new Error(`File "${file.name}" quá lớn. Tối đa 10MB.`);
+        throw new Error(`File "${file.name}" quá lớn. Tối đa 5MB.`);
       }
-      formData.append("evidence", file);
+      formData.append("evidence", file, file.name); 
     });
   }
 
-  const response = await api.post("/dispute", formData);
+  const response = await api.post("/dispute", formData, {
+    headers: {
+    },
+  });
+
   return await parseResponse<Dispute>(response);
 };
 
@@ -85,7 +88,6 @@ export const getDisputes = async (params?: {
   search?: string;
 }): Promise<ApiResponse<{ total: number; data: Dispute[] }>> => {
   const query = new URLSearchParams();
-
   if (params?.page) query.append("page", String(params.page));
   if (params?.limit) query.append("limit", String(params.limit));
   if (params?.status) query.append("status", params.status);
@@ -97,22 +99,18 @@ export const getDisputes = async (params?: {
   return await parseResponse(response);
 };
 
-export const getMyDisputes = async (params?: {
-  status?: string;
-}): Promise<ApiResponse<{ total: number; data: Dispute[] }>> => {
+export const getMyDisputes = async (params?: { status?: string }) => {
   const query = new URLSearchParams();
   if (params?.status) query.append("status", params.status);
-
   const url = `/dispute/my${query.toString() ? `?${query.toString()}` : ""}`;
   const response = await api.get(url);
-  return await parseResponse(response);
+  return await parseResponse<{ total: number; data: Dispute[] }>(response);
 };
 
-export const getDisputeById = async (
-  id: string
-): Promise<ApiResponse<Dispute>> => {
-  const response = await api.get(`/dispute/${id}`);
-  return await parseResponse(response);
+export const getDisputeById = async (id: string, populate = true) => {
+  const url = `/dispute/${id}${populate ? "?populate=true" : ""}`;
+  const response = await api.get(url);
+  return await parseResponse<Dispute>(response);
 };
 
 export interface ResolveDisputePayload {
@@ -125,22 +123,20 @@ export interface ResolveDisputePayload {
 export const resolveDispute = async (
   id: string,
   payload: ResolveDisputePayload
-): Promise<ApiResponse<Dispute>> => {
+) => {
   const response = await api.put(`/dispute/${id}/resolve`, payload);
-  return await parseResponse(response);
+  return await parseResponse<Dispute>(response);
 };
 
-export const assignDispute = async (
-  id: string
-): Promise<ApiResponse<Dispute>> => {
+export const assignDispute = async (id: string) => {
   const response = await api.post(`/dispute/${id}/assign`);
-  return await parseResponse(response);
+  return await parseResponse<Dispute>(response);
 };
 
-export const unassignDispute = async (
-  id: string,
-  reason?: string
-): Promise<ApiResponse<Dispute>> => {
-  const response = await api.post(`/dispute/${id}/unassign`, { reason });
-  return await parseResponse(response);
+export const unassignDispute = async (id: string, reason?: string) => {
+  const response = await api.post(
+    `/dispute/${id}/unassign`,
+    reason ? { reason } : {}
+  );
+  return await parseResponse<Dispute>(response);
 };
