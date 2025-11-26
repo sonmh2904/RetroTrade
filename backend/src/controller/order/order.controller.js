@@ -516,7 +516,6 @@ module.exports = {
           message:
             "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
         });
-      }
 
       order.orderStatus = "progress";
       order.paymentStatus = "paid";
