@@ -44,7 +44,7 @@ cron.schedule('*/1 * * * *', async () => {
     const cancelledOrders = await Order.find({
       isRefunded: false,
       paymentStatus: "paid",
-      orderStatus: { $in: ["pending", "cancelled"] }
+      orderStatus: "cancelled"
     });
 
     for (const order of cancelledOrders) {
