@@ -513,14 +513,10 @@ module.exports = {
 
       if (order.orderStatus !== "received")
         return res.status(400).json({
-          message: "Order must be in received status to start rental",
+          message:
+            "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
         });
-
-      // if (order.startAt && new Date(order.startAt) > new Date()) {
-      //   return res.status(400).json({
-      //     message: "Cannot start rental before scheduled start date",
-      //   });
-      // }
+      }
 
       order.orderStatus = "progress";
       order.paymentStatus = "paid";
