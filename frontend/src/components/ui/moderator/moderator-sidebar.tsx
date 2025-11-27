@@ -78,7 +78,6 @@ export function ModeratorSidebar({
     setIsMounted(true);
   }, []);
 
-
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [activeTab]);
@@ -145,7 +144,7 @@ export function ModeratorSidebar({
       label: "Xử lý khiếu nại",
       icon: AlertTriangle,
       path: "/moderator/dispute-management",
-      description: "Xử lý tranh chấp và khiếu nại",
+      description: "Xử lý Khiếu nạivà khiếu nại",
     },
     // {
     //   id: "userManagement" as const,
@@ -175,7 +174,6 @@ export function ModeratorSidebar({
       description: "Quản lý bài viết và nội dung",
       hasSubmenu: true,
     },
-  
   ];
 
   const productSubmenuItems: {
@@ -408,7 +406,6 @@ export function ModeratorSidebar({
                     }`}
                     onClick={() => {
                       if (item.hasSubmenu && !isCollapsed) {
-                      
                         if (isProduct && activeTab === "productManagement") {
                           setIsProductDropdownOpen(!isProductDropdownOpen);
                         } else if (isProduct) {

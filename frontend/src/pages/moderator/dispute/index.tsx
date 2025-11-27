@@ -58,7 +58,6 @@ export default function DisputeManagementPage() {
     }
   };
 
-
   useEffect(() => {
     fetchDisputes();
   }, [page, search]);
@@ -131,7 +130,7 @@ export default function DisputeManagementPage() {
                       size={40}
                       className="mx-auto mb-2 opacity-40"
                     />
-                    Không có tranh chấp
+                    Không có Khiếu nại
                   </td>
                 </tr>
               ) : (
@@ -166,7 +165,9 @@ export default function DisputeManagementPage() {
                     <td className="p-4 text-center">
                       <Button
                         size="sm"
-                        onClick={() => router.push(`/moderator/dispute/${d._id}`)}
+                        onClick={() =>
+                          router.push(`/moderator/dispute/${d._id}`)
+                        }
                       >
                         <Eye size={16} className="mr-1" /> Xem
                       </Button>

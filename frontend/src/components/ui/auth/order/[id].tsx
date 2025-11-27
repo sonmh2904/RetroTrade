@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  getOrderDetails,
-
-} from "@/services/auth/order.api";
+import { getOrderDetails } from "@/services/auth/order.api";
 import { format } from "date-fns";
 import {
   Package,
@@ -74,8 +71,6 @@ const getErrorMessage = (error: unknown): string => {
   return "Đã xảy ra lỗi";
 };
 
-
-
 const getOrderStatusLabel = (status: string): string => {
   const statusMap: Record<string, string> = {
     pending: "Chờ xác nhận",
@@ -86,7 +81,7 @@ const getOrderStatusLabel = (status: string): string => {
     returned: "Đã trả hàng",
     completed: "Hoàn tất",
     cancelled: "Đã hủy",
-    disputed: "Tranh chấp",
+    disputed: "Khiếu nại",
   };
   return statusMap[status.toLowerCase()] || status;
 };
@@ -114,9 +109,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [pendingAction] = useState<() => Promise<void>>(
-    () => async () => {}
-  );
+  const [pendingAction] = useState<() => Promise<void>>(() => async () => {});
   const [isPaying, setIsPaying] = useState(false); //Thanh toan
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -164,68 +157,68 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   }, []);
 
   // Hàm thanh toán ví - giờ đã an toàn 100%
-const handlePayWithWallet = async () => {
-  if (isPaying || loadingBalance || !order) return;
+  const handlePayWithWallet = async () => {
+    if (isPaying || loadingBalance || !order) return;
 
-  const requiredAmount =
-    (order.finalAmount ?? 0) +
-    (order.depositAmount ?? 0) +
-    (order.serviceFee ?? 0);
-  const shortage = requiredAmount - walletBalance;
+    const requiredAmount =
+      (order.finalAmount ?? 0) +
+      (order.depositAmount ?? 0) +
+      (order.serviceFee ?? 0);
+    const shortage = requiredAmount - walletBalance;
 
-  // Thiếu tiền → hiện modal đẹp
-  if (walletBalance < requiredAmount) {
-    setInsufficientModal({
-      isOpen: true,
-      requiredAmount,
-      shortage,
-    });
-    return;
-  }
-
-  // Đủ tiền → hiện modal xác nhận
-  setConfirmPayModal({
-    isOpen: true,
-    requiredAmount,
-  });
-};
-
-  // Hàm thực hiện thanh toán (gọi khi người dùng bấm "Xác nhận" trong modal)
-const executeWalletPayment = async () => {
-  if (isPaying || !order) return;
-
-  setIsPaying(true);
-  setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
-
-  try {
-    await payOrderWithWallet(order._id);
-    toast.success("Thanh toán thành công bằng ví!");
-    await loadOrder();
-
-    const updated = await getMyWallet();
-    setWalletBalance(updated.balance ?? 0);
-  } catch (error: unknown) {
-    const msg = getErrorMessage(error) || "Thanh toán thất bại";
-    toast.error(msg);
-
-    if (
-      msg.toLowerCase().includes("không đủ") ||
-      msg.toLowerCase().includes("insufficient")
-    ) {
-      const required =
-        (order.finalAmount ?? 0) +
-        (order.depositAmount ?? 0) +
-        (order.serviceFee ?? 0);
+    // Thiếu tiền → hiện modal đẹp
+    if (walletBalance < requiredAmount) {
       setInsufficientModal({
         isOpen: true,
-        requiredAmount: required,
-        shortage: required - walletBalance,
+        requiredAmount,
+        shortage,
       });
+      return;
     }
-  } finally {
-    setIsPaying(false);
-  }
-};
+
+    // Đủ tiền → hiện modal xác nhận
+    setConfirmPayModal({
+      isOpen: true,
+      requiredAmount,
+    });
+  };
+
+  // Hàm thực hiện thanh toán (gọi khi người dùng bấm "Xác nhận" trong modal)
+  const executeWalletPayment = async () => {
+    if (isPaying || !order) return;
+
+    setIsPaying(true);
+    setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
+
+    try {
+      await payOrderWithWallet(order._id);
+      toast.success("Thanh toán thành công bằng ví!");
+      await loadOrder();
+
+      const updated = await getMyWallet();
+      setWalletBalance(updated.balance ?? 0);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error) || "Thanh toán thất bại";
+      toast.error(msg);
+
+      if (
+        msg.toLowerCase().includes("không đủ") ||
+        msg.toLowerCase().includes("insufficient")
+      ) {
+        const required =
+          (order.finalAmount ?? 0) +
+          (order.depositAmount ?? 0) +
+          (order.serviceFee ?? 0);
+        setInsufficientModal({
+          isOpen: true,
+          requiredAmount: required,
+          shortage: required - walletBalance,
+        });
+      }
+    } finally {
+      setIsPaying(false);
+    }
+  };
 
   const loadOrder = async () => {
     setLoading(true);
@@ -266,7 +259,6 @@ const executeWalletPayment = async () => {
   }
   console.log("Dispute RAW:", order.disputeId);
   console.log("Type:", typeof order.disputeId);
-
 
   const timelineSteps: TimelineStep[] = [
     {
@@ -313,7 +305,7 @@ const executeWalletPayment = async () => {
     },
     {
       status: "disputed",
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       active: order.orderStatus === "disputed",
       current: order.orderStatus === "disputed",
       cancelled: false,
@@ -619,7 +611,7 @@ const executeWalletPayment = async () => {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-orange-700 mb-1">
-                      Đang tranh chấp
+                      Đang Khiếu nại
                     </p>
                     <p className="text-xs text-orange-600 mb-3">
                       {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
@@ -638,11 +630,11 @@ const executeWalletPayment = async () => {
                         className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
                       >
                         <Eye className="w-4 h-4" />
-                        Xem chi tiết tranh chấp
+                        Xem chi tiết Khiếu nại
                       </button>
                     ) : (
                       <p className="text-xs text-orange-500">
-                        Đang tải thông tin tranh chấp...
+                        Đang tải thông tin Khiếu nại...
                       </p>
                     )}
                   </div>

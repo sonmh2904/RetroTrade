@@ -142,6 +142,7 @@ export default function OrderListPage({
         if (res.code === 200 && Array.isArray(res.data)) {
           setOrders(res.data);
         }
+        console.log("Fetched orders:", res.data);
       } catch (error) {
         console.error("Error fetching orders:", error);
         toast.error("Không thể tải danh sách đơn hàng");
@@ -286,7 +287,7 @@ export default function OrderListPage({
       bgColor: "bg-red-100 border-red-200",
     },
     disputed: {
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       color: "text-orange-800",
       bgColor: "bg-orange-100 border-orange-200",
     },
@@ -381,7 +382,7 @@ export default function OrderListPage({
     },
     {
       key: "disputed",
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       count: orders.filter((o) => o.orderStatus === "disputed").length,
     },
   ];
@@ -727,7 +728,7 @@ export default function OrderListPage({
                             )}
 
                             {isRenter &&
-                              ["progress", "returned", "completed"].includes(
+                              ["delivery", "received", "returned",].includes(
                                 order.orderStatus
                               ) &&
                               order.orderStatus !== "disputed" && (
@@ -741,15 +742,15 @@ export default function OrderListPage({
                                   }}
                                 >
                                   <AlertCircle className="w-4 h-4 mr-2" />
-                                  Tranh chấp
+                                  Khiếu nại
                                 </Button>
                               )}
 
-                            {/* Nếu đã tranh chấp rồi thì hiện thông báo */}
+                            {/* Nếu đã Khiếu nạirồi thì hiện thông báo */}
                             {order.orderStatus === "disputed" && (
                               <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
                                 <AlertCircle className="w-4 h-4" />
-                                Đơn hàng đang được xử lý tranh chấp
+                                Đơn hàng đang được xử lý Khiếu nại
                               </div>
                             )}
                           </div>
@@ -935,13 +936,13 @@ export default function OrderListPage({
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Dialog Tạo Tranh Chấp */}
+        {/* Dialog Tạo Khiếu nại*/}
         <Dialog open={openDisputeDialog} onOpenChange={setOpenDisputeDialog}>
           <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl p-6  z-200">
             <DialogHeader className="pb-4 border-b">
               <DialogTitle className="flex items-center gap-3 text-xl font-bold text-orange-700">
                 <AlertCircle className="w-7 h-7" />
-                Tạo tranh chấp đơn hàng
+                Tạo Khiếu nạiđơn hàng
               </DialogTitle>
             </DialogHeader>
 
@@ -962,10 +963,10 @@ export default function OrderListPage({
                 </div>
               )}
 
-              {/* Lý do tranh chấp */}
+              {/* Lý do Khiếu nại*/}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Lý do tranh chấp <span className="text-red-600">*</span>
+                  Lý do Khiếu nại<span className="text-red-600">*</span>
                 </label>
                 <select
                   value={disputeReason}
@@ -1071,7 +1072,7 @@ export default function OrderListPage({
                 onClick={async () => {
                   // Validate bắt buộc
                   if (!disputeReason.trim()) {
-                    return toast.error("Vui lòng chọn lý do tranh chấp");
+                    return toast.error("Vui lòng chọn lý do Khiếu nại");
                   }
                   if (disputeEvidence.length === 0) {
                     return toast.error(
@@ -1091,7 +1092,7 @@ export default function OrderListPage({
 
                     if (res.code === 201 || res.code === 200) {
                       toast.success(
-                        "Đã gửi tranh chấp thành công! Moderator sẽ xử lý trong vòng 24h."
+                        "Đã gửi Khiếu nạithành công! Moderator sẽ xử lý trong vòng 24h."
                       );
 
                       // Cập nhật trạng thái đơn hàng ngay lập tức trên UI
@@ -1107,14 +1108,14 @@ export default function OrderListPage({
                     } else {
                       toast.error(
                         res.message ||
-                          "Không thể gửi tranh chấp, vui lòng thử lại"
+                          "Không thể gửi Khiếu nại, vui lòng thử lại"
                       );
                     }
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } catch (err: any) {
                     console.error("Create dispute error:", err);
                     toast.error(
-                      err.message || "Có lỗi xảy ra khi gửi tranh chấp"
+                      err.message || "Có lỗi xảy ra khi gửi Khiếu nại"
                     );
                   } finally {
                     setProcessing(null);
@@ -1134,7 +1135,7 @@ export default function OrderListPage({
                 ) : (
                   <>
                     <AlertCircle className="w-5 h-5 mr-2" />
-                    Gửi tranh chấp
+                    Gửi Khiếu nại
                   </>
                 )}
               </Button>

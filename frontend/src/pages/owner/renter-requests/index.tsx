@@ -9,7 +9,7 @@ import {
   startOrder,
   ownerComplete,
   startDelivery,
-  receiveOrder
+  receiveOrder,
 } from "@/services/auth/order.api";
 import type { Order } from "@/services/auth/order.api";
 import {
@@ -52,7 +52,7 @@ function RenterRequestsContent() {
   const [rejectReason, setRejectReason] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  // Modal Tranh chấp
+  // Modal Khiếu nại
   const [openDisputeModal, setOpenDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [selectedDisputeOrderId, setSelectedDisputeOrderId] = useState<
@@ -78,7 +78,7 @@ function RenterRequestsContent() {
     { key: "returned", label: "Chờ xác nhận trả hàng" },
     { key: "completed", label: "Hoàn tất" },
     { key: "cancelled", label: "Đã hủy" },
-    { key: "disputed", label: "Tranh chấp" },
+    { key: "disputed", label: "Khiếu nại" },
   ];
 
   const statusLabel: Record<string, string> = {
@@ -90,7 +90,7 @@ function RenterRequestsContent() {
     returned: "Chờ xác nhận trả hàng",
     completed: "Hoàn tất",
     cancelled: "Đã hủy",
-    disputed: "Tranh chấp",
+    disputed: "Khiếu nại",
   };
 
   const statusColor: Record<string, string> = {
@@ -171,29 +171,27 @@ function RenterRequestsContent() {
   };
 
   // Bắt đầu giao hàng (Owner)
-const handleStartDelivery = async (order: Order) => {
-  // Kiểm tra thanh toán
-  if (order.paymentStatus !== "paid") {
-    return toast.error("Khách hàng chưa thanh toán. Không thể giao hàng.");
-  }
+  const handleStartDelivery = async (order: Order) => {
+    // Kiểm tra thanh toán
+    if (order.paymentStatus !== "paid") {
+      return toast.error("Khách hàng chưa thanh toán. Không thể giao hàng.");
+    }
 
-  // Chỉ yêu cầu ký hợp đồng nếu đơn trên 2 triệu
-  if (order.totalAmount > 2_000_000 && !order.isContractSigned) {
-    return toast.error(
-      "Hợp đồng chưa được ký. Không thể giao hàng với đơn trên 2 triệu."
-    );
-  }
+    // Chỉ yêu cầu ký hợp đồng nếu đơn trên 2 triệu
+    if (order.totalAmount > 2_000_000 && !order.isContractSigned) {
+      return toast.error(
+        "Hợp đồng chưa được ký. Không thể giao hàng với đơn trên 2 triệu."
+      );
+    }
 
-  const res = await startDelivery(order._id);
-  if (res.code === 200) {
-    toast.success("Đơn hàng đang giao!");
-    setRefreshKey((prev) => prev + 1);
-  } else {
-    toast.error(res.message || "Không thể bắt đầu giao hàng");
-  }
-};
-
-
+    const res = await startDelivery(order._id);
+    if (res.code === 200) {
+      toast.success("Đơn hàng đang giao!");
+      setRefreshKey((prev) => prev + 1);
+    } else {
+      toast.error(res.message || "Không thể bắt đầu giao hàng");
+    }
+  };
 
   const handleStartOrder = async (order: Order) => {
     // Kiểm tra thanh toán
@@ -227,7 +225,7 @@ const handleStartDelivery = async (order: Order) => {
 
   const handleConfirmDispute = async () => {
     if (!disputeReason.trim()) {
-      return toast.error("Vui lòng nhập lý do tranh chấp.");
+      return toast.error("Vui lòng nhập lý do Khiếu nại.");
     }
     if (!selectedDisputeOrderId) return;
 
@@ -238,10 +236,10 @@ const handleStartDelivery = async (order: Order) => {
     });
 
     if (res.code === 201) {
-      toast.success("Đã gửi yêu cầu tranh chấp thành công!");
+      toast.success("Đã gửi yêu cầu Khiếu nạithành công!");
       setRefreshKey((prev) => prev + 1);
     } else {
-      toast.error(res.message || "Gửi tranh chấp thất bại.");
+      toast.error(res.message || "Gửi Khiếu nạithất bại.");
     }
 
     setOpenDisputeModal(false);
@@ -456,7 +454,7 @@ const handleStartDelivery = async (order: Order) => {
                       handleOpenDisputeModal(order._id);
                     }}
                   >
-                    Tranh chấp
+                    Khiếu nại
                   </Button>
                 )}
 
@@ -481,7 +479,7 @@ const handleStartDelivery = async (order: Order) => {
                         handleOpenDisputeModal(order._id);
                       }}
                     >
-                      Tranh chấp
+                      Khiếu nại
                     </Button>
                   </>
                 )}
@@ -515,7 +513,7 @@ const handleStartDelivery = async (order: Order) => {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Tranh chấp */}
+      {/* Modal Khiếu nại*/}
       <DisputeModal
         open={openDisputeModal}
         onOpenChange={setOpenDisputeModal}
@@ -531,10 +529,10 @@ const handleStartDelivery = async (order: Order) => {
           });
 
           if (res.code === 201) {
-            toast.success("Đã gửi yêu cầu tranh chấp thành công!");
+            toast.success("Đã gửi yêu cầu Khiếu nạithành công!");
             setRefreshKey((prev) => prev + 1);
           } else {
-            toast.error(res.message || "Gửi tranh chấp thất bại.");
+            toast.error(res.message || "Gửi Khiếu nạithất bại.");
           }
           setOpenDisputeModal(false); // đóng modal luôn
         }}

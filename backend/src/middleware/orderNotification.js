@@ -102,7 +102,6 @@ const notifyOrderReceived = async (order) => {
   }
 };
 
-
 /**
  * Gửi thông báo khi đơn hàng hoàn thành
  * @param {Object} order - order document
@@ -173,7 +172,11 @@ const notifyOrderReturned = async (order) => {
       "Order Returned",
       "Sản phẩm đã được trả",
       `Người thuê đã trả sản phẩm "${order.itemSnapshot.title}".`,
-      { orderId: order._id, returnedAt: order.returnInfo.returnedAt, notes: order.returnInfo.notes }
+      {
+        orderId: order._id,
+        returnedAt: order.returnInfo.returnedAt,
+        notes: order.returnInfo.notes,
+      }
     );
   } catch (error) {
     console.error("Error notifying order returned:", error);
@@ -215,8 +218,8 @@ const notifyOrderDisputed = async (order) => {
       await createNotification(
         userId,
         "Order Disputed",
-        "Đơn hàng đang tranh chấp",
-        `Đơn hàng #${order.orderGuid} đã được mở tranh chấp.`,
+        "Đơn hàng đang Khiếu nại",
+        `Đơn hàng #${order.orderGuid} đã được mở Khiếu nại.`,
         {
           orderId: order._id,
           orderGuid: order.orderGuid,
@@ -229,7 +232,6 @@ const notifyOrderDisputed = async (order) => {
   }
 };
 
-
 module.exports = {
   notifyOrderCreated,
   notifyOrderConfirmed,
@@ -239,5 +241,5 @@ module.exports = {
   notifyOrderCancelled,
   notifyOrderDisputed,
   notifyOrderDelivery,
-  notifyOrderReceived
+  notifyOrderReceived,
 };

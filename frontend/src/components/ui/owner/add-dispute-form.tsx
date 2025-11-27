@@ -45,7 +45,6 @@ export default function DisputeModal({
 
   const inputId = `evidence-upload-${orderId || "dispute"}`;
 
-
   useEffect(() => {
     return () => {
       previews.forEach((url) => URL.revokeObjectURL(url));
@@ -112,7 +111,7 @@ export default function DisputeModal({
         description: description.trim(),
         evidence: files,
       });
-      toast.success("Gửi tranh chấp thành công!");
+      toast.success("Gửi Khiếu nạithành công!");
       handleClose(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Lỗi hệ thống");
@@ -130,7 +129,7 @@ export default function DisputeModal({
         <DialogHeader className="p-6 pb-4 bg-red-50 border-b border-red-100">
           <DialogTitle className="text-xl font-bold text-red-700 flex items-center gap-3">
             <AlertCircle className="w-7 h-7" />
-            Báo cáo tranh chấp
+            Báo cáo Khiếu nại
           </DialogTitle>
         </DialogHeader>
 
@@ -249,7 +248,7 @@ export default function DisputeModal({
             }
             className="flex-1 bg-red-600 hover:bg-red-700 font-semibold"
           >
-            {submitting ? "Đang gửi..." : "Gửi tranh chấp"}
+            {submitting ? "Đang gửi..." : "Gửi Khiếu nại"}
           </Button>
         </DialogFooter>
       </DialogContent>

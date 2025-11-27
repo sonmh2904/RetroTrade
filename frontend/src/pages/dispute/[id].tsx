@@ -1,7 +1,7 @@
 // File: app/dispute/[id]/page.tsx
 "use client";
 
-import { useEffect,  useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -83,11 +83,31 @@ const getUserDisplay = (user: string | PopulatedUser | undefined) => {
 
 // Config trạng thái
 const statusConfig = {
-  Pending: { label: "Đang chờ", color: "bg-yellow-100 text-yellow-800", icon: Clock },
-  "In Progress": { label: "Đang xử lý", color: "bg-blue-100 text-blue-800", icon: Clock },
-  Reviewed: { label: "Đang xem xét", color: "bg-blue-100 text-blue-800", icon: AlertCircle },
-  Resolved: { label: "Đã giải quyết", color: "bg-green-100 text-green-800", icon: CheckCircle },
-  Rejected: { label: "Bị từ chối", color: "bg-red-100 text-red-800", icon: XCircle },
+  Pending: {
+    label: "Đang chờ",
+    color: "bg-yellow-100 text-yellow-800",
+    icon: Clock,
+  },
+  "In Progress": {
+    label: "Đang xử lý",
+    color: "bg-blue-100 text-blue-800",
+    icon: Clock,
+  },
+  Reviewed: {
+    label: "Đang xem xét",
+    color: "bg-blue-100 text-blue-800",
+    icon: AlertCircle,
+  },
+  Resolved: {
+    label: "Đã giải quyết",
+    color: "bg-green-100 text-green-800",
+    icon: CheckCircle,
+  },
+  Rejected: {
+    label: "Bị từ chối",
+    color: "bg-red-100 text-red-800",
+    icon: XCircle,
+  },
 } as const;
 
 const getRefundTargetLabel = (target?: string) =>
@@ -106,7 +126,7 @@ const getOrderStatusLabel = (status?: string) => {
     returned: "Đã trả",
     completed: "Hoàn tất",
     cancelled: "Đã hủy",
-    disputed: "Đang tranh chấp",
+    disputed: "Đang Khiếu nại",
     refunded: "Đã hoàn tiền",
   };
   return map[(status || "").toLowerCase()] || status || "Không xác định";
@@ -118,7 +138,15 @@ const getUnitName = (unit?: string) => {
 };
 
 // Component xem ảnh
-function ImagePreview({ src, index, total }: { src: string; index: number; total: number }) {
+function ImagePreview({
+  src,
+  index,
+  total,
+}: {
+  src: string;
+  index: number;
+  total: number;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -196,10 +224,10 @@ const NotFound = () => (
     <Card className="max-w-md text-center p-12 bg-white shadow-2xl">
       <AlertCircle className="w-20 h-20 text-red-500 mx-auto mb-6" />
       <h2 className="text-2xl font-bold text-gray-800 mb-3">
-        Không tìm thấy tranh chấp
+        Không tìm thấy Khiếu nại
       </h2>
       <p className="text-gray-600 mb-8">
-        Mã tranh chấp không tồn tại hoặc đã bị xóa.
+        Mã Khiếu nạikhông tồn tại hoặc đã bị xóa.
       </p>
       <Link href="/order">
         <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700">
@@ -226,7 +254,7 @@ export default function DisputeDetailPage() {
         if (res.code === 200 && res.data) {
           setDispute(res.data);
         } else {
-          toast.error("Không tìm thấy tranh chấp");
+          toast.error("Không tìm thấy Khiếu nại");
           router.replace("/order");
         }
       })
@@ -237,7 +265,8 @@ export default function DisputeDetailPage() {
       .finally(() => setLoading(false));
   }, [id, router]);
 
-  const formatDate = (date: string) => format(new Date(date), "dd/MM/yyyy HH:mm");
+  const formatDate = (date: string) =>
+    format(new Date(date), "dd/MM/yyyy HH:mm");
 
   if (loading) return <LoadingSkeleton />;
   if (!dispute) return <NotFound />;
@@ -263,7 +292,7 @@ export default function DisputeDetailPage() {
         <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-8 rounded-3xl shadow-2xl">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
-              <p className="text-sm opacity-90">Mã tranh chấp</p>
+              <p className="text-sm opacity-90">Mã Khiếu nại</p>
               <p className="text-3xl font-bold tracking-tight">
                 #{dispute._id.slice(-8).toUpperCase()}
               </p>
@@ -510,7 +539,7 @@ export default function DisputeDetailPage() {
           <Card className="p-8 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 text-center">
             <AlertCircle className="w-12 h-12 text-blue-600 mx-auto mb-4" />
             <p className="text-xl font-medium text-blue-700">
-              Tranh chấp đang được đội ngũ hỗ trợ xem xét kỹ lưỡng
+              Khiếu nạiđang được đội ngũ hỗ trợ xem xét kỹ lưỡng
             </p>
             <p className="text-blue-600 mt-2">
               Bạn sẽ nhận được thông báo khi có kết quả.

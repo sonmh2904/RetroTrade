@@ -59,7 +59,7 @@ const getOrderStatusLabel = (status: string): string => {
     returned: "Đã trả hàng",
     completed: "Hoàn tất",
     cancelled: "Đã hủy",
-    disputed: "Tranh chấp",
+    disputed: "Khiếu nại",
   };
   return statusMap[status.toLowerCase()] || status;
 };
@@ -149,7 +149,7 @@ function OwnerOrderDetailContent() {
     },
     {
       status: "disputed",
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       active: order.orderStatus === "disputed",
       current: order.orderStatus === "disputed",
       cancelled: false,
@@ -463,7 +463,7 @@ function OwnerOrderDetailContent() {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-orange-700 mb-1">
-                      Đang tranh chấp
+                      Đang Khiếu nại
                     </p>
                     <p className="text-xs text-orange-600 mb-3">
                       {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
@@ -482,11 +482,11 @@ function OwnerOrderDetailContent() {
                         className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
                       >
                         <Eye className="w-4 h-4" />
-                        Xem chi tiết tranh chấp
+                        Xem chi tiết Khiếu nại
                       </button>
                     ) : (
                       <p className="text-xs text-orange-500">
-                        Đang tải thông tin tranh chấp...
+                        Đang tải thông tin Khiếu nại...
                       </p>
                     )}
                   </div>
@@ -847,4 +847,3 @@ function OwnerOrderDetailContent() {
     </div>
   );
 }
-
