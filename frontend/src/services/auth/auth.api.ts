@@ -59,7 +59,16 @@ export const loginWithFacebook = async (
     return await instance.post("/auth/login-with-facebook", payload);
 };
 
-// Firebase Phone Auth OTP endpoints
+// Twilio Phone Auth OTP endpoints (recommended)
+export const sendOtp = async (phone: string): Promise<Response> => {
+    return await instance.post("/auth/phone/send-otp", { phone });
+};
+
+export const verifyOtp = async (phone: string, code: string): Promise<Response> => {
+    return await instance.post("/auth/phone/verify-otp", { phone, code });
+};
+
+// Firebase Phone Auth OTP endpoints (deprecated - use Twilio instead)
 export const sendOtpFirebase = async (phone: string, recaptchaToken?: string): Promise<Response> => {
     return await instance.post("/auth/phone/send-otp-firebase", { phone, recaptchaToken });
 };

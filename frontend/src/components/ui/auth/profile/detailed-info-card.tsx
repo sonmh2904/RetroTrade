@@ -9,8 +9,7 @@ import type { UserProfile } from "@iService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/common/dialog"
 import { PhoneVerification } from "@/components/ui/auth/verify/PhoneVerification"
 import OTPInput from "../verify/OTPInput"
-import { sendOtpFirebase, verifyOtpFirebase } from "@/services/auth/auth.api"
-import Script from "next/script"
+import { sendOtp, verifyOtp } from "@/services/auth/auth.api"
 
 interface DetailedInfoCardProps {
   userProfile: UserProfile;
@@ -28,16 +27,8 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [phoneNumber, setPhoneNumber] = useState("")
   const [otp, setOtp] = useState("")
-  const [sessionInfo, setSessionInfo] = useState("")
   const [step, setStep] = useState(1) // 1: phone, 2: OTP
   const [isLoading, setIsLoading] = useState(false)
-
-  const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_WEB_API_KEY as string,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
-  }
 
   const formatPhoneNumber = (phone: string): string => {
     const digits = phone.replace(/\D/g, '')
@@ -51,7 +42,6 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
     setIsDialogOpen(true)
     setPhoneNumber("")
     setOtp("")
-    setSessionInfo("")
     setStep(1)
   }
 
@@ -61,26 +51,9 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
       const formattedPhone = formatPhoneNumber(phoneNumber)
       console.log('Formatted phone:', formattedPhone)
       
-      const firebaseMaybe = (window as unknown as { firebase?: { apps?: unknown[]; initializeApp: (config: unknown) => void; auth: { RecaptchaVerifier: new (container: string, opts: { size: 'invisible' }) => { verify: () => Promise<string> } } } }).firebase
-      if (!firebaseMaybe) throw new Error('Firebase SDK not loaded')
-      
-      const firebase = firebaseMaybe
-      if (!firebase.apps?.length) firebase.initializeApp(firebaseConfig)
-      
-      const emulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST
-      let recaptchaToken: string | undefined
-      
-      if (!emulatorHost) {
-        const container = document.getElementById('recaptcha-container')
-        if (container) container.innerHTML = ''
-        const verifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' })
-        recaptchaToken = await verifier.verify()
-      }
-      
-      const response = await sendOtpFirebase(formattedPhone, recaptchaToken)
+      const response = await sendOtp(formattedPhone)
       const data = await response.json()
       if (!response.ok) throw new Error(data?.message || 'Send OTP failed')
-      setSessionInfo(data?.data?.sessionInfo || '')
       toast.success("Đã gửi mã OTP!")
       setStep(2)
     } catch (e) {
@@ -93,14 +66,16 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
   const handleVerifyOTP = async () => {
     try {
       setIsLoading(true)
-      const response = await verifyOtpFirebase(sessionInfo, otp)
+      const formattedPhone = formatPhoneNumber(phoneNumber)
+      const response = await verifyOtp(formattedPhone, otp)
       const data = await response.json()
       if (!response.ok) throw new Error(data?.message || 'Verify OTP failed')
       
       toast.success("Xác minh số điện thoại thành công!")
-      setLocalPhone(phoneNumber)
+      const verifiedPhone = data?.data?.phone || phoneNumber
+      setLocalPhone(verifiedPhone)
       const profile = userProfile as UserProfile & { phone?: string; isPhoneConfirmed?: boolean }
-      profile.phone = phoneNumber
+      profile.phone = verifiedPhone
       profile.isPhoneConfirmed = true
       setIsDialogOpen(false)
     } catch (e) {
@@ -218,7 +193,6 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
     </Card>
     
     {/* Phone Verification Dialog */}
-    <Script src="https://www.gstatic.com/firebasejs/9.x/firebase-compat.js" strategy="lazyOnload" />
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -244,8 +218,6 @@ export const DetailedInfoCard = forwardRef<DetailedInfoCardHandle, DetailedInfoC
         </div>
       </DialogContent>
     </Dialog>
-    
-    <div id="recaptcha-container" />
     </>
   )
 })

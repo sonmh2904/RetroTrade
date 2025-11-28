@@ -1,125 +1,141 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import Script from 'next/script';
+import React, { useState } from 'react';
 import { PhoneVerification } from '@/components/ui/auth/verify/PhoneVerification';
-import OTPInput from '@/components/ui/auth/verify/OTPInput';
 import ImageUpload from '@/components/ui/auth/verify/ImageUpload';
 import ResultDisplay from '@/components/ui/auth/verify/ResultDisplay';
 import { FaceVerificationResponse } from '@/services/auth/faceVerification.api';
 import VerificationScript from '@/components/ui/auth/verify/VerificationScript';
-import { sendOtpFirebase, verifyOtpFirebase } from '@/services/auth/auth.api';
 
 type AccountVerificationProps = { className?: string };
 
 export function AccountVerification({ className }: AccountVerificationProps) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // Bắt đầu từ step 1 (PhoneVerification)
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
   const [images, setImages] = useState<File[]>([]);
-  const [sessionInfo, setSessionInfo] = useState('');
-  const [result, setResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string; details?: string; status?: 'success' | 'warning' | 'error' } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [failedStep, setFailedStep] = useState<number | null>(null);
 
-  // Prepare reCAPTCHA container
-  useEffect(() => {
-    const containerId = 'recaptcha-container';
-    let container = document.getElementById(containerId);
-    if (!container) {
-      container = document.createElement('div');
-      container.id = containerId;
-      document.body.appendChild(container);
-    }
-  }, []);
-
-  const formatPhoneNumber = (phone: string): string => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.startsWith('0')) return '+84' + digits.substring(1);
-    if (digits.startsWith('84')) return '+' + digits;
-    if (phone.startsWith('+')) return phone;
-    return '+84' + digits;
-  };
-
-  const handleSendOTP = async () => {
-    try {
-      setIsLoading(true);
-      const formatted = formatPhoneNumber(phoneNumber);
-      const resp = await sendOtpFirebase(formatted, undefined);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.message || 'Send OTP failed');
-      setSessionInfo(data?.data?.sessionInfo || '');
-      setStep(2);
-      setFailedStep(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Có lỗi xảy ra khi gửi OTP');
-      setFailedStep(1);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    try {
-      setIsLoading(true);
-      const resp = await verifyOtpFirebase(sessionInfo, otp);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.message || 'Verify OTP failed');
-      setStep(3);
-      setFailedStep(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Có lỗi xảy ra khi xác minh OTP');
-      setFailedStep(2);
-    } finally {
-      setIsLoading(false);
-    }
+  // Callback khi PhoneVerification hoàn thành (đã xác minh số điện thoại + OTP)
+  const handlePhoneVerified = (verifiedPhone: string) => {
+    setPhoneNumber(verifiedPhone);
+    setError('');
+    setFailedStep(null);
+    setStep(2); // Chuyển sang bước xác minh CCCD
   };
 
   const handleSubmitVerification = async (verificationResult?: FaceVerificationResponse) => {
     try {
       setIsLoading(true);
       if (verificationResult) {
-        const { extractedIdCardInfo, requestId, verificationRequestSubmitted, autoRejected, rejectionReason } = verificationResult.data || {};
+        const { 
+          extractedIdCardInfo, 
+          requestId, 
+          verificationRequestSubmitted, 
+          autoRejected, 
+          autoApproved,
+          rejectionReason,
+          similarity,
+          isFullyVerified,
+          requiresModeratorReview,
+          hasPendingRequest
+        } = verificationResult.data || {};
         
+        // Check if user has pending request
+        if (hasPendingRequest) {
+          setResult({
+            success: false,
+            message: 'Bạn đã có yêu cầu xác minh đang chờ xử lý',
+            details: verificationResult.message || 'Bạn đã có yêu cầu xác minh đang chờ kiểm duyệt viên xử lý. Vui lòng kiểm tra lịch sử xác minh hoặc chờ kiểm duyệt viên xử lý.'
+          });
+          setFailedStep(2);
+        }
+        // Check if auto-approved (from auto verification mode)
+        else if (autoApproved) {
+          const similarityText = similarity ? ` Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%.` : '';
+          const fullyVerifiedText = isFullyVerified 
+            ? ' Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).'
+            : '';
+          
+          setResult({
+            success: true,
+            message: 'Xác minh thành công!',
+            details: `Yêu cầu xác minh của bạn đã được duyệt tự động.${similarityText}${fullyVerifiedText}`
+          });
+        }
         // Check if request was auto-rejected due to OCR failure
-        if (autoRejected) {
+        else if (autoRejected) {
           setResult({
             success: false,
             message: 'Yêu cầu xác minh bị từ chối tự động',
             details: rejectionReason || 'Hệ thống không thể đọc được thông tin từ ảnh căn cước công dân. Vui lòng chụp lại ảnh rõ nét hơn hoặc đảm bảo ảnh không bị mờ, không bị che khuất thông tin.'
           });
-          setFailedStep(3);
-        } else if (verificationRequestSubmitted || requestId) {
+          setFailedStep(2);
+        } 
+        // Auto verification failed, sent to moderator
+        else if (requiresModeratorReview) {
+          const { switchedToManualVerification, manualVerificationMessage } = verificationResult.data || {};
+          
+          let detailsMessage = '';
+          if (switchedToManualVerification && manualVerificationMessage) {
+            // Show similarity first if available, then rejection reason, then manual verification message
+            const similarityText = similarity !== undefined && similarity !== null 
+              ? `Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%.` 
+              : '';
+            const rejectionText = rejectionReason ? `\n\nLý do: ${rejectionReason}.` : '';
+            // Replace "moderator" with "kiểm duyệt viên" in manualVerificationMessage
+            const updatedManualMessage = manualVerificationMessage.replace(/moderator/gi, 'kiểm duyệt viên').replace(/Moderator/gi, 'Kiểm duyệt viên');
+            detailsMessage = `${similarityText}${rejectionText}\n\n${updatedManualMessage} Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất.`;
+          } else {
+            // Fallback to old message format
+            const similarityText = similarity !== undefined && similarity !== null 
+              ? `\n\nĐộ tương đồng khuôn mặt: ${similarity.toFixed(2)}% (dưới ngưỡng 50%).` 
+              : '';
+            const rejectionText = rejectionReason ? `\n\nLý do: ${rejectionReason}.` : '';
+            detailsMessage = `Yêu cầu xác minh của bạn đã được gửi cho kiểm duyệt viên xử lý.${similarityText}${rejectionText}\n\nKiểm duyệt viên sẽ xử lý trong thời gian sớm nhất.`;
+          }
+          
+          setResult({
+            success: false, // Set to false so it shows as warning (not success)
+            status: 'warning', // Explicitly set warning status
+            message: switchedToManualVerification 
+              ? 'Đã chuyển sang xác minh bán tự động'
+              : 'Yêu cầu xác minh đã được gửi',
+            details: detailsMessage
+          });
+        }
+        // Manual verification: sent to moderator
+        else if (verificationRequestSubmitted || requestId) {
           setResult({
             success: true,
             message: 'Yêu cầu xác minh đã được gửi thành công',
-            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất. Bạn sẽ nhận được thông báo khi có kết quả.'
+            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công. Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất. Bạn sẽ nhận được thông báo khi có kết quả.'
           });
         } else if (extractedIdCardInfo && 
           extractedIdCardInfo.idNumber && 
           extractedIdCardInfo.fullName && 
-          extractedIdCardInfo.dateOfBirth && 
-          extractedIdCardInfo.address) {
+          extractedIdCardInfo.dateOfBirth) {
           setResult({
             success: true,
             message: 'Yêu cầu xác minh đã được gửi',
-            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Moderator sẽ xử lý trong thời gian sớm nhất.'
+            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất.'
           });
         } else {
           setResult({
             success: true,
             message: 'Yêu cầu xác minh đã được gửi',
-            details: 'Yêu cầu xác minh đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.'
+            details: 'Yêu cầu xác minh đã được gửi thành công. Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất.'
           });
         }
       } else {
         setResult({ success: false, message: 'Không có kết quả xác minh', details: 'Vui lòng thử lại.' });
       }
-      setStep(4);
+      setStep(3);
       setFailedStep(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Có lỗi xảy ra khi xử lý ảnh');
-      setFailedStep(3);
+      setFailedStep(2);
     } finally {
       setIsLoading(false);
     }
@@ -127,11 +143,9 @@ export function AccountVerification({ className }: AccountVerificationProps) {
 
   const handleBack = () => setStep((s) => Math.max(1, s - 1));
   const handleRestart = () => {
-    setStep(1);
+    setStep(1); // Bắt đầu lại từ step 1 (PhoneVerification)
     setPhoneNumber('');
-    setOtp('');
     setImages([]);
-    setSessionInfo('');
     setResult(null);
     setError('');
     setFailedStep(null);
@@ -139,51 +153,36 @@ export function AccountVerification({ className }: AccountVerificationProps) {
 
   return (
     <div className={className}>
-      {/* Firebase compat scripts for inline verification */}
-      <Script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" strategy="afterInteractive" />
-      <Script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" strategy="afterInteractive" />
-      <div id="recaptcha-container" />
-
-      {/* Inline quick guide */}
-      <div className="mb-4">
-        <VerificationScript />
-      </div>
+      <VerificationScript />
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Xác minh tài khoản</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Xác minh tài khoản</h2>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+            {error}
+          </div>
         )}
 
         {step === 1 && (
-          <PhoneVerification
-            onSuccess={handleSendOTP}
+          <PhoneVerification 
+            onSuccess={handlePhoneVerified}
+            title="Xác minh số điện thoại"
+            description="Nhập số điện thoại và mã OTP để xác minh"
           />
         )}
 
         {step === 2 && (
-          <OTPInput
-            otp={otp}
-            setOtp={setOtp}
-            onNext={handleVerifyOTP}
-            onBack={handleBack}
-            isLoading={isLoading}
-          />
-        )}
-
-        {step === 3 && (
           <ImageUpload
             images={images}
             setImages={setImages}
             onNext={handleSubmitVerification}
             onBack={handleBack}
             isLoading={isLoading}
-            phoneNumber={phoneNumber}
           />
         )}
 
-        {step === 4 && (
+        {step === 3 && (
           <ResultDisplay
             result={result}
             onRestart={handleRestart}
