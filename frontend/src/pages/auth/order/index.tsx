@@ -1308,7 +1308,6 @@ const updateRentalDates = useCallback(
             .catch(() => {});
         }
       }
-
       // KẾT THÚC XỬ LÝ
       const successCount = itemsToProcess.length - failedItemIds.length;
 
