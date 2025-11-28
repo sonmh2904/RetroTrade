@@ -11,12 +11,9 @@ import {
   XCircle,
   PenTool,
   ChevronLeft,
-  Home,
-  ShoppingBag,
   AlertCircle,
   Loader2,
   Eye,
-  ChevronRight,
   UserCheck,
   Clock,
   DollarSign,
@@ -1137,12 +1134,13 @@ export default function SignContractPage() {
         )}
 
         <div className="text-center mt-12">
-          <Link href={`/auth/my-orders/${orderId}`}>
-            <button className="px-8 py-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium flex items-center gap-2 mx-auto shadow-sm hover:shadow-md">
-              <ChevronLeft className="w-5 h-5" />
-              Quay lại chi tiết đơn hàng
-            </button>
-          </Link>
+          <button
+            onClick={() => router.back()}
+            className="px-8 py-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium flex items-center gap-2 mx-auto shadow-sm hover:shadow-md"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Quay lại
+          </button>
         </div>
       </div>
     </div>
