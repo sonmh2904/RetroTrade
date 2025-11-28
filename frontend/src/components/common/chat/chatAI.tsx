@@ -26,6 +26,9 @@ interface ProductSuggestion {
   fullAddress?: string;
   estimatedDistance?: number;
   images?: string[];
+  isBest?: boolean;
+  reasons?: string[];
+  score?: number;
 }
 
 interface AIMessage {
@@ -35,9 +38,10 @@ interface AIMessage {
   timestamp: Date;
   productSuggestions?: ProductSuggestion[];
   orderId?: string;
-  products?: ProductSuggestion[]; 
-  recommendations?: ProductSuggestion[]; 
-  bestProduct?: ProductSuggestion; 
+  products?: ProductSuggestion[];
+  recommendations?: ProductSuggestion[];
+  bestProduct?: ProductSuggestion;
+  bestProducts?: ProductSuggestion[];
 }
 
 interface ChatAIProps {
@@ -96,86 +100,146 @@ const ChatAI: React.FC<ChatAIProps> = ({
     }
   }, [isOpen, user, aiSessionLoaded]);
 
-  // Helper để clean markdown * (loại bỏ italic/strong)
   const cleanMarkdown = useCallback((text: string) => {
     return text
-      .replace(/\*\*(.*?)\*\*/g, "$1") // Bold
-      .replace(/\*(.*?)\*/g, "$1") // Italic
-      .replace(/__(.*?)__/g, "$1") // Underline
-      .replace(/`(.*?)`/g, "$1"); // Inline code
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
+      .replace(/__(.*?)__/g, "$1")
+      .replace(/`(.*?)`/g, "$1");
   }, []);
 
-  // Helper render product suggestions (clickable links)
   const renderProductSuggestions = useCallback(
     (
       suggestions: ProductSuggestion[],
-      // keep param name but now only used to render product cards (no "Gợi ý" label)
       type: "products" | "best" = "products"
     ) => {
       if (!suggestions?.length) return null;
 
-      // Render only product cards (no "Gợi ý" header)
       return (
-        <div className="mt-3 p-0 rounded-lg">
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {suggestions.slice(0, 5).map((p, i) => (
-              <button
-                key={p.itemId || i}
-                onClick={() => {
-                  const itemIdStr = safeToString(
-                    (p as unknown as RawRecord).itemId ?? p.itemId
+        <div className="space-y-2 max-h-60 overflow-y-auto p-3 bg-gray-800 rounded-lg">
+          {suggestions.slice(0, 5).map((p, i) => (
+            <button
+              key={p.itemId || i}
+              onClick={() => {
+                const itemIdStr = normalizeId(p.itemId);
+                if (itemIdStr)
+                  router.push(
+                    `/products/details?id=${encodeURIComponent(itemIdStr)}`
                   );
-                  if (itemIdStr)
-                    router.push(
-                      `/products/details?id=${encodeURIComponent(itemIdStr)}`
-                    );
-                }}
-                className="w-full text-left p-3 bg-gray-700/50 rounded-lg hover:bg-gray-600/70 transition-all border border-gray-600 hover:border-blue-500 group"
-              >
-                <div className="flex gap-3">
-                  {p.images?.[0] && (
+              }}
+              className={`w-full text-left p-3 rounded-lg hover:bg-gray-600/70 transition-all border ${
+                p.isBest
+                  ? "border-yellow-500 bg-yellow-900/20"
+                  : "border-gray-600 hover:border-blue-500 group"
+              }`}
+            >
+              <div className="flex gap-3">
+                <div className="relative w-16 h-16 flex-shrink-0 rounded overflow-hidden bg-gray-700">
+                  {p.images?.[0] ? (
                     <Image
                       src={p.images[0]}
                       alt={p.title}
-                      width={64} // w-16
-                      height={64} // h-16
-                      className="rounded object-cover flex-shrink-0"
+                      fill
+                      className="object-cover"
+                      sizes="64px"
                       onError={(e) => {
-                        // Next/Image không cho thay đổi style trực tiếp
-                        // → cần state để ẩn ảnh khi lỗi
                         e.currentTarget.style.display = "none";
+                        const placeholder = e.currentTarget.parentElement;
+                        if (placeholder) {
+                          placeholder.innerHTML = `
+                            <svg viewBox="0 0 64 64" fill="none" class="w-full h-full p-2">
+                              <rect width="64" height="64" rx="8" fill="#4B5563"/>
+                              <path d="M20 20h24v24H20z" fill="#9CA3AF"/>
+                              <circle cx="32" cy="32" r="8" fill="#6B7280"/>
+                            </svg>
+                          `;
+                        }
                       }}
                     />
+                  ) : (
+                    <svg
+                      viewBox="0 0 64 64"
+                      fill="none"
+                      className="w-full h-full p-2"
+                    >
+                      <rect width="64" height="64" rx="8" fill="#4B5563" />
+                      <path d="M20 20h24v24H20z" fill="#9CA3AF" />
+                      <circle cx="32" cy="32" r="8" fill="#6B7280" />
+                    </svg>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-white truncate group-hover:text-blue-400 transition-colors">
-                      {p.title}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={`font-medium truncate transition-colors ${
+                      p.isBest
+                        ? "text-yellow-300"
+                        : "text-white group-hover:text-blue-400"
+                    }`}
+                  >
+                    {p.title}
+                  </div>
+                  <div className="text-green-400 text-sm font-semibold mt-1">
+                    {p.price?.toLocaleString("vi-VN")}₫
+                  </div>
+                  {p.fullAddress && (
+                    <div className="text-gray-400 text-xs mt-1 truncate">
+                      Location: {p.fullAddress}
                     </div>
-                    <div className="text-green-400 text-sm font-semibold mt-1">
-                      {p.price?.toLocaleString("vi-VN")}₫
+                  )}
+                  {p.isBest && p.reasons && (
+                    <div className="text-xs text-yellow-200 mt-1">
+                      {p.reasons.slice(0, 2).join(" | ")}
                     </div>
-                    {p.fullAddress && (
-                      <div className="text-gray-400 text-xs mt-1 truncate">
-                        📍 {p.fullAddress}
-                      </div>
-                    )}
-                    {p.estimatedDistance && (
-                      <div className="text-blue-400 text-xs mt-1">
-                        📏 Khoảng cách: {p.estimatedDistance}km
-                      </div>
-                    )}
-                    <div className="text-blue-400 text-xs mt-2 font-medium">
-                      👆 Click để xem chi tiết →
-                    </div>
+                  )}
+                  <div
+                    className={`text-xs mt-2 font-medium ${
+                      p.isBest ? "text-yellow-300" : "text-blue-400"
+                    }`}
+                  >
+                    Click để xem chi tiết →
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
+              </div>
+            </button>
+          ))}
         </div>
       );
     },
     [router]
+  );
+
+  // === HỢP NHẤT bestProduct & bestProducts THÀNH 1 MẢNG DUY NHẤT ===
+  const renderBestProducts = useCallback(
+    (msg: AIMessage) => {
+      const bestItems: ProductSuggestion[] =
+        msg.bestProducts && msg.bestProducts.length > 0
+          ? msg.bestProducts
+          : msg.bestProduct
+          ? [msg.bestProduct]
+          : [];
+
+      if (bestItems.length === 0) return null;
+
+      return (
+        <div className="mt-3 p-3 bg-gradient-to-r from-yellow-900/50 to-orange-900/50 rounded-lg border-2 border-yellow-500">
+          <p className="text-xs font-bold text-yellow-300 mb-2">
+            {bestItems.length === 1
+              ? "SẢN PHẨM TỐT NHẤT"
+              : `TOP ${bestItems.length} SẢN PHẨM TỐT NHẤT`}
+          </p>
+
+          {bestItems[0]?.reasons && bestItems[0].reasons.length > 0 && (
+            <p className="text-xs text-yellow-200 mb-3">
+              Lý do: {bestItems[0].reasons.join(", ")}
+              {bestItems[0].score ? ` (Score: ${bestItems[0].score}/100)` : ""}
+            </p>
+          )}
+
+          {renderProductSuggestions(bestItems, "best")}
+        </div>
+      );
+    },
+    [renderProductSuggestions]
   );
 
   type RawRecord = Record<string, unknown>;
@@ -260,17 +324,30 @@ const ChatAI: React.FC<ChatAIProps> = ({
     const images: string[] = Array.isArray(rawImages)
       ? (rawImages as unknown[])
           .map((img) => {
-            if (typeof img === "string") return img;
+            if (typeof img === "string") return img.trim();
             if (isObject(img))
               return (
-                ((img as RawRecord).Url as string) ||
-                ((img as RawRecord).url as string) ||
+                ((img as RawRecord).Url as string)?.trim() ||
+                ((img as RawRecord).url as string)?.trim() ||
                 ""
               );
             return "";
           })
-          .filter(Boolean)
+          .filter((url) => url && url.length > 0)
       : [];
+
+    const isBest = (p as RawRecord).isBest === true;
+    const reasons = Array.isArray((p as RawRecord).reasons)
+      ? ((p as RawRecord).reasons as string[])
+      : [];
+
+    const scoreRaw = (p as RawRecord).score;
+    let score: number | undefined;
+    if (typeof scoreRaw === "number") {
+      score = scoreRaw;
+    } else {
+      score = undefined;
+    }
 
     const cityOrDistance = getStr("City") || getStr("city") || "";
 
@@ -284,6 +361,9 @@ const ChatAI: React.FC<ChatAIProps> = ({
       fullAddress,
       estimatedDistance,
       images,
+      isBest,
+      reasons,
+      score,
     };
   };
 
@@ -337,6 +417,11 @@ const ChatAI: React.FC<ChatAIProps> = ({
             if (mm.bestProduct) {
               mm.bestProduct = normalizeProduct(mm.bestProduct);
             }
+            if (Array.isArray(mm.bestProducts)) {
+              mm.bestProducts = mm.bestProducts.map((x) =>
+                normalizeProduct(x)
+              ) as unknown;
+            }
             const safeRole = (mm.role === "user" ? "user" : "model") as
               | "user"
               | "model";
@@ -362,6 +447,9 @@ const ChatAI: React.FC<ChatAIProps> = ({
                 ? (mm.recommendations as ProductSuggestion[])
                 : undefined,
               bestProduct: mm.bestProduct as ProductSuggestion | undefined,
+              bestProducts: Array.isArray(mm.bestProducts)
+                ? (mm.bestProducts as ProductSuggestion[])
+                : undefined,
               orderId: typeof mm.orderId === "string" ? mm.orderId : undefined,
             } as AIMessage;
           });
@@ -404,20 +492,12 @@ const ChatAI: React.FC<ChatAIProps> = ({
           return (products as unknown[]).map((p) => normalizeProduct(p));
         };
 
-        // Format productSuggestions từ AI response để đảm bảo itemId là string
-        const formatSuggestions = (
-          suggestions: unknown
-        ): ProductSuggestion[] => {
-          if (!Array.isArray(suggestions)) return [];
-          return (suggestions as unknown[]).map((s) => normalizeProduct(s));
-        };
-
         const aiMsg: AIMessage = {
           id: (Date.now() + 1).toString(),
           role: "model",
-          content: cleanMarkdown(aiResponseData.content || aiResponseData), // Clean markdown
+          content: cleanMarkdown(aiResponseData.content || aiResponseData),
           timestamp: new Date(),
-          productSuggestions: formatSuggestions(
+          productSuggestions: formatProductsForDisplay(
             aiResponseData?.productSuggestions ?? []
           ),
           orderId: aiResponseData.orderId,
@@ -428,6 +508,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
           bestProduct: data.data.bestProduct
             ? formatProductsForDisplay([data.data.bestProduct])[0]
             : undefined,
+          bestProducts: formatProductsForDisplay(data.data?.bestProducts ?? []),
         };
 
         if (aiMsg.orderId) {
@@ -518,6 +599,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
         isEmbedded ? "border-0 rounded-none" : ""
       }`}
     >
+      {/* Header */}
       {!isEmbedded && (
         <div className="flex items-center justify-between p-3 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center gap-3">
@@ -551,7 +633,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
               </div>
               <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 bg-green-500" />
             </div>
-            <div className="text-white font-medium text-sm">AI Assistant</div>
+            <div className="text-white font-medium text-sm">RetroTrade AI</div>
           </div>
           <button
             onClick={onClose}
@@ -572,6 +654,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
         </div>
       )}
 
+      {/* Messages */}
       <div
         className={`flex-1 overflow-y-auto p-4 space-y-3 bg-gray-900 ${
           isEmbedded ? "p-0" : ""
@@ -584,7 +667,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
         ) : sortedAiMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center">
-              <div className="text-4xl mb-2">🤖</div>
+              <div className="text-4xl mb-2">Robot Face</div>
               <div className="text-sm">
                 Bắt đầu chat với AI để tư vấn sản phẩm!
               </div>
@@ -610,16 +693,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
                     ? cleanMarkdown(msg.content)
                     : msg.content}
                 </div>
-                {/* Render bestProduct nếu có (1 cái duy nhất) */}
-                {msg.bestProduct && (
-                  <div className="mt-3 p-3 bg-gradient-to-r from-yellow-900/50 to-orange-900/50 rounded-lg border-2 border-yellow-500">
-                    <p className="text-xs font-bold text-yellow-300 mb-2">
-                      ⭐ SẢN PHẨM TỐT NHẤT
-                    </p>
-                    {renderProductSuggestions([msg.bestProduct], "best")}
-                  </div>
-                )}
-                {/* Only show products (actual search results) */}
+                {renderBestProducts(msg)}
                 {msg.products &&
                   renderProductSuggestions(msg.products, "products")}
                 {msg.orderId && (
@@ -627,6 +701,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
                     Order ID: {msg.orderId} (Đã tạo thành công!)
                   </div>
                 )}
+
                 <small className="opacity-75 mt-1 block text-xs">
                   {new Date(msg.timestamp).toLocaleTimeString()}
                 </small>
@@ -637,6 +712,7 @@ const ChatAI: React.FC<ChatAIProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <div
         className={`p-3 bg-gray-800 border-t border-gray-700 relative ${
           isEmbedded ? "border-t-0" : ""

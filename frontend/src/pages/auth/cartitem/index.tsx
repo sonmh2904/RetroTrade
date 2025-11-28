@@ -41,6 +41,7 @@ import { setCartItems, type CartItem } from "@/store/cart/cartReducer";
 import PopupModal from "@/components/ui/common/PopupModal";
 import { getCurrentServiceFee } from "@/services/serviceFee/serviceFee.api";
 import RentalDatePicker from "@/components/ui/common/RentalDatePicker";
+import { getBillableUnits } from "@/utils/rentalTimeCalculator";
 
 
 export default function CartPage() {
@@ -508,6 +509,7 @@ export default function CartPage() {
   };
 
   
+  // Wrapper function để tương thích với code cũ, sử dụng utility chung
   const calculateRentalDuration = (
     startDate?: string,
     endDate?: string,
@@ -515,33 +517,29 @@ export default function CartPage() {
   ) => {
     if (!startDate || !endDate) return 1;
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
+    // Tạo item tạm để sử dụng utility function
+    const tempItem: CartItem = {
+      _id: "",
+      itemId: "",
+      title: "",
+      shortDescription: "",
+      basePrice: 0,
+      depositAmount: 0,
+      currency: "VND",
+      availableQuantity: 0,
+      category: { _id: null, CategoryName: "" },
+      owner: { _id: "", fullName: "", email: "" },
+      condition: "",
+      priceUnit: priceUnit || "",
+      quantity: 1,
+      rentalStartDate: startDate,
+      rentalEndDate: endDate,
+      createdAt: "",
+      updatedAt: "",
+    };
 
-    // Calculate based on price unit
-    switch (priceUnit?.toLowerCase()) {
-      case "giờ":
-      case "hour":
-      case "hours":
-        return Math.ceil(diffTime / (1000 * 60 * 60)) || 1;
-      case "ngày":
-      case "day":
-      case "days":
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-      case "tuần":
-      case "week":
-      case "weeks":
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7)) || 1;
-      case "tháng":
-      case "month":
-      case "months":
-        // Approximate month calculation (30 days)
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30)) || 1;
-      default:
-        // Default to days if unit is not recognized
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-    }
+    const billableUnits = getBillableUnits(tempItem);
+    return billableUnits || 1; // Fallback về 1 nếu không tính được
   };
 
 

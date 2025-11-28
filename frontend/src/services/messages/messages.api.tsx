@@ -275,7 +275,7 @@ export const connectSocket = (tokenFromRedux?: string): Socket => {
     auth: {
       token: authToken,
     },
-    transports: SOCKET_CONFIG.TRANSPORTS,
+    transports: [...SOCKET_CONFIG.TRANSPORTS],
     reconnection: true,
     reconnectionAttempts: SOCKET_CONFIG.RECONNECTION_ATTEMPTS,
     reconnectionDelay: SOCKET_CONFIG.RECONNECTION_DELAY,

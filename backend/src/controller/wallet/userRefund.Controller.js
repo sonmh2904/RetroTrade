@@ -56,7 +56,7 @@ async function refundOrder(orderId, session = null) {
         await ownerWallet.save({ session });
 
         // Tạo giao dịch lịch sử (thêm ordered:true và orderCode)
-        await WalletTransaction.create([
+        const adminTxs = await WalletTransaction.create([
             {
                 walletId: adminWallet._id,
                 typeId: "payout_renter_refund",
@@ -77,7 +77,7 @@ async function refundOrder(orderId, session = null) {
             },
         ], { session, ordered: true });
 
-        await WalletTransaction.create([
+        const renterTxs = await WalletTransaction.create([
             {
                 walletId: renterWallet._id,
                 typeId: "refund_deposit",
@@ -89,7 +89,7 @@ async function refundOrder(orderId, session = null) {
             },
         ], { session, ordered: true });
 
-        await WalletTransaction.create([
+        const ownerTxs = await WalletTransaction.create([
             {
                 walletId: ownerWallet._id,
                 typeId: "owner_payment",

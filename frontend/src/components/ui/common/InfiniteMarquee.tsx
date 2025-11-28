@@ -1,7 +1,7 @@
 // components/InfiniteMarquee.tsx
 import React from "react";
 import styled from "styled-components";
-
+import Link from "next/link";
 const InfiniteMarquee = () => {
   const items = [
     { emoji: "New", text: "iPhone 13 Pro chỉ 8tr" },
@@ -46,8 +46,15 @@ const InfiniteMarquee = () => {
 
         {/* CTA Buttons */}
         <CTAButtons>
-          <ButtonPrimary>Đăng ký miễn phí</ButtonPrimary>
-          <ButtonOutline>Tìm hiểu thêm</ButtonOutline>
+          <div className="flex gap-4">
+            <Link href="/auth/register">
+              <ButtonPrimary>Đăng ký miễn phí</ButtonPrimary>
+            </Link>
+
+            <Link href="/about">
+              <ButtonOutline>Tìm hiểu thêm</ButtonOutline>
+            </Link>
+          </div>
         </CTAButtons>
       </Container>
     </StyledSection>

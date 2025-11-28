@@ -11,12 +11,9 @@ import {
   XCircle,
   PenTool,
   ChevronLeft,
-  Home,
-  ShoppingBag,
   AlertCircle,
   Loader2,
   Eye,
-  ChevronRight,
   UserCheck,
   Clock,
   DollarSign,
@@ -57,7 +54,7 @@ interface SignatureResponse {
 }
 
 interface ContractTemplate {
-  _id: string;
+  _id?: string;
   templateName: string;
   description?: string;
   headerContent?: string;
@@ -224,7 +221,7 @@ export default function SignContractPage() {
         const availableTpls: ContractTemplate[] = Array.isArray(
           contractRes.availableTemplates
         )
-          ? contractRes.availableTemplates
+          ? contractRes.availableTemplates as ContractTemplate[]
           : [];
         setTemplates(availableTpls);
         if (availableTpls.length === 0) {
@@ -613,7 +610,7 @@ export default function SignContractPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        <nav className="mb-6 flex items-center space-x-2 text-sm text-gray-600 bg-white rounded-xl p-3 shadow-sm">
+        {/* <nav className="mb-6 flex items-center space-x-2 text-sm text-gray-600 bg-white rounded-xl p-3 shadow-sm">
           <Link
             href="/home"
             className="hover:text-blue-600 flex items-center gap-1"
@@ -631,7 +628,7 @@ export default function SignContractPage() {
           </Link>
           <ChevronRight className="w-4 h-4 text-gray-400" />
           <span className="font-medium text-blue-600">Ký hợp đồng</span>
-        </nav>
+        </nav> */}
 
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 mb-6 overflow-hidden">
           <div className="absolute top-4 right-4 bg-gradient-to-r from-blue-500 to-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">
@@ -1137,12 +1134,13 @@ export default function SignContractPage() {
         )}
 
         <div className="text-center mt-12">
-          <Link href={`/auth/order/${orderId}`}>
-            <button className="px-8 py-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium flex items-center gap-2 mx-auto shadow-sm hover:shadow-md">
-              <ChevronLeft className="w-5 h-5" />
-              Quay lại chi tiết đơn hàng
-            </button>
-          </Link>
+          <button
+            onClick={() => router.back()}
+            className="px-8 py-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-medium flex items-center gap-2 mx-auto shadow-sm hover:shadow-md"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Quay lại
+          </button>
         </div>
       </div>
     </div>

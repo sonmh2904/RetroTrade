@@ -134,18 +134,26 @@ const AddProductPage: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  const prevUserAddressesRef = useRef<UserAddress[]>([]);
+
   useEffect(() => {
-    if (userAddresses.length > 0 && !address && !city && !district) {
-      const defaultAddress = userAddresses.find(
-        (addr: UserAddress) => addr.IsDefault
-      );
+    // Chỉ chạy khi userAddresses thay đổi từ rỗng → có dữ liệu
+    if (
+      prevUserAddressesRef.current.length === 0 &&
+      userAddresses.length > 0 &&
+      !address.trim() &&
+      !city.trim() &&
+      !district.trim()
+    ) {
+      const defaultAddress = userAddresses.find((addr) => addr.IsDefault);
       if (defaultAddress) {
         setAddress(defaultAddress.Address || "");
         setCity(defaultAddress.City || "");
         setDistrict(defaultAddress.District || "");
       }
     }
-  }, [userAddresses]);
+    prevUserAddressesRef.current = userAddresses;
+  }, [userAddresses, address, city, district]);
 
   useEffect(() => {
     fetchInitialData();

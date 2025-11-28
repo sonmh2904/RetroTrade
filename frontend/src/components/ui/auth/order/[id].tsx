@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  getOrderDetails,
-
-} from "@/services/auth/order.api";
+import { getOrderDetails } from "@/services/auth/order.api";
 import { format } from "date-fns";
 import {
   Package,
@@ -74,17 +71,17 @@ const getErrorMessage = (error: unknown): string => {
   return "Đã xảy ra lỗi";
 };
 
-
-
 const getOrderStatusLabel = (status: string): string => {
   const statusMap: Record<string, string> = {
     pending: "Chờ xác nhận",
     confirmed: "Đã xác nhận",
+    delivery: "Đã giao hàng",
+    received: "Đã nhận hàng",
     progress: "Đang thuê",
     returned: "Đã trả hàng",
     completed: "Hoàn tất",
     cancelled: "Đã hủy",
-    disputed: "Tranh chấp",
+    disputed: "Khiếu nại",
   };
   return statusMap[status.toLowerCase()] || status;
 };
@@ -112,9 +109,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [pendingAction] = useState<() => Promise<void>>(
-    () => async () => {}
-  );
+  const [pendingAction] = useState<() => Promise<void>>(() => async () => {});
   const [isPaying, setIsPaying] = useState(false); //Thanh toan
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -162,68 +157,68 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   }, []);
 
   // Hàm thanh toán ví - giờ đã an toàn 100%
-const handlePayWithWallet = async () => {
-  if (isPaying || loadingBalance || !order) return;
+  const handlePayWithWallet = async () => {
+    if (isPaying || loadingBalance || !order) return;
 
-  const requiredAmount =
-    (order.finalAmount ?? 0) +
-    (order.depositAmount ?? 0) +
-    (order.serviceFee ?? 0);
-  const shortage = requiredAmount - walletBalance;
+    const requiredAmount =
+      (order.finalAmount ?? 0) +
+      (order.depositAmount ?? 0) +
+      (order.serviceFee ?? 0);
+    const shortage = requiredAmount - walletBalance;
 
-  // Thiếu tiền → hiện modal đẹp
-  if (walletBalance < requiredAmount) {
-    setInsufficientModal({
-      isOpen: true,
-      requiredAmount,
-      shortage,
-    });
-    return;
-  }
-
-  // Đủ tiền → hiện modal xác nhận
-  setConfirmPayModal({
-    isOpen: true,
-    requiredAmount,
-  });
-};
-
-  // Hàm thực hiện thanh toán (gọi khi người dùng bấm "Xác nhận" trong modal)
-const executeWalletPayment = async () => {
-  if (isPaying || !order) return;
-
-  setIsPaying(true);
-  setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
-
-  try {
-    await payOrderWithWallet(order._id);
-    toast.success("Thanh toán thành công bằng ví!");
-    await loadOrder();
-
-    const updated = await getMyWallet();
-    setWalletBalance(updated.balance ?? 0);
-  } catch (error: unknown) {
-    const msg = getErrorMessage(error) || "Thanh toán thất bại";
-    toast.error(msg);
-
-    if (
-      msg.toLowerCase().includes("không đủ") ||
-      msg.toLowerCase().includes("insufficient")
-    ) {
-      const required =
-        (order.finalAmount ?? 0) +
-        (order.depositAmount ?? 0) +
-        (order.serviceFee ?? 0);
+    // Thiếu tiền → hiện modal đẹp
+    if (walletBalance < requiredAmount) {
       setInsufficientModal({
         isOpen: true,
-        requiredAmount: required,
-        shortage: required - walletBalance,
+        requiredAmount,
+        shortage,
       });
+      return;
     }
-  } finally {
-    setIsPaying(false);
-  }
-};
+
+    // Đủ tiền → hiện modal xác nhận
+    setConfirmPayModal({
+      isOpen: true,
+      requiredAmount,
+    });
+  };
+
+  // Hàm thực hiện thanh toán (gọi khi người dùng bấm "Xác nhận" trong modal)
+  const executeWalletPayment = async () => {
+    if (isPaying || !order) return;
+
+    setIsPaying(true);
+    setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
+
+    try {
+      await payOrderWithWallet(order._id);
+      toast.success("Thanh toán thành công bằng ví!");
+      await loadOrder();
+
+      const updated = await getMyWallet();
+      setWalletBalance(updated.balance ?? 0);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error) || "Thanh toán thất bại";
+      toast.error(msg);
+
+      if (
+        msg.toLowerCase().includes("không đủ") ||
+        msg.toLowerCase().includes("insufficient")
+      ) {
+        const required =
+          (order.finalAmount ?? 0) +
+          (order.depositAmount ?? 0) +
+          (order.serviceFee ?? 0);
+        setInsufficientModal({
+          isOpen: true,
+          requiredAmount: required,
+          shortage: required - walletBalance,
+        });
+      }
+    } finally {
+      setIsPaying(false);
+    }
+  };
 
   const loadOrder = async () => {
     setLoading(true);
@@ -262,6 +257,8 @@ const executeWalletPayment = async () => {
       </div>
     );
   }
+  console.log("Dispute RAW:", order.disputeId);
+  console.log("Type:", typeof order.disputeId);
 
   const timelineSteps: TimelineStep[] = [
     {
@@ -279,6 +276,22 @@ const executeWalletPayment = async () => {
       current: order.orderStatus === "confirmed",
     },
     {
+      status: "delivery",
+      label: "Đang giao",
+      active: ["confirmed", "progress", "completed"].includes(
+        order.orderStatus
+      ),
+      current: order.orderStatus === "delivery",
+    },
+    {
+      status: "received",
+      label: "Đã nhận hàng",
+      active: ["confirmed", "progress", "completed"].includes(
+        order.orderStatus
+      ),
+      current: order.orderStatus === "received",
+    },
+    {
       status: "progress",
       label: "Đang thuê",
       active: ["progress", "returned", "completed"].includes(order.orderStatus),
@@ -292,7 +305,7 @@ const executeWalletPayment = async () => {
     },
     {
       status: "disputed",
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       active: order.orderStatus === "disputed",
       current: order.orderStatus === "disputed",
       cancelled: false,
@@ -371,60 +384,64 @@ const executeWalletPayment = async () => {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Package className="w-6 h-6 text-blue-600" />
-                Sản phẩm thuê Demo
-              </h2>
-              <div className="flex gap-6 items-start">
-                <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
-                  {order.itemSnapshot.images[0] ? (
-                    <Image
-                      src={order.itemSnapshot.images[0] || ""}
-                      alt={order.itemSnapshot.title || "Ảnh sản phẩm"}
-                      width={160}
-                      height={160}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Package className="w-10 h-10 text-gray-400 m-auto" />
-                  )}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <h3 className="font-semibold text-gray-800">
-                    {order.itemSnapshot.title}
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    Số lượng: <strong>{order.unitCount} cái</strong>
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Giá thuê:{" "}
-                    <strong>
-                      {order.itemSnapshot.basePrice.toLocaleString("vi-VN")}₫/
-                      {getUnitName(order.itemSnapshot.priceUnit)}
-                    </strong>
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Cọc:{" "}
-                    <strong>
-                      {(
-                        order.depositAmount ?? 0 / order.unitCount
-                      ).toLocaleString("vi-VN")}
-                      ₫/cái
-                    </strong>
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Thời gian thuê:{" "}
-                    <strong>
-                      {order.rentalDuration} {order.rentalUnit}
-                    </strong>
-                  </p>
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <Clock className="w-4 h-4 text-emerald-600" />
-                    {format(new Date(order.startAt), "dd/MM/yyyy HH:mm")} →{" "}
-                    {format(new Date(order.endAt), "dd/MM/yyyy HH:mm")}
+              <Link href={`/products/details?id=${order.itemId}`}>
+                <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                  <Package className="w-6 h-6 text-blue-600" />
+                  Sản phẩm thuê Demo
+                </h2>
+                <div className="flex gap-6 items-start">
+                  <div className="w-40 h-40 bg-gray-200 border-2 border-dashed rounded-xl overflow-hidden flex-shrink-0">
+                    {order.itemSnapshot.images[0] ? (
+                      <Image
+                        src={order.itemSnapshot.images[0] || ""}
+                        alt={order.itemSnapshot.title || "Ảnh sản phẩm"}
+                        width={160}
+                        height={160}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Package className="w-10 h-10 text-gray-400 m-auto" />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <h3 className="font-semibold text-gray-800">
+                      {order.itemSnapshot.title}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Số lượng: <strong>{order.unitCount} cái</strong>
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Giá thuê:{" "}
+                      <strong>
+                        {order.itemSnapshot.basePrice.toLocaleString("vi-VN")}₫/
+                        {getUnitName(order.itemSnapshot.priceUnit)}
+                      </strong>
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Cọc:{" "}
+                      <strong>
+                        {(
+                          order.depositAmount ?? 0 / order.unitCount
+                        ).toLocaleString("vi-VN")}
+                        ₫/cái
+                      </strong>
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Thời gian thuê:{" "}
+                      <strong>
+                        {order.rentalDuration} {order.rentalUnit}
+                      </strong>
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Clock className="w-4 h-4 text-emerald-600" />
+                      {format(
+                        new Date(order.startAt),
+                        "dd/MM/yyyy HH:mm"
+                      )} → {format(new Date(order.endAt), "dd/MM/yyyy HH:mm")}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             </div>
 
             {/* User Info */}
@@ -594,7 +611,7 @@ const executeWalletPayment = async () => {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-orange-700 mb-1">
-                      Đang tranh chấp
+                      Đang Khiếu nại
                     </p>
                     <p className="text-xs text-orange-600 mb-3">
                       {format(new Date(order.updatedAt), "dd/MM/yyyy HH:mm")}
@@ -613,11 +630,11 @@ const executeWalletPayment = async () => {
                         className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
                       >
                         <Eye className="w-4 h-4" />
-                        Xem chi tiết tranh chấp
+                        Xem chi tiết Khiếu nại
                       </button>
                     ) : (
                       <p className="text-xs text-orange-500">
-                        Đang tải thông tin tranh chấp...
+                        Đang tải thông tin Khiếu nại...
                       </p>
                     )}
                   </div>
@@ -1000,69 +1017,58 @@ const executeWalletPayment = async () => {
                 </div>
               )}
             </div>
-            {/* Hợp đồng */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <FileText className="w-6 h-6 text-blue-600" />
-                Hợp đồng thuê
-              </h2>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-700">Hợp đồng</span>
-                <span
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-        ${
-          order.isContractSigned
-            ? "bg-green-100 text-green-700"
-            : "bg-red-100 text-red-700"
-        }`}
-                >
-                  {order.isContractSigned ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Đã ký
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-4 h-4" />
-                      Chưa ký
-                    </>
-                  )}
-                </span>
+            {/* Hợp đồng - CHỈ HIỆN KHI ĐƠN HÀNG > 2.000.000₫ */}
+            {order.totalAmount > 2_000_000 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-blue-600" />
+                  Hợp đồng thuê
+                </h2>
+
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-gray-700">Hợp đồng</span>
+                  <span
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+                      order.isContractSigned
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {order.isContractSigned ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Đã ký
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-4 h-4" />
+                        Chưa ký
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                {/* Nút ký hợp đồng - chỉ hiện khi chưa ký */}
+                {!order.isContractSigned && (
+                  <Link href={`/auth/contract/sign/${id}`}>
+                    <button className="w-full bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg flex items-center justify-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      Ký hợp đồng ngay
+                    </button>
+                  </Link>
+                )}
+
+                {/* Thông báo đã ký */}
+                {order.isContractSigned && (
+                  <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                    <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-5 h-5" />
+                      Hợp đồng đã được cả hai bên ký thành công
+                    </p>
+                  </div>
+                )}
               </div>
-
-              {/* Chỉ hiện nút ký khi: chưa ký + tổng tiền thuê > 2.000.000 ₫ */}
-              {!order.isContractSigned && order.totalAmount > 2_000_000 && (
-                <Link href={`/auth/contract/sign/${id}`}>
-                  <button className="mt-4 w-full bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg">
-                    Ký hợp đồng ngay
-                  </button>
-                </Link>
-              )}
-
-              {/* Thông báo khi đơn hàng dưới 2 triệu */}
-              {!order.isContractSigned && order.totalAmount <= 2_000_000 && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800 flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <span>
-                      Đơn hàng dưới <strong>2.000.000₫</strong> không yêu cầu ký
-                      hợp đồng điện tử. Bạn có thể giao dịch trực tiếp với người
-                      thuê.
-                    </span>
-                  </p>
-                </div>
-              )}
-
-              {/* Nếu đã ký rồi thì hiển thị thông tin */}
-              {order.isContractSigned && (
-                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <p className="text-sm text-emerald-800 flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>Hợp đồng đã được cả hai bên ký thành công.</span>
-                  </p>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Tiện ích */}
             <div className="bg-gray-50 rounded-2xl p-4 space-y-2">

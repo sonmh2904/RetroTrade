@@ -3,14 +3,20 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
-import { decodeToken } from '@/utils/jwtHelper';
+import { decodeToken } from "@/utils/jwtHelper";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
 import { Input } from "@/components/ui/common/input";
 import { Textarea } from "@/components/ui/common/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/common/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/common/dialog";
 import {
   AlertTriangle,
   CheckCircle,
@@ -23,7 +29,14 @@ import {
   ArrowLeft,
   FileText,
 } from "lucide-react";
-import { getDisputes, getDisputeById, assignDispute, unassignDispute, resolveDispute, type Dispute } from "@/services/moderator/disputeOrder.api";
+import {
+  getDisputes,
+  getDisputeById,
+  assignDispute,
+  unassignDispute,
+  resolveDispute,
+  type Dispute,
+} from "@/services/moderator/disputeOrder.api";
 import { getOrderDetails, type Order } from "@/services/auth/order.api";
 
 const REFUND_TARGET_OPTIONS = [
@@ -46,7 +59,7 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
   delivered: "Đã giao",
   completed: "Hoàn tất",
   cancelled: "Đã hủy",
-  disputed: "Đang tranh chấp",
+  disputed: "Đang Khiếu nại",
   refunded: "Đã hoàn tiền",
 };
 
@@ -76,6 +89,8 @@ export function DisputeManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // all, unassigned, assigned, assignedToMe
+  const [sortBy, setSortBy] = useState<string>("newest"); // newest, oldest, status
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -89,7 +104,9 @@ export function DisputeManagement() {
   // Resolve form state
   const [decision, setDecision] = useState("");
   const [notes, setNotes] = useState("");
-  const [refundTarget, setRefundTarget] = useState<"reporter" | "reported" | "">("");
+  const [refundTarget, setRefundTarget] = useState<
+    "reporter" | "reported" | ""
+  >("");
   const [refundPercentage, setRefundPercentage] = useState<string>("");
   const [unassignReason, setUnassignReason] = useState("");
 
@@ -99,18 +116,27 @@ export function DisputeManagement() {
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Dispute details for detail dialog
-  const [detailDisputeData, setDetailDisputeData] = useState<Dispute | null>(null);
+  const [detailDisputeData, setDetailDisputeData] = useState<Dispute | null>(
+    null
+  );
   const [loadingDetailData, setLoadingDetailData] = useState(false);
 
-  const orderTotalForRefund =
-    orderDetails?.totalAmount ??
-    (typeof disputeDetails?.orderId === "object"
-      ? disputeDetails?.orderId?.totalAmount
+  // Image modal state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+
+  // Tính tiền hoàn chỉ dựa trên tiền cọc (depositAmount), không động vào tổng tiền
+  const depositAmountForRefund =
+    orderDetails?.depositAmount ??
+    (typeof disputeDetails?.orderId === "object" &&
+    disputeDetails?.orderId !== null &&
+    "depositAmount" in disputeDetails.orderId
+      ? (disputeDetails.orderId as Order).depositAmount
       : 0) ??
     0;
   const computedRefundPreview =
-    refundPercentage && orderTotalForRefund
-      ? Math.round((orderTotalForRefund * Number(refundPercentage)) / 100)
+    refundPercentage && depositAmountForRefund
+      ? Math.round((depositAmountForRefund * Number(refundPercentage)) / 100)
       : 0;
 
   useEffect(() => {
@@ -122,7 +148,7 @@ export function DisputeManagement() {
     fetchDisputes();
     // Reset pagination when filter changes
     setPagination({ currentPage: 1, itemsPerPage: pagination.itemsPerPage });
-  }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, assigneeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchDisputes = async () => {
     setLoading(true);
@@ -136,9 +162,15 @@ export function DisputeManagement() {
       if (response.code === 200) {
         // Backend trả về { total, data } nên cần lấy response.data.data
         const disputeData = response.data as { data?: Dispute[] } | Dispute[];
-        setDisputes(Array.isArray(disputeData) ? disputeData : (Array.isArray(disputeData?.data) ? disputeData.data : []));
+        setDisputes(
+          Array.isArray(disputeData)
+            ? disputeData
+            : Array.isArray(disputeData?.data)
+            ? disputeData.data
+            : []
+        );
       } else {
-        setError(response.message || "Không thể tải danh sách tranh chấp");
+        setError(response.message || "Không thể tải danh sách Khiếu nại");
         toast.error(response.message || "Có lỗi xảy ra");
       }
     } catch (err) {
@@ -154,33 +186,36 @@ export function DisputeManagement() {
     try {
       const response = await assignDispute(disputeId);
       if (response.code === 200) {
-        toast.success("Đã nhận tranh chấp thành công");
+        toast.success("Đã nhận Khiếu nạithành công");
         fetchDisputes();
       } else {
-        toast.error(response.message || "Không thể nhận tranh chấp");
+        toast.error(response.message || "Không thể nhận Khiếu nại");
       }
     } catch (err) {
       console.error("Error assigning dispute:", err);
-      toast.error("Có lỗi xảy ra khi nhận tranh chấp");
+      toast.error("Có lỗi xảy ra khi nhận Khiếu nại");
     }
   };
 
   const handleUnassign = async () => {
     if (!selectedDispute) return;
     try {
-      const response = await unassignDispute(selectedDispute._id, unassignReason);
+      const response = await unassignDispute(
+        selectedDispute._id,
+        unassignReason
+      );
       if (response.code === 200) {
-        toast.success("Đã trả lại tranh chấp thành công");
+        toast.success("Đã trả lại Khiếu nạithành công");
         setUnassignDialog(false);
         setUnassignReason("");
         setSelectedDispute(null);
         fetchDisputes();
       } else {
-        toast.error(response.message || "Không thể trả lại tranh chấp");
+        toast.error(response.message || "Không thể trả lại Khiếu nại");
       }
     } catch (err) {
       console.error("Error unassigning dispute:", err);
-      toast.error("Có lỗi xảy ra khi trả lại tranh chấp");
+      toast.error("Có lỗi xảy ra khi trả lại Khiếu nại");
     }
   };
 
@@ -190,7 +225,9 @@ export function DisputeManagement() {
       // Get orderId from dispute - ensure it's always a string
       let orderIdValue: string | null = null;
       if (typeof dispute.orderId === "object" && dispute.orderId !== null) {
-        orderIdValue = dispute.orderId._id || null;
+        // Type guard: check if it's an Order-like object
+        const orderObj = dispute.orderId as { _id?: string };
+        orderIdValue = orderObj._id || null;
       } else if (typeof dispute.orderId === "string") {
         orderIdValue = dispute.orderId;
       }
@@ -223,10 +260,10 @@ export function DisputeManagement() {
     setResolveDialog(true);
     setOrderDetails(null);
     setDisputeDetails(null);
-     setDecision("");
-     setNotes("");
-     setRefundTarget("");
-     setRefundPercentage("");
+    setDecision("");
+    setNotes("");
+    setRefundTarget("");
+    setRefundPercentage("");
     await fetchOrderAndDisputeDetails(dispute);
   };
 
@@ -265,7 +302,7 @@ export function DisputeManagement() {
       };
       const response = await resolveDispute(selectedDispute._id, payload);
       if (response.code === 200) {
-        toast.success("Đã xử lý tranh chấp thành công");
+        toast.success("Đã xử lý Khiếu nạithành công");
         setResolveDialog(false);
         setDecision("");
         setNotes("");
@@ -276,66 +313,131 @@ export function DisputeManagement() {
         setDisputeDetails(null);
         fetchDisputes();
       } else {
-        toast.error(response.message || "Không thể xử lý tranh chấp");
+        toast.error(response.message || "Không thể xử lý Khiếu nại");
       }
     } catch (err) {
       console.error("Error resolving dispute:", err);
-      toast.error("Có lỗi xảy ra khi xử lý tranh chấp");
+      toast.error("Có lỗi xảy ra khi xử lý Khiếu nại");
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Pending":
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Chờ xử lý</Badge>;
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+            Chờ xử lý
+          </Badge>
+        );
       case "In Progress":
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Đang xử lý</Badge>;
+        return (
+          <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+            Đang xử lý
+          </Badge>
+        );
       case "Resolved":
-        return <Badge className="bg-green-100 text-green-800 border-green-300">Đã xử lý</Badge>;
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-300">
+            Đã xử lý
+          </Badge>
+        );
       case "Rejected":
-        return <Badge className="bg-red-100 text-red-800 border-red-300">Đã từ chối</Badge>;
+        return (
+          <Badge className="bg-red-100 text-red-800 border-red-300">
+            Đã từ chối
+          </Badge>
+        );
       default:
-        return <Badge className="bg-gray-100 text-gray-800 border-gray-300">{status}</Badge>;
+        return (
+          <Badge className="bg-gray-100 text-gray-800 border-gray-300">
+            {status}
+          </Badge>
+        );
     }
   };
 
   const isAssignedToMe = (dispute: Dispute) => {
     if (!currentUserId || !dispute.assignedBy) return false;
-    const assignedById = typeof dispute.assignedBy === "object" ? dispute.assignedBy._id : dispute.assignedBy;
+    const assignedById =
+      typeof dispute.assignedBy === "object"
+        ? dispute.assignedBy._id
+        : dispute.assignedBy;
     return assignedById === currentUserId;
   };
 
   const filteredDisputes = disputes.filter((dispute) => {
+    // Search filter
     const matchesSearch =
       dispute.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (typeof dispute.orderId === "object" && dispute.orderId?.orderGuid?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      dispute.reporterId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      dispute.reportedUserId?.fullName?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+      (typeof dispute.orderId === "object" &&
+      dispute.orderId !== null &&
+      "orderGuid" in dispute.orderId
+        ? (dispute.orderId as { orderGuid?: string }).orderGuid
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase())
+        : false) ||
+      (typeof dispute.reporterId === "object" &&
+        dispute.reporterId?.fullName
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase())) ||
+      (typeof dispute.reportedUserId === "object" &&
+        dispute.reportedUserId?.fullName
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    // Status filter
+    if (statusFilter !== "all" && dispute.status !== statusFilter) {
+      return false;
+    }
+
+    // Assignee filter
+    if (assigneeFilter === "unassigned" && dispute.assignedBy) {
+      return false;
+    }
+    if (assigneeFilter === "assigned" && !dispute.assignedBy) {
+      return false;
+    }
+    if (assigneeFilter === "assignedToMe" && !isAssignedToMe(dispute)) {
+      return false;
+    }
+
+    return true;
   });
 
-  // Sort disputes: Pending first, then by createdAt (oldest first)
+  // Sort disputes based on sortBy option
   const sortedDisputes = [...filteredDisputes].sort((a, b) => {
-    // Priority order: Pending > In Progress > Others
-    const statusPriority: { [key: string]: number } = {
-      Pending: 1,
-      "In Progress": 2,
-      Reviewed: 3,
-      Resolved: 4,
-      Rejected: 5,
-    };
-    
-    const priorityA = statusPriority[a.status] || 99;
-    const priorityB = statusPriority[b.status] || 99;
-    
-    // If same priority, sort by createdAt (oldest first)
-    if (priorityA === priorityB) {
+    if (sortBy === "oldest") {
+      // Oldest first
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
-      return dateA - dateB; // Oldest first
+      return dateA - dateB;
+    } else if (sortBy === "status") {
+      // Sort by status priority: Pending > In Progress > Others
+      const statusPriority: { [key: string]: number } = {
+        Pending: 1,
+        "In Progress": 2,
+        Reviewed: 3,
+        Resolved: 4,
+        Rejected: 5,
+      };
+      const priorityA = statusPriority[a.status] || 99;
+      const priorityB = statusPriority[b.status] || 99;
+
+      if (priorityA === priorityB) {
+        // If same priority, sort by createdAt (newest first)
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      }
+      return priorityA - priorityB;
+    } else {
+      // Default: newest first
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
     }
-    
-    return priorityA - priorityB;
   });
 
   // Pagination calculations
@@ -344,10 +446,10 @@ export function DisputeManagement() {
   const endIndex = startIndex + pagination.itemsPerPage;
   const paginatedDisputes = sortedDisputes.slice(startIndex, endIndex);
 
-  // Reset page when search term changes
+  // Reset page when search term or sort changes
   useEffect(() => {
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
-  }, [searchTerm]);
+  }, [searchTerm, sortBy]);
 
   const handlePageChange = (page: number) => {
     setPagination((prev) => ({ ...prev, currentPage: page }));
@@ -374,7 +476,11 @@ export function DisputeManagement() {
         <CardContent className="p-8 text-center">
           <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-4" />
           <p className="text-gray-900 mb-4">{error}</p>
-          <Button onClick={fetchDisputes} variant="outline" className="text-gray-900">
+          <Button
+            onClick={fetchDisputes}
+            variant="outline"
+            className="text-gray-900"
+          >
             Thử lại
           </Button>
         </CardContent>
@@ -387,8 +493,7 @@ export function DisputeManagement() {
       <Card className="bg-white border border-gray-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-gray-900">Danh sách tranh chấp</CardTitle>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 <Input
@@ -399,17 +504,41 @@ export function DisputeManagement() {
                 />
               </div>
               <select
-                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900"
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="all">Tất cả</option>
+                <option value="all">Tất cả trạng thái</option>
                 <option value="Pending">Chờ xử lý</option>
                 <option value="In Progress">Đang xử lý</option>
                 <option value="Resolved">Đã xử lý</option>
                 <option value="Rejected">Đã từ chối</option>
               </select>
-              <Button onClick={fetchDisputes} variant="ghost" size="icon" className="text-gray-900">
+              <select
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm"
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+              >
+                <option value="all">Tất cả người xử lý</option>
+                <option value="unassigned">Chưa được gán</option>
+                <option value="assigned">Đã được gán</option>
+                <option value="assignedToMe">Được gán cho tôi</option>
+              </select>
+              <select
+                className="px-4 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="newest">Mới nhất</option>
+                <option value="oldest">Cũ nhất</option>
+                <option value="status">Theo trạng thái</option>
+              </select>
+              <Button
+                onClick={fetchDisputes}
+                variant="ghost"
+                size="icon"
+                className="text-gray-900"
+              >
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
@@ -420,15 +549,24 @@ export function DisputeManagement() {
             {total === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                <p>Không có tranh chấp nào</p>
+                <p>Không có Khiếu nạinào</p>
               </div>
             ) : (
               paginatedDisputes.map((dispute) => {
-                const orderGuid = typeof dispute.orderId === "object" ? dispute.orderId?.orderGuid : "N/A";
+                const orderGuid =
+                  typeof dispute.orderId === "object" &&
+                  dispute.orderId !== null &&
+                  "orderGuid" in dispute.orderId
+                    ? (dispute.orderId as { orderGuid?: string }).orderGuid ||
+                      "N/A"
+                    : "N/A";
                 const assignedToMe = isAssignedToMe(dispute);
-                const canAssign = dispute.status === "Pending" && !dispute.assignedBy;
-                const canResolve = dispute.status === "In Progress" && assignedToMe;
-                const canUnassign = dispute.status === "In Progress" && assignedToMe;
+                const canAssign =
+                  dispute.status === "Pending" && !dispute.assignedBy;
+                const canResolve =
+                  dispute.status === "In Progress" && assignedToMe;
+                const canUnassign =
+                  dispute.status === "In Progress" && assignedToMe;
 
                 return (
                   <div
@@ -438,7 +576,9 @@ export function DisputeManagement() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-semibold text-gray-900">Đơn hàng #{orderGuid}</h3>
+                          <h3 className="font-semibold text-gray-900">
+                            Đơn hàng #{orderGuid}
+                          </h3>
                           {getStatusBadge(dispute.status)}
                           {dispute.assignedBy && (
                             <Badge variant="outline" className="text-xs">
@@ -453,24 +593,40 @@ export function DisputeManagement() {
                           <strong>Lý do:</strong> {dispute.reason}
                         </p>
                         {dispute.description && (
-                          <p className="text-gray-500 text-sm mb-2">{dispute.description}</p>
+                          <p className="text-gray-500 text-sm mb-2">
+                            {dispute.description}
+                          </p>
                         )}
                         <div className="flex items-center gap-4 text-sm text-gray-600">
                           <div className="flex items-center gap-1">
                             <User className="w-4 h-4" />
                             <span>
-                              Người báo cáo: {dispute.reporterId?.fullName || dispute.reporterId?.email}
+                              Người báo cáo:{" "}
+                              {typeof dispute.reporterId === "object"
+                                ? dispute.reporterId.fullName ||
+                                  dispute.reporterId.email ||
+                                  "N/A"
+                                : "N/A"}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
                             <User className="w-4 h-4" />
                             <span>
-                              Người bị báo cáo: {dispute.reportedUserId?.fullName || dispute.reportedUserId?.email}
+                              Người bị báo cáo:{" "}
+                              {typeof dispute.reportedUserId === "object"
+                                ? dispute.reportedUserId.fullName ||
+                                  dispute.reportedUserId.email ||
+                                  "N/A"
+                                : "N/A"}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>{new Date(dispute.createdAt).toLocaleString("vi-VN")}</span>
+                            <span>
+                              {new Date(dispute.createdAt).toLocaleString(
+                                "vi-VN"
+                              )}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -484,12 +640,17 @@ export function DisputeManagement() {
                             setDetailDisputeData(null);
                             setLoadingDetailData(true);
                             try {
-                              const response = await getDisputeById(dispute._id);
+                              const response = await getDisputeById(
+                                dispute._id
+                              );
                               if (response.code === 200 && response.data) {
                                 setDetailDisputeData(response.data);
                               }
                             } catch (err) {
-                              console.error("Error fetching dispute details:", err);
+                              console.error(
+                                "Error fetching dispute details:",
+                                err
+                              );
                             } finally {
                               setLoadingDetailData(false);
                             }
@@ -557,7 +718,10 @@ export function DisputeManagement() {
             </button>
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={pagination.currentPage === Math.ceil(total / pagination.itemsPerPage) || total === 0}
+              disabled={
+                pagination.currentPage ===
+                  Math.ceil(total / pagination.itemsPerPage) || total === 0
+              }
               className="relative ml-3 inline-flex items-center px-4 py-2 border border-gray-200 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
             >
               Sau
@@ -625,24 +789,28 @@ export function DisputeManagement() {
                 >
                   Trước
                 </button>
-                {Array.from({ length: Math.ceil(total / pagination.itemsPerPage) || 1 }, (_, i) => i + 1).map(
-                  (page) => (
-                    <button
-                      key={page}
-                      onClick={() => handlePageChange(page)}
-                      className={`relative inline-flex items-center px-4 py-2 border border-gray-200 text-sm font-medium ${
-                        pagination.currentPage === page
-                          ? "z-10 bg-indigo-50 border-indigo-500 text-indigo-600"
-                          : "bg-white text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  )
-                )}
+                {Array.from(
+                  { length: Math.ceil(total / pagination.itemsPerPage) || 1 },
+                  (_, i) => i + 1
+                ).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`relative inline-flex items-center px-4 py-2 border border-gray-200 text-sm font-medium ${
+                      pagination.currentPage === page
+                        ? "z-10 bg-indigo-50 border-indigo-500 text-indigo-600"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
                 <button
                   onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={pagination.currentPage === Math.ceil(total / pagination.itemsPerPage) || total === 0}
+                  disabled={
+                    pagination.currentPage ===
+                      Math.ceil(total / pagination.itemsPerPage) || total === 0
+                  }
                   className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Sau
@@ -657,7 +825,7 @@ export function DisputeManagement() {
       <Dialog open={detailDialog} onOpenChange={setDetailDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Chi tiết tranh chấp</DialogTitle>
+            <DialogTitle>Chi tiết Khiếu nại</DialogTitle>
           </DialogHeader>
           {loadingDetailData ? (
             <div className="flex items-center justify-center py-12">
@@ -666,7 +834,7 @@ export function DisputeManagement() {
                 <p className="text-lg">Đang tải thông tin...</p>
               </div>
             </div>
-          ) : (selectedDispute || detailDisputeData) ? (
+          ) : selectedDispute || detailDisputeData ? (
             <div className="space-y-4">
               {(() => {
                 const dispute = detailDisputeData || selectedDispute;
@@ -674,56 +842,84 @@ export function DisputeManagement() {
                 return (
                   <>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Đơn hàng</label>
+                      <label className="text-sm font-medium text-gray-700">
+                        Đơn hàng
+                      </label>
                       <p className="text-gray-900">
-                        #{typeof dispute.orderId === "object" ? dispute.orderId?.orderGuid : "N/A"}
+                        #
+                        {typeof dispute.orderId === "object" &&
+                        dispute.orderId !== null &&
+                        "orderGuid" in dispute.orderId
+                          ? (dispute.orderId as { orderGuid?: string })
+                              .orderGuid || "N/A"
+                          : "N/A"}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Lý do</label>
+                      <label className="text-sm font-medium text-gray-700">
+                        Lý do
+                      </label>
                       <p className="text-gray-900">{dispute.reason}</p>
                     </div>
                     {dispute.description && (
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Mô tả</label>
-                        <p className="text-gray-900 whitespace-pre-wrap">{dispute.description}</p>
+                        <label className="text-sm font-medium text-gray-700">
+                          Mô tả
+                        </label>
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {dispute.description}
+                        </p>
                       </div>
                     )}
                     {dispute.evidence && dispute.evidence.length > 0 ? (
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">
+                          Bằng chứng
+                        </label>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                          {dispute.evidence.map((url: string, index: number) => (
-                              <a
+                          {dispute.evidence.map(
+                            (url: string, index: number) => (
+                              <button
                                 key={`evidence-${index}`}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
+                                type="button"
+                                onClick={() => {
+                                  setSelectedImage(url);
+                                  setImageModalOpen(true);
+                                }}
+                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors cursor-pointer"
                               >
                                 <img
                                   src={url}
                                   alt={`Bằng chứng ${index + 1}`}
                                   className="w-full h-32 object-cover rounded"
                                   onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/file.svg";
+                                    (e.target as HTMLImageElement).src =
+                                      "/file.svg";
                                   }}
                                 />
-                              </a>
-                            ))}
+                              </button>
+                            )
+                          )}
                         </div>
                       </div>
                     ) : null}
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Trạng thái</label>
-                      <div className="mt-1">{getStatusBadge(dispute.status)}</div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Trạng thái
+                      </label>
+                      <div className="mt-1">
+                        {getStatusBadge(dispute.status)}
+                      </div>
                     </div>
                     {dispute.assignedBy && (
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Người xử lý</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Người xử lý
+                        </label>
                         <p className="text-gray-900">
                           {typeof dispute.assignedBy === "object"
-                            ? dispute.assignedBy.fullName || dispute.assignedBy.email
+                            ? dispute.assignedBy.fullName ||
+                              dispute.assignedBy.email
                             : "Đã được nhận"}
                         </p>
                       </div>
@@ -731,32 +927,51 @@ export function DisputeManagement() {
                     {dispute.resolution && (
                       <div className="border-t pt-4 space-y-3">
                         <div>
-                          <label className="text-sm font-medium text-gray-700">Quyết định</label>
-                          <p className="text-gray-900">{dispute.resolution.decision}</p>
+                          <label className="text-sm font-medium text-gray-700">
+                            Quyết định
+                          </label>
+                          <p className="text-gray-900">
+                            {dispute.resolution.decision}
+                          </p>
                         </div>
                         {dispute.resolution.notes && (
                           <div>
-                            <label className="text-sm font-medium text-gray-700 block">Ghi chú</label>
-                            <p className="text-gray-900">{dispute.resolution.notes}</p>
+                            <label className="text-sm font-medium text-gray-700 block">
+                              Ghi chú
+                            </label>
+                            <p className="text-gray-900">
+                              {dispute.resolution.notes}
+                            </p>
                           </div>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                            <p className="text-xs uppercase tracking-wide text-gray-500">Số tiền hoàn</p>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Số tiền hoàn
+                            </p>
                             <p className="text-lg font-semibold text-gray-900">
-                              {(dispute.resolution.refundAmount || 0).toLocaleString("vi-VN")} VNĐ
+                              {(
+                                dispute.resolution.refundAmount || 0
+                              ).toLocaleString("vi-VN")}{" "}
+                              VNĐ
                             </p>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                            <p className="text-xs uppercase tracking-wide text-gray-500">Phần trăm</p>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Phần trăm
+                            </p>
                             <p className="text-lg font-semibold text-gray-900">
                               {dispute.resolution.refundPercentage ?? 0}%
                             </p>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                            <p className="text-xs uppercase tracking-wide text-gray-500">Hoàn cho</p>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Hoàn cho
+                            </p>
                             <p className="text-lg font-semibold text-gray-900">
-                              {getRefundTargetLabel(dispute.resolution.refundTarget)}
+                              {getRefundTargetLabel(
+                                dispute.resolution.refundTarget
+                              )}
                             </p>
                           </div>
                         </div>
@@ -768,8 +983,8 @@ export function DisputeManagement() {
             </div>
           ) : null}
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setDetailDialog(false);
                 setDetailDisputeData(null);
@@ -785,9 +1000,9 @@ export function DisputeManagement() {
       <Dialog open={resolveDialog} onOpenChange={setResolveDialog}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Xử lý tranh chấp</DialogTitle>
+            <DialogTitle>Xử lý Khiếu nại</DialogTitle>
           </DialogHeader>
-          
+
           {loadingDetails ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center text-gray-900">
@@ -808,76 +1023,249 @@ export function DisputeManagement() {
                     </h3>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Mã đơn hàng</label>
-                        <p className="text-gray-900 font-semibold">#{orderDetails.orderGuid}</p>
+                        <label className="text-sm font-medium text-gray-700">
+                          Mã đơn hàng
+                        </label>
+                        <p className="text-gray-900 font-semibold">
+                          #{orderDetails.orderGuid}
+                        </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Trạng thái</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Trạng thái
+                        </label>
                         <p className="text-gray-900">
                           {getOrderStatusLabel(orderDetails.orderStatus)}
                         </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Người thuê</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Người thuê
+                        </label>
                         <p className="text-gray-900">
-                          {orderDetails.renterId?.fullName || orderDetails.renterId?.email || "N/A"}
+                          {orderDetails.renterId?.fullName ||
+                            orderDetails.renterId?.email ||
+                            "N/A"}
                         </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Người cho thuê</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Người cho thuê
+                        </label>
                         <p className="text-gray-900">
-                          {orderDetails.ownerId?.fullName || orderDetails.ownerId?.email || "N/A"}
+                          {orderDetails.ownerId?.fullName ||
+                            orderDetails.ownerId?.email ||
+                            "N/A"}
                         </p>
                       </div>
                       {orderDetails.itemSnapshot && (
-                        <>
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Sản phẩm</label>
-                            <p className="text-gray-900">{orderDetails.itemSnapshot.title || "N/A"}</p>
+                        <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                          <label className="text-sm font-medium text-gray-700 mb-3 block">
+                            Thông tin sản phẩm
+                          </label>
+                          <div className="flex gap-4">
+                            {/* Hình ảnh sản phẩm */}
+                            {orderDetails.itemSnapshot.images &&
+                            orderDetails.itemSnapshot.images.length > 0 ? (
+                              <div className="flex-shrink-0">
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedImage(
+                                        orderDetails.itemSnapshot.images[0]
+                                      );
+                                      setImageModalOpen(true);
+                                    }}
+                                    className="group relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-200 hover:border-indigo-500 transition-all cursor-pointer"
+                                  >
+                                    <img
+                                      src={orderDetails.itemSnapshot.images[0]}
+                                      alt={
+                                        orderDetails.itemSnapshot.title ||
+                                        "Ảnh sản phẩm"
+                                      }
+                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src =
+                                          "/file.svg";
+                                      }}
+                                    />
+                                    {orderDetails.itemSnapshot.images.length >
+                                      1 && (
+                                      <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                                        +
+                                        {orderDetails.itemSnapshot.images
+                                          .length - 1}
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                      <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                  </button>
+                                  {orderDetails.itemSnapshot.images.length >
+                                    1 && (
+                                    <div className="mt-2 flex gap-1 overflow-x-auto max-w-[128px]">
+                                      {orderDetails.itemSnapshot.images
+                                        .slice(1, 4)
+                                        .map((img, idx) => (
+                                          <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedImage(img);
+                                              setImageModalOpen(true);
+                                            }}
+                                            className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 hover:border-indigo-500 overflow-hidden"
+                                          >
+                                            <img
+                                              src={img}
+                                              alt={`Ảnh ${idx + 2}`}
+                                              className="w-full h-full object-cover"
+                                              onError={(e) => {
+                                                (
+                                                  e.target as HTMLImageElement
+                                                ).src = "/file.svg";
+                                              }}
+                                            />
+                                          </button>
+                                        ))}
+                                      {orderDetails.itemSnapshot.images.length >
+                                        4 && (
+                                        <div className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 bg-gray-100 flex items-center justify-center text-xs text-gray-600">
+                                          +
+                                          {orderDetails.itemSnapshot.images
+                                            .length - 4}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex-shrink-0 w-32 h-32 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+                                <FileText className="w-8 h-8 text-gray-400" />
+                              </div>
+                            )}
+
+                            {/* Thông tin sản phẩm */}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 mb-3 line-clamp-2">
+                                {orderDetails.itemSnapshot.title || "N/A"}
+                              </h4>
+                              <div className="space-y-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-gray-600 whitespace-nowrap">
+                                    Giá thuê:
+                                  </span>
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {orderDetails.itemSnapshot.basePrice?.toLocaleString(
+                                      "vi-VN"
+                                    ) || "0"}{" "}
+                                    VNĐ
+                                  </span>
+                                  {orderDetails.itemSnapshot.priceUnit && (
+                                    <span className="text-sm text-gray-500">
+                                      / {orderDetails.itemSnapshot.priceUnit}
+                                    </span>
+                                  )}
+                                </div>
+                                {orderDetails.unitCount && (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm text-gray-600 whitespace-nowrap">
+                                      Số lượng:
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {orderDetails.unitCount}{" "}
+                                      {orderDetails.itemSnapshot.priceUnit ||
+                                        ""}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-gray-600 whitespace-nowrap">
+                                    Tiền cọc / Tổng tiền:
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-semibold text-gray-900">
+                                      {orderDetails.depositAmount?.toLocaleString(
+                                        "vi-VN"
+                                      ) || "0"}{" "}
+                                      {orderDetails.currency || "VNĐ"}
+                                    </span>
+                                    <span className="text-gray-400">/</span>
+                                    <span className="text-sm font-semibold text-blue-600">
+                                      {orderDetails.totalAmount?.toLocaleString(
+                                        "vi-VN"
+                                      ) || "0"}{" "}
+                                      {orderDetails.currency || "VNĐ"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-gray-600 whitespace-nowrap">
+                                    Trạng thái thanh toán:
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {getPaymentStatusLabel(
+                                      orderDetails.paymentStatus
+                                    )}
+                                  </span>
+                                </div>
+                                {(orderDetails.startAt ||
+                                  orderDetails.endAt) && (
+                                  <div className="flex flex-wrap items-start gap-2">
+                                    <span className="text-sm text-gray-600 whitespace-nowrap">
+                                      Thời gian thuê:
+                                    </span>
+                                    <div className="text-sm text-gray-900">
+                                      {orderDetails.startAt && (
+                                        <div>
+                                          Bắt đầu:{" "}
+                                          {new Date(
+                                            orderDetails.startAt
+                                          ).toLocaleString("vi-VN")}
+                                        </div>
+                                      )}
+                                      {orderDetails.startAt &&
+                                        orderDetails.endAt && (
+                                          <div className="mt-1">
+                                            Kết thúc:{" "}
+                                            {new Date(
+                                              orderDetails.endAt
+                                            ).toLocaleString("vi-VN")}
+                                          </div>
+                                        )}
+                                      {!orderDetails.startAt &&
+                                        orderDetails.endAt && (
+                                          <div>
+                                            Kết thúc:{" "}
+                                            {new Date(
+                                              orderDetails.endAt
+                                            ).toLocaleString("vi-VN")}
+                                          </div>
+                                        )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Giá thuê</label>
-                            <p className="text-gray-900">
-                              {orderDetails.itemSnapshot.basePrice?.toLocaleString("vi-VN") || "0"} {orderDetails.itemSnapshot.priceUnit || "VNĐ"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Tổng tiền</label>
-                        <p className="text-gray-900 font-semibold">
-                          {orderDetails.totalAmount?.toLocaleString("vi-VN") || "0"} {orderDetails.currency || "VNĐ"}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Trạng thái thanh toán</label>
-                        <p className="text-gray-900">
-                          {getPaymentStatusLabel(orderDetails.paymentStatus)}
-                        </p>
-                      </div>
-                      {orderDetails.startAt && (
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Thời gian bắt đầu</label>
-                          <p className="text-gray-900">
-                            {new Date(orderDetails.startAt).toLocaleString("vi-VN")}
-                          </p>
-                        </div>
-                      )}
-                      {orderDetails.endAt && (
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Thời gian kết thúc</label>
-                          <p className="text-gray-900">
-                            {new Date(orderDetails.endAt).toLocaleString("vi-VN")}
-                          </p>
                         </div>
                       )}
                       {orderDetails.shippingAddress && (
                         <div>
-                          <label className="text-sm font-medium text-gray-700">Địa chỉ giao hàng</label>
+                          <label className="text-sm font-medium text-gray-700">
+                            Địa chỉ giao hàng
+                          </label>
                           <p className="text-gray-900 text-sm">
-                            {orderDetails.shippingAddress.fullName && `${orderDetails.shippingAddress.fullName}, `}
-                            {orderDetails.shippingAddress.street}, {orderDetails.shippingAddress.ward}, {orderDetails.shippingAddress.province}
-                            {orderDetails.shippingAddress.phone && ` - ${orderDetails.shippingAddress.phone}`}
+                            {orderDetails.shippingAddress.fullName &&
+                              `${orderDetails.shippingAddress.fullName}, `}
+                            {orderDetails.shippingAddress.street},{" "}
+                            {orderDetails.shippingAddress.ward},{" "}
+                            {orderDetails.shippingAddress.province}
+                            {orderDetails.shippingAddress.phone &&
+                              ` - ${orderDetails.shippingAddress.phone}`}
                           </p>
                         </div>
                       )}
@@ -894,62 +1282,98 @@ export function DisputeManagement() {
                     </h3>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Lý do khiếu nại</label>
-                        <p className="text-gray-900 font-semibold">{disputeDetails.reason}</p>
+                        <label className="text-sm font-medium text-gray-700">
+                          Lý do khiếu nại
+                        </label>
+                        <p className="text-gray-900 font-semibold">
+                          {disputeDetails.reason}
+                        </p>
                       </div>
                       {disputeDetails.description && (
                         <div>
-                          <label className="text-sm font-medium text-gray-700">Mô tả chi tiết</label>
-                          <p className="text-gray-900 whitespace-pre-wrap text-sm">{disputeDetails.description}</p>
+                          <label className="text-sm font-medium text-gray-700">
+                            Mô tả chi tiết
+                          </label>
+                          <p className="text-gray-900 whitespace-pre-wrap text-sm">
+                            {disputeDetails.description}
+                          </p>
                         </div>
                       )}
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Người báo cáo</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Người báo cáo
+                        </label>
                         <p className="text-gray-900">
-                          {disputeDetails.reporterId?.fullName || disputeDetails.reporterId?.email || "N/A"}
+                          {typeof disputeDetails.reporterId === "object"
+                            ? disputeDetails.reporterId.fullName ||
+                              disputeDetails.reporterId.email ||
+                              "N/A"
+                            : "N/A"}
                         </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Người bị báo cáo</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Người bị báo cáo
+                        </label>
                         <p className="text-gray-900">
-                          {disputeDetails.reportedUserId?.fullName || disputeDetails.reportedUserId?.email || "N/A"}
+                          {typeof disputeDetails.reportedUserId === "object"
+                            ? disputeDetails.reportedUserId.fullName ||
+                              disputeDetails.reportedUserId.email ||
+                              "N/A"
+                            : "N/A"}
                         </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Thời gian tạo</label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Thời gian tạo
+                        </label>
                         <p className="text-gray-900">
-                          {new Date(disputeDetails.createdAt).toLocaleString("vi-VN")}
+                          {new Date(disputeDetails.createdAt).toLocaleString(
+                            "vi-VN"
+                          )}
                         </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700">Trạng thái</label>
-                        <div className="mt-1">{getStatusBadge(disputeDetails.status)}</div>
+                        <label className="text-sm font-medium text-gray-700">
+                          Trạng thái
+                        </label>
+                        <div className="mt-1">
+                          {getStatusBadge(disputeDetails.status)}
+                        </div>
                       </div>
-                      {disputeDetails.evidence && disputeDetails.evidence.length > 0 && (
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 mb-2 block">Bằng chứng</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {disputeDetails.evidence.map((url: string, index: number) => (
-                              <a
-                                key={index}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors"
-                              >
-                                <img
-                                  src={url}
-                                  alt={`Bằng chứng ${index + 1}`}
-                                  className="w-full h-20 object-cover rounded"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/file.svg";
-                                  }}
-                                />
-                              </a>
-                            ))}
+                      {disputeDetails.evidence &&
+                        disputeDetails.evidence.length > 0 && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 mb-2 block">
+                              Bằng chứng
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {disputeDetails.evidence.map(
+                                (url: string, index: number) => (
+                                  <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedImage(url);
+                                      setImageModalOpen(true);
+                                    }}
+                                    className="block border border-gray-200 rounded p-2 hover:border-indigo-500 transition-colors cursor-pointer"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt={`Bằng chứng ${index + 1}`}
+                                      className="w-full h-20 object-cover rounded"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src =
+                                          "/file.svg";
+                                      }}
+                                    />
+                                  </button>
+                                )
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                     </div>
                   </div>
                 )}
@@ -957,7 +1381,9 @@ export function DisputeManagement() {
 
               {/* Form quyết định */}
               <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quyết định xử lý</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Quyết định xử lý
+                </h3>
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -971,7 +1397,9 @@ export function DisputeManagement() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Ghi chú</label>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">
+                      Ghi chú
+                    </label>
                     <Textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
@@ -994,11 +1422,34 @@ export function DisputeManagement() {
                         }
                       >
                         <option value="">Không hoàn / Không áp dụng</option>
-                        {REFUND_TARGET_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
+                        {REFUND_TARGET_OPTIONS.map((option) => {
+                          // Lấy tên người dùng từ disputeDetails hoặc orderDetails
+                          let userName = "";
+                          if (disputeDetails) {
+                            if (option.value === "reporter") {
+                              userName =
+                                typeof disputeDetails.reporterId === "object"
+                                  ? disputeDetails.reporterId.fullName ||
+                                    disputeDetails.reporterId.email ||
+                                    ""
+                                  : "";
+                            } else if (option.value === "reported") {
+                              userName =
+                                typeof disputeDetails.reportedUserId ===
+                                "object"
+                                  ? disputeDetails.reportedUserId.fullName ||
+                                    disputeDetails.reportedUserId.email ||
+                                    ""
+                                  : "";
+                            }
+                          }
+                          return (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                              {userName ? ` - ${userName}` : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div>
@@ -1019,15 +1470,40 @@ export function DisputeManagement() {
                       </select>
                     </div>
                   </div>
-                  {refundPercentage && (
+                  {refundPercentage && refundTarget && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                      <p className="text-sm text-emerald-700">
-                        Số tiền dự kiến hoàn trả
+                      <p className="text-sm text-emerald-700 mb-1">
+                        Số tiền dự kiến hoàn trả (từ tiền cọc)
                       </p>
-                      <p className="text-2xl font-bold text-emerald-900">
+                      <p className="text-2xl font-bold text-emerald-900 mb-2">
                         {computedRefundPreview
-                          ? `${computedRefundPreview.toLocaleString("vi-VN")} VNĐ`
+                          ? `${computedRefundPreview.toLocaleString(
+                              "vi-VN"
+                            )} VNĐ`
                           : "0 VNĐ"}
+                      </p>
+                      {disputeDetails && (
+                        <p className="text-sm text-emerald-600">
+                          Sẽ hoàn cho:{" "}
+                          <span className="font-semibold">
+                            {refundTarget === "reporter"
+                              ? typeof disputeDetails.reporterId === "object"
+                                ? disputeDetails.reporterId.fullName ||
+                                  disputeDetails.reporterId.email ||
+                                  "Người khiếu nại"
+                                : "Người khiếu nại"
+                              : typeof disputeDetails.reportedUserId ===
+                                "object"
+                              ? disputeDetails.reportedUserId.fullName ||
+                                disputeDetails.reportedUserId.email ||
+                                "Người bị khiếu nại"
+                              : "Người bị khiếu nại"}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-xs text-emerald-600 mt-1">
+                        Tiền cọc:{" "}
+                        {depositAmountForRefund.toLocaleString("vi-VN")} VNĐ
                       </p>
                     </div>
                   )}
@@ -1037,8 +1513,8 @@ export function DisputeManagement() {
           )}
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setResolveDialog(false);
                 setOrderDetails(null);
@@ -1066,14 +1542,17 @@ export function DisputeManagement() {
       <Dialog open={unassignDialog} onOpenChange={setUnassignDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Trả lại tranh chấp</DialogTitle>
+            <DialogTitle>Trả lại Khiếu nại</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-gray-600">
-              Bạn có chắc chắn muốn trả lại tranh chấp này để moderator khác xử lý?
+              Bạn có chắc chắn muốn trả lại Khiếu nạinày để moderator khác xử
+              lý?
             </p>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Lý do trả lại (tùy chọn)</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Lý do trả lại (tùy chọn)
+              </label>
               <Textarea
                 value={unassignReason}
                 onChange={(e) => setUnassignReason(e.target.value)}
@@ -1086,8 +1565,37 @@ export function DisputeManagement() {
             <Button variant="outline" onClick={() => setUnassignDialog(false)}>
               Hủy
             </Button>
-            <Button onClick={handleUnassign} className="bg-orange-600 hover:bg-orange-700">
+            <Button
+              onClick={handleUnassign}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
               Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Modal */}
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Xem bằng chứng</DialogTitle>
+          </DialogHeader>
+          {selectedImage && (
+            <div className="flex items-center justify-center">
+              <img
+                src={selectedImage}
+                alt="Bằng chứng"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/file.svg";
+                }}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImageModalOpen(false)}>
+              Đóng
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1095,4 +1603,3 @@ export function DisputeManagement() {
     </>
   );
 }
-

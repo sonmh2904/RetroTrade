@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import { listOrders } from "@/services/auth/order.api"; // import hàm API
 import {
   getRatingsByItem,
   createRating,
@@ -10,7 +11,7 @@ import {
 import { Star } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import { toast } from "sonner";
 
 interface Rating {
@@ -31,11 +32,6 @@ interface Order {
   orderStatus: string;
 }
 
-interface Props {
-  itemId: string;
-  orders: Order[];
-}
-
 interface JwtPayload {
   _id: string;
   fullName: string;
@@ -46,11 +42,17 @@ interface JwtPayload {
   iat: number;
 }
 
-const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
+interface Props {
+  itemId: string;
+  orders?: Order[]; // ← Thêm prop này (tùy chọn)
+}
+
+const RatingSection: React.FC<Props> = ({ itemId }) => {
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
   const [currentUser, setCurrentUser] = useState<JwtPayload | null>(null);
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [filteredRatings, setFilteredRatings] = useState<Rating[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [filterStar, setFilterStar] = useState<number | null>(null);
 
   // Form state
@@ -61,7 +63,6 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   const [editingRatingId, setEditingRatingId] = useState<string | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
 
   // Decode token
   useEffect(() => {
@@ -93,6 +94,44 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
     fetchRatings();
   }, [itemId]);
 
+  // Fetch orders trực tiếp
+  // Sử dụng orders từ props nếu có, nếu không thì mới fetch
+  useEffect(() => {
+    if (orders && orders.length > 0) {
+      // Dùng orders được truyền từ trang chi tiết (tối ưu, không gọi API thừa)
+      const normalizedOrders = orders.map((o: any) => ({
+        ...o,
+        itemId:
+          typeof o.itemId === "object" ? o.itemId._id || o.itemId : o.itemId,
+        renterId: o.renterId || { _id: "" },
+        orderStatus: o.orderStatus || "",
+      }));
+      setOrders(normalizedOrders);
+    } else {
+      // Chỉ fallback khi không có orders từ props (trường hợp dùng RatingSection ở chỗ khác)
+      const fetchOrders = async () => {
+        try {
+          const res = await listOrders();
+          if (res.data) {
+            const normalizedOrders = (res.data as any[]).map((o) => ({
+              ...o,
+              itemId:
+                typeof o.itemId === "object"
+                  ? o.itemId._id || o.itemId
+                  : o.itemId,
+              renterId: o.renterId || { _id: "" },
+              orderStatus: o.orderStatus || "",
+            }));
+            setOrders(normalizedOrders);
+          }
+        } catch (err) {
+          console.error("Error fetching orders:", err);
+        }
+      };
+      fetchOrders();
+    }
+  }, [orders]); // Dependency là orders từ props
+
   // Check if user can review
   const canReview = useMemo(() => {
     if (!currentUser) return false;
@@ -120,7 +159,7 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
     const order = orders.find(
       (o) =>
         o.itemId === itemId &&
-        o.orderStatus === "completed" &&
+        o.orderStatus.toLowerCase() === "completed" &&
         o.renterId._id === currentUser._id
     );
     return order?._id || null;
@@ -219,6 +258,16 @@ const RatingSection: React.FC<Props> = ({ itemId, orders }) => {
   const countByStar = [5, 4, 3, 2, 1].map(
     (star) => ratings.filter((r) => r.rating === star).length
   );
+  useEffect(() => {
+    console.log({
+      currentUser,
+      canReview,
+      editingRatingId,
+      orders,
+      reviewableOrderId,
+    });
+  }, [currentUser, canReview, editingRatingId, orders, reviewableOrderId]);
+
 
   return (
     <div className="mt-6 border-t pt-4">

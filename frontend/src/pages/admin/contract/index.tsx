@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
@@ -6,16 +8,18 @@ import { ContractTemplateForm } from "@/components/ui/admin/contract/contract-fo
 import { Button } from "@/components/ui/common/button";
 
 interface ContractTemplate {
-  _id: string;
+  _id?: string;
   templateName: string;
   description: string;
-  templateContent: string;
+  headerContent?: string;
+  bodyContent?: string;
+  footerContent?: string;
   isActive: boolean;
-  createdBy: {
+  createdBy?: {
     fullName: string;
     email: string;
   };
-  createdAt: string;
+  createdAt?: string;
 }
 
 export default function ContractManagementPage() {
@@ -95,11 +99,9 @@ export default function ContractManagementPage() {
         <ContractManagementTable onEdit={handleEdit} />
       </motion.div>
 
-      {/* Modal with backdrop */}
       <AnimatePresence>
         {showForm && (
           <>
-            {/* Backdrop overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -109,7 +111,6 @@ export default function ContractManagementPage() {
               onClick={handleFormClose}
             />
 
-            {/* Modal content */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <motion.div
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -125,7 +126,26 @@ export default function ContractManagementPage() {
                 <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
                   <div className="max-h-[90vh] overflow-y-auto custom-scrollbar">
                     <ContractTemplateForm
-                      template={editingTemplate}
+                      template={
+                        editingTemplate
+                          ? ({
+                              ...editingTemplate,
+                              headerContent:
+                                editingTemplate.headerContent ?? "",
+                              bodyContent: editingTemplate.bodyContent ?? "",
+                              footerContent:
+                                editingTemplate.footerContent ?? "",
+                            } as {
+                              _id?: string;
+                              templateName: string;
+                              description: string;
+                              headerContent: string;
+                              bodyContent: string;
+                              footerContent: string;
+                              isActive: boolean;
+                            })
+                          : undefined
+                      }
                       onClose={handleFormClose}
                       onSuccess={handleFormSuccess}
                     />
@@ -141,17 +161,14 @@ export default function ContractManagementPage() {
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
         }
-
         .custom-scrollbar::-webkit-scrollbar-track {
           background: #f1f1f1;
           border-radius: 10px;
         }
-
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: linear-gradient(180deg, #6366f1 0%, #a855f7 100%);
           border-radius: 10px;
         }
-
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: linear-gradient(180deg, #4f46e5 0%, #9333ea 100%);
         }

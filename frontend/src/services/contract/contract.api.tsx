@@ -1,9 +1,10 @@
 import instance from "../customizeAPI";
 
 export interface ContractTemplateData {
+  _id?: string;
   templateName: string;
   description?: string;
-  templateContent: string;
+  templateContent?: string;
 }
 
 export interface UpdateContractTemplateData {
@@ -39,6 +40,7 @@ export const deleteContractTemplate = async (id: string): Promise<Response> => {
 export interface PreviewTemplateData {
   orderId: string;
   templateId: string;
+  customClauses?: string;
 }
 
 export const previewTemplate = async (data: PreviewTemplateData): Promise<Response> => {
@@ -48,16 +50,46 @@ export const previewTemplate = async (data: PreviewTemplateData): Promise<Respon
 export interface ConfirmCreateData {
   orderId: string;
   templateId: string;
+  customClauses?: string;
 }
 
 export const confirmCreateContract = async (data: ConfirmCreateData): Promise<Response> => {
   return await instance.post("/contract/confirm-create", data);
 };
 
+export interface ContractSignatureInfo {
+  _id: string;
+  signatureId: {
+    _id?: string;
+    signatureImagePath?: string;
+    signerName: string;
+    signerUserId?: string;
+    validFrom: string;
+    validTo?: string;
+    isActive: boolean;
+  } | null;
+  signedAt: string;
+  isValid: boolean;
+  verificationInfo: string;
+  positionX: number;
+  positionY: number;
+}
+
+export interface ContractData {
+  contractId: string;
+  status: string;
+  content: string;
+  signatures: ContractSignatureInfo[];
+  templateName: string | null;
+  signaturesCount: number;
+  isFullySigned: boolean;
+  canSign: boolean;
+}
+
 export interface GetOrCreateContractResponse {
   hasContract: boolean;
-  data?: any;
-  availableTemplates?: any[];
+  data?: ContractData;
+  availableTemplates?: ContractTemplateData[];
 }
 
 export const getOrCreateContractForOrder = async (orderId: string): Promise<Response> => {
@@ -69,7 +101,7 @@ export const getContractById = async (contractId: string): Promise<Response> => 
 };
 
 export const exportContractPDF = async (contractId: string): Promise<Response> => {
-  return await instance.get(`/contract/${contractId}/export-pdf`, { responseType: 'blob' });
+  return await instance.get(`/contract/${contractId}/export-pdf`);
 };
 
 export interface SignContractData {
@@ -110,10 +142,13 @@ export const decryptSignature = async (signatureId: string): Promise<Response> =
 };
 
 export interface SignatureResponse {
-  signatureUrl: string;
-  decryptedData: string | null;
-  validTo: string;
+  signatureUrl?: string;
+  validFrom?: string;
+  validTo?: string;
   isActive: boolean;
+  decryptedData?: string | null;
+  isUsedInContract?: boolean;
+  isExpired?: boolean;
 }
 
 export const getUserSignature = async (): Promise<Response> => {

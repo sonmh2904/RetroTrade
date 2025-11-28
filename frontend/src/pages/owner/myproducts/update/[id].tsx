@@ -142,18 +142,25 @@ const UpdateProductPage: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  const prevUserAddressesRef = useRef<UserAddress[]>([]);
+
   useEffect(() => {
-    if (userAddresses.length > 0 && !address && !city && !district) {
-      const defaultAddress = userAddresses.find(
-        (addr: UserAddress) => addr.IsDefault
-      );
+    if (
+      prevUserAddressesRef.current.length === 0 &&
+      userAddresses.length > 0 &&
+      !address.trim() &&
+      !city.trim() &&
+      !district.trim()
+    ) {
+      const defaultAddress = userAddresses.find((addr) => addr.IsDefault);
       if (defaultAddress) {
         setAddress(defaultAddress.Address || "");
         setCity(defaultAddress.City || "");
         setDistrict(defaultAddress.District || "");
       }
     }
-  }, [userAddresses]);
+    prevUserAddressesRef.current = userAddresses;
+  }, [userAddresses, address, city, district]);
 
   const fetchProductDetails = useCallback(
     async (productId: string) => {

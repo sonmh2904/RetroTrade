@@ -194,3 +194,19 @@ export const listOrdersByOwner = async (params?: {
   const response = await api.get(`/order/owner${query ? `?${query}` : ""}`);
   return await parseResponse<Order[]>(response);
 };
+
+// Bắt đầu giao hàng (chuyển trạng thái order => delivery)
+export const startDelivery = async (
+  orderId: string
+): Promise<ApiResponse<Order>> => {
+  const response = await api.post(`/order/${orderId}/delivery`);
+  return await parseResponse<Order>(response);
+};
+
+// Khách hàng xác nhận đã nhận hàng (chuyển trạng thái order => received)
+export const receiveOrder = async (
+  orderId: string
+): Promise<ApiResponse<Order>> => {
+  const response = await api.post(`/order/${orderId}/received`);
+  return await parseResponse<Order>(response);
+};

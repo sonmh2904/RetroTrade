@@ -2,12 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import Image from "next/image";
+import { useAppSelector } from "@/store/hooks";
 import type { RootState } from "@/store/redux_store";
-import { MapPin, Star, Bookmark, ShieldCheck, Truck, BadgeCheck, Clock3, ChevronLeft, ChevronRight, Loader2, Eye, ChevronDown, MessageCircle, Zap } from "lucide-react";
-import { getFavorites, getPublicStoreByUserGuid, getRatingsByOwner } from "@/services/products/product.api";
+import {
+  MapPin,
+  Star,
+  Bookmark,
+  ShieldCheck,
+  Truck,
+  BadgeCheck,
+  Clock3,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Eye,
+  ChevronDown,
+  MessageCircle,
+  Zap,
+} from "lucide-react";
+import { getPublicStoreByUserGuid } from "@/services/products/product.api";
 import OwnerRatingsSection from "@/components/owner/OwnerRatingsSection";
 import type { OwnerRatingStats } from "@/components/owner/OwnerRatingsSection";
 import AddToCartButton from "@/components/ui/common/AddToCartButton";
@@ -60,58 +74,95 @@ const formatPrice = (price: number, currency: string) => {
   return `$${price}`;
 };
 
-const LIMIT = 8; // Updated to 8 products per page/load
+const LIMIT = 8;
 
 export default function OwnerStorePage() {
   const router = useRouter();
   const { userGuid } = router.query as { userGuid?: string };
 
-  // States
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [owner, setOwner] = useState<Owner | null>(null);
-  const [items, setItems] = useState<Product[]>([]); // For pagination mode
-  const [products, setProducts] = useState<Product[]>([]); // For load more mode
+  const [items, setItems] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadMoreMode, setIsLoadMoreMode] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [favoriteLoading, setFavoriteLoading] = useState<Set<string>>(new Set());
-  const [ownerRatingStats, setOwnerRatingStats] = useState<OwnerRatingStats | null>(null);
-  const [storeStats, setStoreStats] = useState<{ inStockCount: number; categoryCount: number; totalProducts: number } | null>(null);
-  const isAuthenticated = useAppSelector((state: RootState) => !!state.auth.accessToken);
-    const accessToken = useAppSelector((state: RootState) => state.auth.accessToken);
-    const dispatch = useAppDispatch();
+  const [favoriteLoading, setFavoriteLoading] = useState<Set<string>>(
+    new Set()
+  );
+  const [ownerRatingStats, setOwnerRatingStats] =
+    useState<OwnerRatingStats | null>(null);
+  const [storeStats, setStoreStats] = useState<{
+    inStockCount: number;
+    categoryCount: number;
+    totalProducts: number;
+  } | null>(null);
+  const isAuthenticated = useAppSelector(
+    (state: RootState) => !!state.auth.accessToken
+  );
 
   const totalPages = useMemo(() => Math.ceil((total || 0) / LIMIT), [total]);
 
-  const availableCategories = useMemo(() => {
-    const displayItems = isLoadMoreMode ? products : items;
-    return Array.from(new Set(displayItems.map((it) => it.Category?.name).filter(Boolean)));
-  }, [isLoadMoreMode, products, items]);
-
-  const displayItems = useMemo(() => (isLoadMoreMode ? products : items), [isLoadMoreMode, products, items]);
+  const displayItems = useMemo(
+    () => (isLoadMoreMode ? products : items),
+    [isLoadMoreMode, products, items]
+  );
   const ownerInfo = useMemo(() => owner, [owner]);
 
-  // Update URL with current query params (only for pagination mode)
-  const updateUrl = useCallback((page: number) => {
-    if (isLoadMoreMode) return; // No URL update in load more mode
-    const query: { [key: string]: string | string[] | undefined } = { ...router.query };
-    if (page > 1) {
-      query.page = page.toString();
-    } else {
-      delete query.page;
-    }
-    router.replace(
-      {
-        pathname: router.pathname,
-        query,
-      },
-      undefined,
-      { shallow: true }
-    );
-  }, [router, isLoadMoreMode]);
+  // Fetch store data
+  const fetchStoreData = useCallback(
+    async (page?: number) => {
+      if (!userGuid) {
+        setError("Không có userGuid");
+        setLoading(false);
+        return;
+      }
+
+      const fetchPage = page || currentPage;
+
+      try {
+        setLoading(true);
+        setError(null);
+        const queryParams = { limit: LIMIT, page: fetchPage };
+        const res = await getPublicStoreByUserGuid(
+          String(userGuid),
+          queryParams
+        );
+
+        const responseData = res as {
+          success: boolean;
+          data?: {
+            owner: Owner | null;
+            items: Product[];
+            total: number;
+          };
+        };
+
+        const fetchedOwner = responseData.data?.owner ?? null;
+        const fetchedItems = (responseData.data?.items ?? []) as Product[];
+        const fetchedTotal = responseData.data?.total ?? 0;
+
+        setOwner(fetchedOwner);
+        setTotal(fetchedTotal);
+
+        if (fetchPage === 1) {
+          setIsLoadMoreMode(false);
+          setItems(fetchedItems);
+        } else if (!isLoadMoreMode) {
+          setItems(fetchedItems);
+        }
+      } catch (e) {
+        console.error("Failed to load owner store", e);
+        setError("Không thể tải dữ liệu cửa hàng");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [userGuid, currentPage, isLoadMoreMode]
+  );
 
   // Read page from URL and trigger data fetch (only for pagination mode)
   useEffect(() => {
@@ -120,209 +171,186 @@ export default function OwnerStorePage() {
       setCurrentPage(page);
       fetchStoreData(page);
     }
-  }, [router.isReady, router.query.page, isLoadMoreMode]);
+  }, [router.isReady, router.query.page, isLoadMoreMode, fetchStoreData]);
 
   // Fetch user's favorites on component mount
   useEffect(() => {
     const fetchFavorites = async () => {
       if (!isAuthenticated) return;
-      
+
       try {
-        const { getFavorites } = await import('@/services/products/product.api');
+        const { getFavorites } = await import(
+          "@/services/products/product.api"
+        );
         const res = await getFavorites();
-        
+
         if (res.ok) {
           const data = await res.json();
-          // Normalize IDs to string to satisfy Set<string> typing
           interface FavoriteItem {
             productId?: { _id?: string } | string;
           }
-          const favoriteIdsArray = ((data?.data || []) as FavoriteItem[]).map((fav) => {
-            const id = typeof fav.productId === 'object' && fav.productId !== null
-              ? fav.productId._id
-              : typeof fav.productId === 'string'
-              ? fav.productId
-              : null;
-            return id == null ? null : String(id);
-          }).filter((id: string | null): id is string => id !== null);
-          const favoriteIds = new Set<string>(favoriteIdsArray);
-          setFavorites(favoriteIds);
+          const favoriteIdsArray = ((data?.data || []) as FavoriteItem[])
+            .map((fav) => {
+              const id =
+                typeof fav.productId === "object" && fav.productId !== null
+                  ? (fav.productId as { _id?: string })._id
+                  : typeof fav.productId === "string"
+                  ? fav.productId
+                  : null;
+              return id ? String(id) : null;
+            })
+            .filter((id): id is string => id !== null);
+
+          setFavorites(new Set(favoriteIdsArray));
         } else if (res.status === 401 || res.status === 403) {
-          // Handle unauthorized
-          router.push('/auth/login');
-          toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+          router.push("/auth/login");
+          toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
         }
       } catch (error) {
-        console.error('Error fetching favorites:', error);
-        toast.error('Không thể tải danh sách yêu thích');
+        console.error("Error fetching favorites:", error);
+        toast.error("Không thể tải danh sách yêu thích");
       }
     };
 
     fetchFavorites();
   }, [isAuthenticated, router]);
 
-  // Toggle favorite status
-  const toggleFavorite = useCallback(async (productId: string, currentFavoriteCount: number) => {
-    if (!isAuthenticated) {
-      router.push('/auth/login');
-      toast.error('Vui lòng đăng nhập để thêm vào yêu thích');
-      return;
-    }
-
-    if (favoriteLoading.has(productId)) return;
-    
-    const isFavorite = favorites.has(productId);
-    
-    // Optimistic update
-    setFavoriteLoading(prev => new Set(prev).add(productId));
-    
-    // Update local state
-    setFavorites(prev => {
-      const newSet = new Set(prev);
-      if (isFavorite) {
-        newSet.delete(productId);
-      } else {
-        newSet.add(productId);
-      }
-      return newSet;
-    });
-
-    // Update the item's favorite count in display items
-    const updateDisplayItems = (prevItems: Product[]) => 
-      prevItems.map(item => 
-        item._id === productId 
-          ? { 
-              ...item, 
-              FavoriteCount: isFavorite 
-                ? Math.max(0, (item.FavoriteCount || 1) - 1)
-                : (item.FavoriteCount || 0) + 1
-            } 
-          : item
-      );
-
-    if (isLoadMoreMode) {
-      setProducts(updateDisplayItems);
-    } else {
-      setItems(updateDisplayItems);
-    }
-
-    try {
-      // Dynamically import the required API functions
-      const { addToFavorites, removeFromFavorites } = await import('@/services/products/product.api');
-      
-      if (isFavorite) {
-        await removeFromFavorites(productId);
-      } else {
-        await addToFavorites(productId);
+  const toggleFavorite = useCallback(
+    async (productId: string) => {
+      if (!isAuthenticated) {
+        router.push("/auth/login");
+        toast.error("Vui lòng đăng nhập để thêm vào yêu thích");
+        return;
       }
 
-      // Success - state already updated optimistically
-      toast.success(isFavorite ? 'Đã xóa khỏi yêu thích!' : 'Đã thêm vào yêu thích!');
-    } catch (error: any) {
-      console.error('Error toggling favorite:', error);
-      
-      // Revert optimistic update
-      setFavorites(prev => {
+      if (favoriteLoading.has(productId)) return;
+
+      const isFavorite = favorites.has(productId);
+
+      setFavoriteLoading((prev) => new Set(prev).add(productId));
+
+      setFavorites((prev) => {
         const newSet = new Set(prev);
         if (isFavorite) {
-          newSet.add(productId);
-        } else {
           newSet.delete(productId);
+        } else {
+          newSet.add(productId);
         }
         return newSet;
       });
-      
-      const revertDisplayItems = (prevItems: Product[]) => 
-        prevItems.map(item => 
-          item._id === productId 
-            ? { 
-                ...item, 
-                FavoriteCount: isFavorite 
-                  ? (item.FavoriteCount || 0) + 1
-                  : Math.max(0, (item.FavoriteCount || 1) - 1)
-              } 
+
+      const updateDisplayItems = (prevItems: Product[]) =>
+        prevItems.map((item) =>
+          item._id === productId
+            ? {
+                ...item,
+                FavoriteCount: isFavorite
+                  ? Math.max(0, (item.FavoriteCount || 1) - 1)
+                  : (item.FavoriteCount || 0) + 1,
+              }
             : item
         );
 
       if (isLoadMoreMode) {
-        setProducts(revertDisplayItems);
+        setProducts(updateDisplayItems);
       } else {
-        setItems(revertDisplayItems);
-      }
-      
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        router.push('/auth/login');
-        toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-      } else {
-        toast.error(error.message || 'Có lỗi xảy ra, vui lòng thử lại');
-      }
-    } finally {
-      setFavoriteLoading(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(productId);
-        return newSet;
-      });
-    }
-  }, [favorites, favoriteLoading, isAuthenticated, router, isLoadMoreMode]);
-
-  async function fetchStoreData(page?: number) {
-    if (!userGuid) {
-      setError("Không có userGuid");
-      setLoading(false);
-      return;
-    }
-    
-    const fetchPage = page || currentPage;
-
-    try {
-      setLoading(true);
-      setError(null);
-      const queryParams = { limit: LIMIT, page: fetchPage };
-      const res = await getPublicStoreByUserGuid(String(userGuid), queryParams);
-      const { owner: fetchedOwner, items: fetchedItems, total: fetchedTotal } = res?.data || res || { owner: null, items: [], total: 0 };
-      setOwner(fetchedOwner);
-
-      // Determine mode based on total (only on initial load)
-      if (fetchPage === 1) {
-        setTotal(fetchedTotal);
-        setIsLoadMoreMode(false);
-        setItems(fetchedItems);
-      } else if (!isLoadMoreMode) {
-        // For pagination mode, update items
-        setItems(fetchedItems);
+        setItems(updateDisplayItems);
       }
 
-    } catch (e) {
-      console.error("Failed to load owner store", e);
-      setError("Không thể tải dữ liệu cửa hàng");
-    } finally {
-      setLoading(false);
-    }
-  }
+      try {
+        const { addToFavorites, removeFromFavorites } = await import(
+          "@/services/products/product.api"
+        );
 
-  // Fetch store stats separately using existing API
+        if (isFavorite) {
+          await removeFromFavorites(productId);
+        } else {
+          await addToFavorites(productId);
+        }
+
+        toast.success(
+          isFavorite ? "Đã xóa khỏi yêu thích!" : "Đã thêm vào yêu thích!"
+        );
+      } catch (error) {
+        console.error("Error toggling favorite:", error);
+
+        setFavorites((prev) => {
+          const newSet = new Set(prev);
+          if (isFavorite) {
+            newSet.add(productId);
+          } else {
+            newSet.delete(productId);
+          }
+          return newSet;
+        });
+
+        const revertDisplayItems = (prevItems: Product[]) =>
+          prevItems.map((item) =>
+            item._id === productId
+              ? {
+                  ...item,
+                  FavoriteCount: isFavorite
+                    ? (item.FavoriteCount || 0) + 1
+                    : Math.max(0, (item.FavoriteCount || 1) - 1),
+                }
+              : item
+          );
+
+        if (isLoadMoreMode) {
+          setProducts(revertDisplayItems);
+        } else {
+          setItems(revertDisplayItems);
+        }
+
+        const err = error as { response?: { status?: number } };
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          router.push("/auth/login");
+          toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+        } else {
+          toast.error("Có lỗi xảy ra, vui lòng thử lại");
+        }
+      } finally {
+        setFavoriteLoading((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
+        });
+      }
+    },
+    [favorites, favoriteLoading, isAuthenticated, router, isLoadMoreMode]
+  );
+
   const fetchStoreStats = useCallback(async (userGuid: string) => {
     try {
-      // Get all products with a large limit to calculate stats
-      const res = await getPublicStoreByUserGuid(String(userGuid), { limit: 1000, page: 1 });
-      const { items: allItems } = res?.data || res || { items: [] };
-      
-      // Calculate stats from all items
-      const inStockCount = allItems.filter((it: Product) => (it.AvailableQuantity ?? 0) > 0).length;
-      const categories = Array.from(new Set(allItems.map((it: Product) => it.Category?.name).filter(Boolean)));
-      
+      const res = await getPublicStoreByUserGuid(String(userGuid), {
+        limit: 1000,
+        page: 1,
+      });
+      const responseData = res as { data?: { items: Product[] } };
+      const allItems = (responseData.data?.items ?? []) as Product[];
+
+      const inStockCount = allItems.filter(
+        (it) => (it.AvailableQuantity ?? 0) > 0
+      ).length;
+      const categories = Array.from(
+        new Set(
+          allItems
+            .map((it) => it.Category?.name)
+            .filter((name): name is string => Boolean(name))
+        )
+      );
+
       setStoreStats({
         inStockCount,
         categoryCount: categories.length,
-        totalProducts: allItems.length
+        totalProducts: allItems.length,
       });
     } catch (e) {
       console.error("Failed to fetch store stats", e);
-      // Set default stats on error
       setStoreStats({
         inStockCount: 0,
         categoryCount: 0,
-        totalProducts: 0
+        totalProducts: 0,
       });
     }
   }, []);
@@ -331,19 +359,20 @@ export default function OwnerStorePage() {
     if (ownerInfo && userGuid) {
       fetchStoreStats(userGuid);
     }
-  }, [ownerInfo, userGuid]);
+  }, [ownerInfo, userGuid, fetchStoreStats]);
 
-  // Load more handler for load more mode
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || products.length >= total) return;
-    
+
     const nextPage = Math.ceil(products.length / LIMIT) + 1;
     try {
       setLoadingMore(true);
       const queryParams = { limit: LIMIT, page: nextPage };
       const res = await getPublicStoreByUserGuid(String(userGuid), queryParams);
-      const { items: moreItems } = res?.data || res || { items: [] };
-      setProducts(prev => [...prev, ...moreItems]);
+      const responseData = res as { data?: { items: Product[] } };
+      const moreItems = (responseData.data?.items ?? []) as Product[];
+
+      setProducts((prev) => [...prev, ...moreItems]);
     } catch (e) {
       console.error("Failed to load more", e);
       toast.error("Không thể tải thêm sản phẩm");
@@ -352,15 +381,28 @@ export default function OwnerStorePage() {
     }
   }, [userGuid, products.length, total, loadingMore]);
 
-  // Handle page change with smooth scroll and URL update (only pagination mode)
-  const handlePageChange = useCallback((newPage: number) => {
-    if (isLoadMoreMode || newPage < 1 || newPage > totalPages) return;
-    setCurrentPage(newPage);
-    fetchStoreData(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [isLoadMoreMode, totalPages]);
-
-  // Initial load is now handled by the URL-based effect above
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (isLoadMoreMode || newPage < 1 || newPage > totalPages) return;
+      
+      // Clear items immediately to prevent showing old data
+      setItems([]);
+      
+      // Update URL first (this will trigger useEffect which will handle the fetch)
+      router.push(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, page: newPage },
+        },
+        undefined,
+        { shallow: true }
+      );
+      
+      // Instant scroll to top
+      window.scrollTo({ top: 0, behavior: "auto" });
+    },
+    [isLoadMoreMode, totalPages, router]
+  );
 
   if (loading) {
     return (
@@ -377,7 +419,9 @@ export default function OwnerStorePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{error || "Không tìm thấy chủ shop"}</p>
+          <p className="text-red-500 mb-4">
+            {error || "Không tìm thấy chủ shop"}
+          </p>
           <button
             onClick={() => router.push("/products")}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -392,10 +436,9 @@ export default function OwnerStorePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
       <div className="container mx-auto px-4 max-w-7xl py-6">
-        {/* Back button */}
         <div className="mb-8">
-          <button 
-            onClick={() => router.back()} 
+          <button
+            onClick={() => router.back()}
             className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium transition"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -403,15 +446,22 @@ export default function OwnerStorePage() {
           </button>
         </div>
 
-        {/* Owner header */}
         <div className="bg-white border border-gray-200 rounded-3xl p-8 mb-8 shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex flex-col md:flex-row items-start gap-6">
             <div className="flex-shrink-0">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 overflow-hidden ring-2 ring-white/50 shadow-md">
                 {ownerInfo?.avatarUrl ? (
-                  <img src={ownerInfo.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                  <Image
+                    src={ownerInfo.avatarUrl}
+                    alt="avatar"
+                    width={96}
+                    height={96}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-2xl text-gray-400">👤</div>
+                  <div className="w-full h-full flex items-center justify-center text-2xl text-gray-400">
+                    Người dùng
+                  </div>
                 )}
               </div>
             </div>
@@ -420,15 +470,21 @@ export default function OwnerStorePage() {
                 <h1 className="text-3xl font-bold text-gray-900">
                   {ownerInfo.displayName || ownerInfo.fullName || "Chủ shop"}
                 </h1>
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">Shop ID: {userGuid}</span>
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                  Shop ID: {userGuid}
+                </span>
               </div>
               <div className="flex items-center gap-4 mb-4 text-sm text-gray-600 flex-wrap">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                   <span className="font-semibold text-gray-900">
-                    {ownerRatingStats?.average?.toFixed(1) || ownerInfo.reputationScore?.toFixed(1) || "5.0"}
+                    {ownerRatingStats?.average?.toFixed(1) ||
+                      ownerInfo.reputationScore?.toFixed(1) ||
+                      "5.0"}
                   </span>
-                  <span className="text-gray-500">({ownerRatingStats?.total || 0})</span>
+                  <span className="text-gray-500">
+                    ({ownerRatingStats?.total || 0})
+                  </span>
                 </div>
                 <div className="hidden md:block w-px h-4 bg-gray-300" />
                 <div className="flex items-center gap-1">
@@ -452,29 +508,38 @@ export default function OwnerStorePage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
                   <div className="text-gray-600 text-sm">Sản phẩm</div>
-                  <div className="text-2xl font-bold text-gray-900">{total}</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {total}
+                  </div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100">
                   <div className="text-gray-600 text-sm">Còn hàng</div>
-                  <div className="text-2xl font-bold text-gray-900">{storeStats?.inStockCount ?? 0}</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {storeStats?.inStockCount ?? 0}
+                  </div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-100">
                   <div className="text-gray-600 text-sm">Danh mục</div>
-                  <div className="text-2xl font-bold text-gray-900">{storeStats?.categoryCount ?? 0}</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {storeStats?.categoryCount ?? 0}
+                  </div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-100">
                   <div className="text-gray-600 text-sm">Lượt đánh giá</div>
-                  <div className="text-2xl font-bold text-gray-900">{ownerRatingStats?.total ?? 0}</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {ownerRatingStats?.total ?? 0}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Product grid */}
         <div className="bg-white rounded-3xl p-6 shadow-lg mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:mb-0">Sản phẩm đang cho thuê</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:mb-0">
+              Sản phẩm đang cho thuê
+            </h2>
           </div>
 
           {displayItems.length === 0 ? (
@@ -487,31 +552,33 @@ export default function OwnerStorePage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {displayItems.map((it, index) => {
-                const thumb = it.Images?.[0]?.Url || '/placeholder.jpg';
+                const thumb = it.Images?.[0]?.Url || "/placeholder.jpg";
                 const href = `/products/details?id=${it._id}`;
                 const availableQuantity = it.AvailableQuantity || 0;
                 const quantity = it.Quantity || 1;
                 const viewCount = it.ViewCount || 0;
                 const rentCount = it.RentCount || 0;
-                const favoriteCount = it.FavoriteCount || 0;
-                
+
                 return (
                   <div
                     key={it._id}
                     onClick={() => router.push(href)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && router.push(href)}
+                    onKeyDown={(e) => e.key === "Enter" && router.push(href)}
                     className="group h-full flex flex-col cursor-pointer bg-white rounded-xl shadow-sm hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 overflow-hidden"
                     style={{
                       transitionDelay: `${index * 50}ms`,
                     }}
                   >
                     <div className="relative h-48 bg-gray-200 overflow-hidden">
-                      <img
+                      <Image
                         src={thumb}
                         alt={it.Title}
+                        width={400}
+                        height={300}
                         className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                        priority={index < 4}
                       />
                       {availableQuantity === 0 && (
                         <div className="absolute top-3 right-3 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
@@ -537,32 +604,36 @@ export default function OwnerStorePage() {
                             </span>
                           )}
                         </div>
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleFavorite(it._id, it.FavoriteCount || 0);
+                            toggleFavorite(it._id);
                           }}
                           className="flex items-center gap-1 group relative"
                           disabled={favoriteLoading.has(it._id)}
-                          title={favorites.has(it._id) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'}
+                          title={
+                            favorites.has(it._id)
+                              ? "Xóa khỏi yêu thích"
+                              : "Thêm vào yêu thích"
+                          }
                         >
                           {favoriteLoading.has(it._id) ? (
                             <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                           ) : (
-                            <Bookmark 
-                              size={16} 
+                            <Bookmark
+                              size={16}
                               className={`transition-colors ${
-                                favorites.has(it._id) 
-                                  ? 'text-yellow-500 fill-yellow-500' 
-                                  : 'text-gray-400 hover:text-yellow-500'
-                              }`} 
+                                favorites.has(it._id)
+                                  ? "text-yellow-500 fill-yellow-500"
+                                  : "text-gray-400 hover:text-yellow-500"
+                              }`}
                             />
                           )}
-                          <span 
+                          <span
                             className={`text-sm ${
-                              favorites.has(it._id) 
-                                ? 'text-yellow-600 font-medium' 
-                                : 'text-gray-500'
+                              favorites.has(it._id)
+                                ? "text-yellow-600 font-medium"
+                                : "text-gray-500"
                             }`}
                           >
                             {it.FavoriteCount || 0}
@@ -572,7 +643,8 @@ export default function OwnerStorePage() {
                       <div className="flex items-center gap-1 text-sm text-gray-600 mb-3 min-h-[1.5rem]">
                         <MapPin size={14} className="text-gray-400" />
                         <span className="truncate">
-                          {it.District || ''}{it.City ? `, ${it.City}` : ''}
+                          {it.District || ""}
+                          {it.City ? `, ${it.City}` : ""}
                         </span>
                       </div>
                       <div className="bg-blue-50 rounded-lg p-3 mb-3 min-h-[4.5rem]">
@@ -610,7 +682,8 @@ export default function OwnerStorePage() {
                         <div>
                           <span className="font-semibold">
                             {availableQuantity}/{quantity}
-                          </span> sản phẩm
+                          </span>{" "}
+                          sản phẩm
                         </div>
                       </div>
 
@@ -648,7 +721,6 @@ export default function OwnerStorePage() {
             </div>
           )}
 
-          {/* Load More Button (for load more mode) */}
           {isLoadMoreMode && products.length < total && (
             <div className="text-center mt-8">
               <button
@@ -671,24 +743,21 @@ export default function OwnerStorePage() {
             </div>
           )}
 
-          {/* Pagination (for pagination mode) */}
           {!isLoadMoreMode && totalPages > 1 && (
             <div className="flex flex-col sm:flex-row items-center justify-between mt-12 space-y-4 sm:space-y-0">
               <div className="flex flex-wrap items-center justify-center gap-2">
-                
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
                   className={`p-2 rounded-lg border ${
-                    currentPage === 1 
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    currentPage === 1
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-50"
                   } transition`}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                {/* Page numbers */}
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum;
                   if (totalPages <= 5) {
@@ -700,43 +769,41 @@ export default function OwnerStorePage() {
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <button
                       key={pageNum}
                       onClick={() => handlePageChange(pageNum)}
                       className={`w-10 h-10 flex items-center justify-center rounded-lg ${
                         currentPage === pageNum
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "border border-gray-300 text-gray-600 hover:bg-gray-50"
                       } transition`}
                     >
                       {pageNum}
                     </button>
                   );
                 })}
-                
+
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   className={`p-2 rounded-lg border ${
                     currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-50"
                   } transition`}
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
-                
               </div>
             </div>
           )}
         </div>
 
-        {/* Customer Reviews Section */}
         {ownerInfo?._id && (
-          <OwnerRatingsSection 
-            ownerId={ownerInfo._id} 
+          <OwnerRatingsSection
+            ownerId={ownerInfo._id}
             onStatsUpdate={setOwnerRatingStats}
           />
         )}

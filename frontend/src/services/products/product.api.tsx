@@ -15,7 +15,9 @@ export const getProductsByCategoryId = async (
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
-    const res = await instance.get(`/products/product/category/${categoryId}${qs ? `?${qs}` : ""}`);
+    const res = await instance.get(
+      `/products/product/category/${categoryId}${qs ? `?${qs}` : ""}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -25,7 +27,11 @@ export const getProductsByCategoryId = async (
     return { data: { items: [], total: 0 } } as any;
   }
 };
-export const setDefaultAddress = (addressData: {Address: string;City: string;District: string;}) => {
+export const setDefaultAddress = (addressData: {
+  Address: string;
+  City: string;
+  District: string;
+}) => {
   return instance.post("/products/addresses/default", addressData);
 };
 export const addProduct = async (productData: any): Promise<Response> => {
@@ -51,7 +57,10 @@ export const getProductById = async (id: string): Promise<Response> => {
   return await instance.get(`/products/user/${id}`);
 };
 
-export const updateProduct = async (id: string,productData: any): Promise<Response> => {
+export const updateProduct = async (
+  id: string,
+  productData: any
+): Promise<Response> => {
   return await instance.put(`/products/user/${id}`, productData);
 };
 
@@ -61,10 +70,12 @@ export const deleteProduct = async (id: string): Promise<Response> => {
 
 //moderator
 export const getPendingProducts = async (): Promise<Response> => {
-  return await instance.get("/products/pending"); 
+  return await instance.get("/products/pending");
 };
 
-export const getPendingProductDetails = async (id: string): Promise<Response> => {
+export const getPendingProductDetails = async (
+  id: string
+): Promise<Response> => {
   return await instance.get(`/products/pending/${id}`);
 };
 
@@ -72,7 +83,10 @@ export const approveProduct = async (id: string): Promise<Response> => {
   return await instance.put(`/products/pending/${id}/approve`);
 };
 
-export const rejectProduct = async (id: string, reason?: string): Promise<Response> => {
+export const rejectProduct = async (
+  id: string,
+  reason?: string
+): Promise<Response> => {
   return await instance.put(`/products/pending/${id}/reject`, { reason });
 };
 
@@ -107,7 +121,10 @@ export const getTopProductsForHighlight = async (): Promise<Response> => {
   return await instance.get("/products/top-for-highlight");
 };
 
-export const toggleProductHighlight = async (id: string, isHighlighted?: boolean): Promise<Response> => {
+export const toggleProductHighlight = async (
+  id: string,
+  isHighlighted?: boolean
+): Promise<Response> => {
   const body = isHighlighted !== undefined ? { isHighlighted } : {};
   return await instance.put(`/products/approve/${id}/highlight`, body);
 };
@@ -128,9 +145,14 @@ export const getFavorites = async (): Promise<Response> => {
   return await instance.get("/products/favorites");
 };
 
-export const getTopViewedItemsByOwner = async (ownerId: string, limit: number = 4) => {
+export const getTopViewedItemsByOwner = async (
+  ownerId: string,
+  limit: number = 4
+) => {
   try {
-    const res = await instance.get(`/products/owner/${ownerId}/top-viewed?limit=${limit}`);
+    const res = await instance.get(
+      `/products/owner/${ownerId}/top-viewed?limit=${limit}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -153,13 +175,18 @@ export const getAllItems = async () => {
   }
 };
 
-export const getFeaturedItems = async (params?: { page?: number; limit?: number }) => {
+export const getFeaturedItems = async (params?: {
+  page?: number;
+  limit?: number;
+}) => {
   try {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
-    const res = await instance.get(`/products/product/featured${qs ? `?${qs}` : ""}`);
+    const res = await instance.get(
+      `/products/product/featured${qs ? `?${qs}` : ""}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -231,7 +258,9 @@ export const getPublicStoreByUserGuid = async (
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
-    const res = await instance.get(`/products/store/${userGuid}${qs ? `?${qs}` : ""}`);
+    const res = await instance.get(
+      `/products/store/${userGuid}${qs ? `?${qs}` : ""}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -253,9 +282,11 @@ export const getComparableProducts = async (
     const query = new URLSearchParams();
     if (limit) query.set("limit", limit.toString());
 
-    const url = `/products/compare/${productId}/${categoryId}${query.toString() ? `?${query.toString()}` : ""}`;
-    console.log('Fetching comparable products from:', url);
-    
+    const url = `/products/compare/${productId}/${categoryId}${
+      query.toString() ? `?${query.toString()}` : ""
+    }`;
+    console.log("Fetching comparable products from:", url);
+
     const res = await instance.get(url);
 
     if (!res.ok) {
@@ -264,7 +295,7 @@ export const getComparableProducts = async (
     }
 
     const data = await res.json();
-    console.log('Comparable products response:', data);
+    console.log("Comparable products response:", data);
     return data;
   } catch (error: any) {
     console.error("Error fetching comparable products:", error);
@@ -281,15 +312,13 @@ export const getRatingsByItem = async (itemId: string) => {
       throw new Error(`HTTP ${res.status}: ${text}`);
     }
 
-    const data = await res.json(); 
+    const data = await res.json();
     return { data: Array.isArray(data) ? data : [] };
   } catch (error: any) {
     console.error(" Error fetching ratings:", error?.message || error);
     return { data: [] };
   }
 };
-
-
 
 export const createRating = async (formData: FormData) => {
   try {

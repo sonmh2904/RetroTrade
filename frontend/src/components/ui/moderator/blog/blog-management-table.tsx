@@ -248,12 +248,9 @@ export function BlogManagementTable() {
           open={openEdit}
           postId={editBlogId}
           onClose={handleCloseEdit}
-          onSuccess={(updatedPost) => {
+          onSuccess={async () => {
             toast.success("Cập nhật bài viết thành công!");
-
-            setPosts((prev) =>
-              prev.map((p) => (p._id === updatedPost._id ? updatedPost : p))
-            );
+            await fetchPosts(); 
           }}
         />
       )}

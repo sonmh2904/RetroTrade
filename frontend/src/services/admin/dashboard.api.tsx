@@ -145,7 +145,9 @@ export interface ProductStats {
 export const dashboardApi = {
 
   getDashboardStats: async (): Promise<DashboardStats> => {
-    const response = await api.get("/admin/dashboard/stats");
+    // Add cache-busting timestamp to force fresh data
+    const timestamp = Date.now();
+    const response = await api.get(`/admin/dashboard/stats?t=${timestamp}`);
     const result = await response.json();
     if (result.code !== 200) {
       throw new Error(result.message || "Failed to fetch dashboard stats");
