@@ -53,7 +53,7 @@ const createChatSession = async (req, res) => {
   }
 };
 
-// Gửi message và nhận response từ AI
+// Gửi message và nhận response từ AI (FIXED: Ensure content is always string)
 const sendMessage = async (req, res) => {
   try {
     const user = req.user;
@@ -92,13 +92,11 @@ const sendMessage = async (req, res) => {
     await chatSession.save();
 
     // 2. Xây dựng context chính xác cho AI API
-    // Lưu ý: Cần lưu cả products để có thể dùng lại trong context
     const fullHistory = chatSession.messages.map((m) => {
       const msg = {
         role: m.role,
         content: m.content,
       };
-      // Lưu products từ message để có thể dùng lại (nếu có)
       if (m.products && Array.isArray(m.products) && m.products.length > 0) {
         msg.products = m.products;
       }
@@ -112,16 +110,18 @@ const sendMessage = async (req, res) => {
       if (m.bestProduct) {
         msg.bestProduct = m.bestProduct;
       }
+      if (
+        m.bestProducts &&
+        Array.isArray(m.bestProducts) &&
+        m.bestProducts.length > 0
+      ) {
+        msg.bestProducts = m.bestProducts;
+      }
       return msg;
     });
 
-    // Loại user hiện tại để lấy previous history (số chẵn, kết thúc bằng 'model')
     const previousHistory = fullHistory.slice(0, -1);
-
-    // Lấy last 10 tin từ previous (số chẵn, bắt đầu bằng 'user' nếu có)
-    const historyForAPI = previousHistory.slice(-10); // -10 của chẵn = bắt đầu index chẵn (user)
-
-    // Context: previous + current user (bao gồm cả products từ previous messages)
+    const historyForAPI = previousHistory.slice(-10);
     const currentUserMsg = { role: "user", content: message };
     const context = [...historyForAPI, currentUserMsg];
 
@@ -138,7 +138,7 @@ const sendMessage = async (req, res) => {
       aiResponse = await sendToGemini(context, searchUserId);
     }
 
-    // Format products để lưu vào message (chỉ lưu thông tin cần thiết)
+    // Format products để lưu vào message
     const formatProductsForStorage = (products) => {
       if (!products || !Array.isArray(products)) return [];
       return products.slice(0, 20).map((p) => {
@@ -172,13 +172,24 @@ const sendMessage = async (req, res) => {
       });
     };
 
+    const formatBestProductsForStorage = (bestProducts) => {
+      if (!bestProducts || !Array.isArray(bestProducts)) return [];
+      return formatProductsForStorage(bestProducts);
+    };
+
+    const safeContent = (() => {
+      if (typeof aiResponse === "string") return aiResponse;
+      if (aiResponse && typeof aiResponse.content === "string")
+        return aiResponse.content;
+      return "Không nhận được phản hồi từ AI. Hãy thử lại!"; 
+    })();
+
     const aiMsg = {
       role: "model",
-      content: aiResponse.content || aiResponse,
+      content: safeContent, 
       timestamp: new Date(),
       productSuggestions: aiResponse.suggestions || [],
       orderId: aiResponse.orderId,
-      // Lưu products vào message để có thể dùng lại trong context (format đơn giản)
       products: formatProductsForStorage(aiResponse.products || []),
       recommendations: formatProductsForStorage(
         aiResponse.recommendations || []
@@ -186,12 +197,16 @@ const sendMessage = async (req, res) => {
       bestProduct: aiResponse.bestProduct
         ? formatProductsForStorage([aiResponse.bestProduct])[0]
         : null,
+      bestProducts: formatBestProductsForStorage(aiResponse.bestProducts || []),
     };
+
+    if (typeof aiMsg.content !== "string") {
+      throw new Error(`Invalid content type: ${typeof aiMsg.content}`);
+    }
 
     chatSession.messages.push(aiMsg);
     chatSession.updatedAt = new Date();
     await chatSession.save();
-
 
     res.json({
       message: "Gửi message thành công",
@@ -201,7 +216,8 @@ const sendMessage = async (req, res) => {
         products: aiResponse.products,
         productDetail: aiResponse.productDetail,
         recommendations: aiResponse.recommendations,
-        bestProduct: aiResponse.bestProduct, // Sản phẩm tốt nhất (1 cái)
+        bestProduct: aiResponse.bestProduct,
+        bestProducts: aiResponse.bestProducts,
       },
     });
   } catch (error) {
