@@ -1,10 +1,11 @@
-/* eslint-disable @next/next/no-img-element */
+// File: app/dispute/[id]/page.tsx
+"use client";
 
-import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { getDisputeById } from "@/services/moderator/disputeOrder.api";
-import { format } from "date-fns";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import { format } from "date-fns";
 import {
   AlertCircle,
   Calendar,
@@ -18,11 +19,23 @@ import {
   Eye,
   DollarSign,
   Gavel,
-  Loader2,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
 import { Card } from "@/components/ui/common/card";
 import { toast } from "sonner";
+
+// Import đúng type từ API service
+import { getDisputeById } from "@/services/moderator/disputeOrder.api";
+import type { ApiResponse } from "@iService";
+
+// Type hỗ trợ khi backend populate user
+interface PopulatedUser {
+  _id: string;
+  fullName: string;
+  email: string;
+  avatarUrl?: string;
+}
 
 interface OrderSnapshot {
   _id: string;
@@ -35,22 +48,19 @@ interface OrderSnapshot {
     basePrice?: number;
     priceUnit?: string;
   };
-  rentalDuration?: number;
-  rentalUnit?: string;
   unitCount?: number;
-  depositAmount?: number;
-  serviceFee?: number;
-  createdAt?: string;
 }
 
-interface Dispute {
+// Dữ liệu thật từ backend (reporterId/reportedUserId có thể là string hoặc object)
+interface DisputeFromAPI {
   _id: string;
   orderId: string | OrderSnapshot;
-  reporterId: { _id: string; fullName: string; email: string };
-  reportedUserId: { _id: string; fullName: string; email: string };
+  orderGuid: string;
+  reporterId: string | PopulatedUser;
+  reportedUserId: string | PopulatedUser;
   reason: string;
   description?: string;
-  evidence?: string[];
+  evidence: string[];
   status: "Pending" | "In Progress" | "Reviewed" | "Resolved" | "Rejected";
   resolution?: {
     decision: string;
@@ -59,11 +69,19 @@ interface Dispute {
     refundPercentage?: number;
     refundTarget?: "reporter" | "reported";
   };
-  handledBy?: { _id: string; fullName: string };
+  handledBy?: PopulatedUser;
   handledAt?: string;
   createdAt: string;
 }
 
+// Helper hiển thị user an toàn
+const getUserDisplay = (user: string | PopulatedUser | undefined) => {
+  if (!user) return { fullName: "Không xác định", email: "" };
+  if (typeof user === "string") return { fullName: "Đang tải...", email: "" };
+  return user;
+};
+
+// Config trạng thái
 const statusConfig = {
   Pending: {
     label: "Đang chờ",
@@ -90,52 +108,36 @@ const statusConfig = {
     color: "bg-red-100 text-red-800",
     icon: XCircle,
   },
-};
+} as const;
 
-const getRefundTargetLabel = (target?: string): string => {
-  if (target === "reporter") return "Người khiếu nại (người thuê)";
-  if (target === "reported") return "Người bị khiếu nại (người bán)";
-  return "Không áp dụng";
-};
+const getRefundTargetLabel = (target?: string) =>
+  target === "reporter"
+    ? "Người khiếu nại (người thuê)"
+    : target === "reported"
+    ? "Người bị khiếu nại (người cho thuê)"
+    : "Không áp dụng";
 
 const getOrderStatusLabel = (status?: string) => {
-  if (!status) return "Không xác định";
   const map: Record<string, string> = {
     pending: "Chờ xác nhận",
     confirmed: "Đã xác nhận",
+    progress: "Đang thuê",
     delivering: "Đang giao",
-    delivered: "Đã giao",
+    returned: "Đã trả",
     completed: "Hoàn tất",
     cancelled: "Đã hủy",
-    disputed: "Đang tranh chấp",
+    disputed: "Đang Khiếu nại",
     refunded: "Đã hoàn tiền",
   };
-  return map[status.toLowerCase()] || status;
+  return map[(status || "").toLowerCase()] || status || "Không xác định";
 };
 
-const getPaymentStatusLabel = (status?: string) => {
-  if (!status) return "Không xác định";
-  const map: Record<string, string> = {
-    pending: "Chờ thanh toán",
-    not_paid: "Chưa thanh toán",
-    paid: "Đã thanh toán",
-    refunded: "Đã hoàn tiền",
-    partial: "Thanh toán một phần",
-    failed: "Thanh toán thất bại",
-  };
-  return map[status.toLowerCase()] || status;
+const getUnitName = (unit?: string) => {
+  const map = { "1": "giờ", "2": "ngày", "3": "tuần", "4": "tháng" };
+  return map[unit as keyof typeof map] || "đơn vị";
 };
 
-const getUnitName = (priceUnit?: string) => {
-  const map: Record<string, string> = {
-    "1": "giờ",
-    "2": "ngày",
-    "3": "tuần",
-    "4": "tháng",
-  };
-  return map[priceUnit || ""] || "đơn vị";
-};
-
+// Component xem ảnh
 function ImagePreview({
   src,
   index,
@@ -145,57 +147,34 @@ function ImagePreview({
   index: number;
   total: number;
 }) {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
   const [open, setOpen] = useState(false);
 
   return (
     <>
-   
       <div
         onClick={() => setOpen(true)}
         className="group relative block rounded-xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-zoom-in bg-gray-100 border border-gray-200"
       >
-
-        {!loaded && !error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-200 z-10">
-            <Loader2 className="w-10 h-10 text-gray-400 animate-spin" />
-          </div>
-        )}
-
-      
-        {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-200 text-gray-500 z-10">
-            <AlertCircle className="w-12 h-12 mb-2" />
-            <p className="text-sm font-medium">Không tải được</p>
-          </div>
-        )}
-
-
-        <img
+        <Image
           src={src}
           alt={`Bằng chứng ${index}`}
-          loading="lazy"
-          onLoad={() => setLoaded(true)}
-          onError={() => setError(true)}
-          className={`w-full h-48 object-cover transition-all duration-700 ${
-            loaded ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          } group-hover:scale-110`}
+          width={600}
+          height={400}
+          className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-700"
+          onError={(e) => {
+            e.currentTarget.src = "/placeholder-image.png";
+          }}
         />
-
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
           <span className="text-white text-sm font-medium bg-black/50 px-2 py-1 rounded">
             {index}/{total}
           </span>
         </div>
-
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
           <Eye className="w-12 h-12 text-white drop-shadow-lg" />
         </div>
       </div>
 
-      {/* Modal fullscreen */}
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm"
@@ -204,13 +183,15 @@ function ImagePreview({
           <div className="relative max-w-5xl max-h-full p-4">
             <button
               onClick={() => setOpen(false)}
-              className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full p-3 transition z-10"
+              className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full p-3 z-10"
             >
               <XCircle className="w-8 h-8" />
             </button>
-            <img
+            <Image
               src={src}
               alt={`Bằng chứng ${index}`}
+              width={1200}
+              height={800}
               className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
             />
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-medium">
@@ -223,93 +204,98 @@ function ImagePreview({
   );
 }
 
+// Loading & NotFound (đã fix return đúng cách)
+const LoadingSkeleton = () => (
+  <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
+    <div className="max-w-5xl mx-auto space-y-8">
+      <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
+      <div className="h-48 bg-gray-200 rounded-3xl animate-pulse" />
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="h-32 bg-gray-200 rounded-200 rounded-2xl animate-pulse" />
+        <div className="h-32 bg-gray-200 rounded-2xl animate-pulse" />
+      </div>
+      <div className="h-64 bg-gray-200 rounded-2xl animate-pulse" />
+    </div>
+  </div>
+);
+
+const NotFound = () => (
+  <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center p-6">
+    <Card className="max-w-md text-center p-12 bg-white shadow-2xl">
+      <AlertCircle className="w-20 h-20 text-red-500 mx-auto mb-6" />
+      <h2 className="text-2xl font-bold text-gray-800 mb-3">
+        Không tìm thấy Khiếu nại
+      </h2>
+      <p className="text-gray-600 mb-8">
+        Mã Khiếu nạikhông tồn tại hoặc đã bị xóa.
+      </p>
+      <Link href="/order">
+        <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700">
+          Quay lại danh sách đơn hàng
+        </Button>
+      </Link>
+    </Card>
+  </div>
+);
+
 export default function DisputeDetailPage() {
   const router = useRouter();
-  const [dispute, setDispute] = useState<Dispute | null>(null);
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [dispute, setDispute] = useState<DisputeFromAPI | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!router.isReady) return;
+    if (!id) return;
 
-    const rawId = router.query.id;
-    let disputeId = "";
-
-    if (typeof rawId === "string") {
-      disputeId = rawId;
-    } else if (Array.isArray(rawId)) {
-      disputeId = rawId[0];
-    } else if (rawId && typeof rawId === "object") {
-      disputeId = Object.values(rawId)[0] as string;
-    }
-
-    if (!disputeId || disputeId === "[object Object]") {
-      console.error("disputeId is invalid:", disputeId);
-      setError(true);
-      setLoading(false);
-      return;
-    }
-
-    getDisputeById(disputeId)
-      .then((res) => {
+    getDisputeById(id)
+      .then((res: ApiResponse<DisputeFromAPI>) => {
         if (res.code === 200 && res.data) {
           setDispute(res.data);
         } else {
-          setError(true);
+          toast.error("Không tìm thấy Khiếu nại");
+          router.replace("/order");
         }
       })
-      .catch((err) => {
-        console.error("Error fetching dispute:", err);
-        toast.error("Không tải được thông tin tranh chấp");
-        setError(true);
+      .catch(() => {
+        toast.error("Lỗi tải dữ liệu");
+        router.replace("/order");
       })
       .finally(() => setLoading(false));
-  }, [router.isReady, router.query.id]);
-
-  // Đóng modal bằng phím ESC
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        document.body.click(); // Đóng tất cả modal
-      }
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, []);
+  }, [id, router]);
 
   const formatDate = (date: string) =>
     format(new Date(date), "dd/MM/yyyy HH:mm");
 
   if (loading) return <LoadingSkeleton />;
-  if (error || !dispute) return <NotFound />;
+  if (!dispute) return <NotFound />;
 
-  const statusInfo = statusConfig[dispute.status];
+  const statusInfo = statusConfig[dispute.status] || statusConfig.Pending;
   const StatusIcon = statusInfo.icon;
-  const order =
-    dispute.orderId && typeof dispute.orderId === "object"
-      ? (dispute.orderId as OrderSnapshot)
-      : null;
+
+  const reporter = getUserDisplay(dispute.reporterId);
+  const reported = getUserDisplay(dispute.reportedUserId);
+  const order = typeof dispute.orderId === "object" ? dispute.orderId : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
       <div className="max-w-5xl mx-auto space-y-8">
-        {/* Breadcrumb */}
-        <nav className="text-sm text-gray-600">
-          <Link href="/order" className="hover:text-blue-600 transition">
-            Đơn hàng
-          </Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">
-            Tranh chấp #{dispute._id.slice(-6)}
-          </span>
-        </nav>
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-emerald-700 transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Quay lại
+        </button>
 
         {/* Header */}
         <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-8 rounded-3xl shadow-2xl">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
-              <p className="text-sm opacity-90">Mã tranh chấp</p>
-              <p className="text-3xl font-bold tracking-tight">{dispute._id}</p>
+              <p className="text-sm opacity-90">Mã Khiếu nại</p>
+              <p className="text-3xl font-bold tracking-tight">
+                #{dispute._id.slice(-8).toUpperCase()}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-sm opacity-90">Trạng thái</p>
@@ -323,51 +309,53 @@ export default function DisputeDetailPage() {
           </div>
         </div>
 
-        {/* Order Info */}
+        {/* Thông tin đơn hàng */}
         {order && (
           <section className="space-y-4">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-              <Package className="w-7 h-7 text-emerald-600" />
-              Thông tin đơn hàng
+              <Package className="w-7 h-7 text-emerald-600" /> Thông tin đơn
+              hàng
             </h2>
-            <Card className="p-6 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <Card className="p-6 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
+              <div className="flex justify-between items-start mb-6">
                 <div>
-                  <p className="text-lg font-semibold text-gray-800">
+                  <p className="text-lg font-semibold">
                     Mã đơn:{" "}
-                    <span className="text-emerald-700">{order.orderGuid}</span>
+                    <span className="text-emerald-700">
+                      #{order.orderGuid.slice(0, 8).toUpperCase()}
+                    </span>
                   </p>
-                  <p className="text-gray-600">
+                  <p>
                     Trạng thái:{" "}
                     <span className="font-medium">
                       {getOrderStatusLabel(order.orderStatus)}
                     </span>
                   </p>
                 </div>
-                {order._id && (
-                  <Link href={`/order/${order._id}`}>
-                    <Button className="bg-emerald-600 hover:bg-emerald-700">
-                      <Eye className="w-5 h-5 mr-2" />
-                      Xem chi tiết đơn
-                    </Button>
-                  </Link>
-                )}
+                <Link href={`/auth/my-orders/${order._id}`}>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700">
+                    <Eye className="w-5 h-5 mr-2" /> Xem chi tiết
+                  </Button>
+                </Link>
               </div>
-              <div className="grid gap-6 md:grid-cols-[220px,1fr]">
-                <div className="relative h-52 rounded-2xl overflow-hidden bg-white shadow-inner border border-emerald-100">
-                  {order.itemSnapshot?.images &&
-                  order.itemSnapshot.images.length > 0 ? (
-                    <img
+
+              <div className="grid md:grid-cols-[220px,1fr] gap-6">
+                <div className="relative h-100 rounded-2xl overflow-hidden bg-white shadow-inner border">
+                  {order.itemSnapshot?.images?.[0] ? (
+                    <Image
                       src={order.itemSnapshot.images[0]}
                       alt={order.itemSnapshot.title || "Ảnh sản phẩm"}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
+                      unoptimized // Thêm dòng này nếu ảnh từ domain ngoài (rất quan trọng!)
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-emerald-400">
+                    <div className="flex items-center justify-center h-full text-emerald-400 bg-gray-50">
                       <Package className="w-16 h-16" />
                     </div>
                   )}
                 </div>
+
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs uppercase text-gray-500">Sản phẩm</p>
@@ -376,7 +364,7 @@ export default function DisputeDetailPage() {
                     </p>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                    <div className="bg-white rounded-2xl p-4 border">
                       <p className="text-xs text-gray-500">Giá thuê</p>
                       <p className="text-lg font-semibold text-emerald-700">
                         {(order.itemSnapshot?.basePrice || 0).toLocaleString(
@@ -385,7 +373,7 @@ export default function DisputeDetailPage() {
                         ₫ / {getUnitName(order.itemSnapshot?.priceUnit)}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                    <div className="bg-white rounded-2xl p-4 border">
                       <p className="text-xs text-gray-500">Số lượng</p>
                       <p className="text-lg font-semibold">
                         {order.unitCount || 1} món
@@ -398,75 +386,71 @@ export default function DisputeDetailPage() {
           </section>
         )}
 
-        
+        {/* Người khiếu nại & bị khiếu nại */}
         <section className="grid md:grid-cols-2 gap-8">
           <div>
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
-              <User className="w-6 h-6 text-red-600" />
-              Người báo cáo
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-3">
+              <User className="w-6 h-6 text-red-600" /> Người khiếu nại
             </h3>
             <Card className="p-6 bg-red-50 border border-red-200">
               <p className="text-lg font-bold text-red-800">
-                {dispute.reporterId.fullName}
+                {reporter.fullName}
               </p>
-              <p className="text-gray-600">{dispute.reporterId.email}</p>
+              <p className="text-gray-600">{reporter.email}</p>
             </Card>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
-              <User className="w-6 h-6 text-orange-600" />
-              Người bị báo cáo
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-3">
+              <User className="w-6 h-6 text-orange-600" /> Người bị khiếu nại
             </h3>
             <Card className="p-6 bg-orange-50 border border-orange-200">
               <p className="text-lg font-bold text-orange-800">
-                {dispute.reportedUserId.fullName}
+                {reported.fullName}
               </p>
-              <p className="text-gray-600">{dispute.reportedUserId.email}</p>
+              <p className="text-gray-600">{reported.email}</p>
             </Card>
           </div>
         </section>
 
-        {/* Nội dung */}
+        {/* Nội dung khiếu nại */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-            <FileText className="w-7 h-7 text-blue-600" />
-            Nội dung tranh chấp
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+            <FileText className="w-7 h-7 text-blue-600" /> Nội dung khiếu nại
           </h2>
           <Card className="p-6 bg-blue-50 border border-blue-200">
             <div className="space-y-5">
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">
-                  Lý do chính
+                  Lý do
                 </p>
-                <p className="text-lg px-4 py-2 bg-amber-100 text-red-600">
-                       {dispute.reason}
+                <p className="text-lg px-4 py-2 bg-amber-100 text-red-600 rounded-lg">
+                  {dispute.reason}
                 </p>
               </div>
               {dispute.description && (
                 <div>
                   <p className="text-sm font-semibold text-gray-700 mb-2">
-                    Mô tả chi tiết
+                    Chi tiết
                   </p>
-                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-lg border">
+                  <p className="bg-white p-4 rounded-lg border whitespace-pre-wrap leading-relaxed">
                     {dispute.description}
                   </p>
                 </div>
               )}
               <div className="flex items-center gap-2 text-gray-600">
                 <Calendar className="w-5 h-5" />
-                <span className="font-medium">Thời gian gửi:</span>
-                <span>{formatDate(dispute.createdAt)}</span>
+                <span>Gửi lúc: {formatDate(dispute.createdAt)}</span>
               </div>
             </div>
           </Card>
         </section>
 
-     
-        {dispute.evidence && dispute.evidence.length > 0 && (
+        {/* Bằng chứng */}
+        {dispute.evidence.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-              <ImageIcon className="w-7 h-7 text-purple-600" />
-              Bằng chứng ({dispute.evidence.length})
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+              <ImageIcon className="w-7 h-7 text-purple-600" /> Bằng chứng (
+              {dispute.evidence.length})
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {dispute.evidence.map((url, i) => (
@@ -474,7 +458,7 @@ export default function DisputeDetailPage() {
                   key={i}
                   src={url}
                   index={i + 1}
-                  total={dispute.evidence!.length}
+                  total={dispute.evidence.length}
                 />
               ))}
             </div>
@@ -485,9 +469,8 @@ export default function DisputeDetailPage() {
         {(dispute.status === "Resolved" || dispute.status === "Rejected") &&
           dispute.resolution && (
             <section>
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <Gavel className="w-7 h-7 text-indigo-600" />
-                Kết quả xử lý
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                <Gavel className="w-7 h-7 text-indigo-600" /> Kết quả xử lý
               </h2>
               <Card
                 className={`p-8 border-2 ${
@@ -497,8 +480,8 @@ export default function DisputeDetailPage() {
                 }`}
               >
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between flex-wrap gap-4">
-                    <p className="text-xl font-bold text-gray-800">
+                  <div className="flex justify-between items-center">
+                    <p className="text-xl font-bold">
                       Quyết định:{" "}
                       <span
                         className={
@@ -511,114 +494,59 @@ export default function DisputeDetailPage() {
                       </span>
                     </p>
                     {dispute.resolution.refundAmount > 0 && (
-                      <div className="flex items-center gap-2 text-2xl font-bold text-green-700">
-                        <DollarSign className="w-8 h-8" />
+                      <p className="text-3xl font-bold text-green-600">
                         {dispute.resolution.refundAmount.toLocaleString(
                           "vi-VN"
-                        )}{" "}
+                        )}
                         ₫
-                      </div>
+                      </p>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-white/70 rounded-xl p-4 border border-gray-200">
-                      <p className="text-sm text-gray-500">Phần trăm hoàn</p>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="bg-white/70 p-4 rounded-xl border">
+                      <p className="text-sm text-gray-500">Hoàn tiền</p>
                       <p className="text-2xl font-bold text-green-700">
                         {dispute.resolution.refundPercentage ?? 0}%
                       </p>
                     </div>
-                    <div className="bg-white/70 rounded-xl p-4 border border-gray-200">
+                    <div className="bg-white/70 p-4 rounded-xl border">
                       <p className="text-sm text-gray-500">Hoàn cho</p>
-                      <p className="text-lg font-semibold text-gray-800">
+                      <p className="text-lg font-semibold">
                         {getRefundTargetLabel(dispute.resolution.refundTarget)}
                       </p>
                     </div>
                   </div>
                   {dispute.resolution.notes && (
-                    <div>
-                      <p className="font-semibold text-gray-700 mb-2">
-                        Ghi chú từ admin
-                      </p>
-                      <p className="text-gray-700 italic bg-white p-4 rounded-lg border">
-                        &ldquo;{dispute.resolution.notes}&rdquo;
-                      </p>
-                    </div>
+                    <p className="italic bg-white p-4 rounded-lg border">
+                      &ldquo;{dispute.resolution.notes}&rdquo;
+                    </p>
                   )}
-                  <div className="flex items-center justify-between text-sm text-gray-600 pt-4 border-t">
-                    {dispute.handledBy && (
-                      <p>
-                        <User className="w-4 h-4 inline mr-1" />
-                        Xử lý bởi:{" "}
-                        <span className="font-bold">
-                          {dispute.handledBy.fullName}
-                        </span>
-                      </p>
-                    )}
-                    {dispute.handledAt && (
-                      <p>Lúc: {formatDate(dispute.handledAt)}</p>
-                    )}
-                  </div>
+                  {dispute.handledBy && (
+                    <p className="text-sm text-gray-600">
+                      <User className="w-4 h-4 inline mr-1" /> Xử lý bởi:{" "}
+                      <span className="font-bold">
+                        {dispute.handledBy.fullName}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </Card>
             </section>
           )}
 
-        {/* Đang xử lý */}
+        {/* Đang xem xét */}
         {dispute.status === "Reviewed" && (
-          <Card className="p-8 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200">
-            <p className="text-xl text-blue-700 flex items-center gap-3 font-medium">
-              <AlertCircle className="w-8 h-8" />
-              Tranh chấp đang được đội ngũ hỗ trợ xem xét kỹ lưỡng.
+          <Card className="p-8 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 text-center">
+            <AlertCircle className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+            <p className="text-xl font-medium text-blue-700">
+              Khiếu nạiđang được đội ngũ hỗ trợ xem xét kỹ lưỡng
             </p>
             <p className="text-blue-600 mt-2">
               Bạn sẽ nhận được thông báo khi có kết quả.
             </p>
           </Card>
         )}
-
-        <div className="text-center text-sm text-gray-500 pt-8 border-t border-gray-200">
-          Cập nhật lần cuối: {formatDate(dispute.createdAt)}
-        </div>
       </div>
-    </div>
-  );
-}
-
-
-function LoadingSkeleton() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
-        <div className="h-48 bg-gray-200 rounded-3xl animate-pulse" />
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="h-32 bg-gray-200 rounded-2xl animate-pulse" />
-          <div className="h-32 bg-gray-200 rounded-2xl animate-pulse" />
-        </div>
-        <div className="h-64 bg-gray-200 rounded-2xl animate-pulse" />
-      </div>
-    </div>
-  );
-}
-
-// Not Found
-function NotFound() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex items-center justify-center p-6">
-      <Card className="max-w-md text-center p-12 bg-white shadow-2xl">
-        <AlertCircle className="w-20 h-20 text-red-500 mx-auto mb-6" />
-        <h2 className="text-2xl font-bold text-gray-800 mb-3">
-          Không tìm thấy tranh chấp
-        </h2>
-        <p className="text-gray-600 mb-8">
-          Mã tranh chấp không tồn tại hoặc đã bị xóa.
-        </p>
-        <Link href="/order">
-          <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700">
-            Quay lại danh sách đơn hàng
-          </Button>
-        </Link>
-      </Card>
     </div>
   );
 }

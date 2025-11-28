@@ -28,6 +28,7 @@ const treeGameRouter = require("./games/tree.routes");
 const adminComplaintRouter = require("./admin/complaint.routes");
 const adminDashboardRouter = require("./admin/dashboard.routes");
 const moderatorDashboardRouter = require("./moderator/dashboard.routes");
+const ownerDashboardRouter = require("./owner/dashboard.routes");
 const termsRouter = require("./terms/terms.routes");
 const privacyRouter = require("./privacy/privacy.routes");
 const privacyTypesRouter = require("./privacy/privacy-types.routes");
@@ -67,4 +68,5 @@ module.exports = (app) => {
     app.use(api + "/admin/complaints", adminComplaintRouter);
     app.use(api + "/admin/dashboard", adminDashboardRouter);
     app.use(api + "/moderator/dashboard", moderatorDashboardRouter);
+    app.use(api + "/owner/dashboard", ownerDashboardRouter);
 }

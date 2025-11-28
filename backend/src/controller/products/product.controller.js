@@ -12,6 +12,7 @@ const ItemConditions = require("../../models/Product/ItemConditions.model");
 const PriceUnits = require("../../models/Product/PriceUnits.model");
 const User = require("../../models/User.model");
 const Tags = require("../../models/Tag.model");
+const Order = require("../../models/Order/Order.model");
 
 const cloudinary = require("cloudinary").v2;
 
@@ -53,6 +54,24 @@ const saveUserAddress = async (
     IsDefault: false,
   });
   return await newAddress.save({ session });
+};
+
+// Hàm helper kiểm tra sản phẩm có đang được thuê (có order active) không
+const hasActiveOrders = async (itemId, session = null) => {
+  const activeStatuses = [
+    "pending",
+    "confirmed",
+    "delivery",
+    "received",
+    "progress",
+    "returned",
+    "disputed",
+  ];
+  const activeOrders = await Order.find({
+    itemId: itemId,
+    orderStatus: { $in: activeStatuses },
+  }).session(session);
+  return activeOrders.length > 0;
 };
 
 const addProduct = async (req, res) => {
@@ -430,6 +449,14 @@ const updateProduct = async (req, res) => {
     if (!existingItem) {
       throw new Error(
         "Sản phẩm không tồn tại hoặc bạn không có quyền chỉnh sửa"
+      );
+    }
+
+    // Kiểm tra sản phẩm có đang được thuê (có order active) không
+    const hasActive = await hasActiveOrders(id, session);
+    if (hasActive) {
+      throw new Error(
+        "Không thể cập nhật sản phẩm khi có đơn hàng đang thuê. Chỉ có thể cập nhật sau khi tất cả đơn hàng hoàn tất hoặc bị hủy."
       );
     }
 
@@ -846,7 +873,11 @@ const updateProduct = async (req, res) => {
         console.error("Abort transaction error:", abortError);
       }
     }
-    console.error("Lỗi cập nhật sản phẩm:", error);
+    const activeOrderErrorMsg =
+      "Không thể cập nhật sản phẩm khi có đơn hàng đang thuê. Chỉ có thể cập nhật sau khi tất cả đơn hàng hoàn tất hoặc bị hủy.";
+    if (error.message !== activeOrderErrorMsg) {
+      console.error("Lỗi cập nhật sản phẩm:", error);
+    }
     return res.status(500).json({
       success: false,
       message: error.message || "Lỗi server khi cập nhật sản phẩm",
@@ -978,6 +1009,14 @@ const deleteProduct = async (req, res) => {
       throw new Error("Sản phẩm không tồn tại hoặc bạn không có quyền xóa");
     }
 
+    // Kiểm tra sản phẩm có đang được thuê (có order active) không
+    const hasActive = await hasActiveOrders(id, session);
+    if (hasActive) {
+      throw new Error(
+        "Không thể xóa sản phẩm khi có đơn hàng đang thuê. Chỉ có thể xóa sau khi tất cả đơn hàng hoàn tất hoặc bị hủy."
+      );
+    }
+
     await Item.findByIdAndUpdate(
       id,
       { IsDeleted: true, UpdatedAt: new Date() },
@@ -1041,7 +1080,11 @@ const deleteProduct = async (req, res) => {
         console.error("Abort transaction error:", abortError);
       }
     }
-    console.error("Lỗi xóa sản phẩm:", error);
+    const activeOrderErrorMsg =
+      "Không thể xóa sản phẩm khi có đơn hàng đang thuê. Chỉ có thể xóa sau khi tất cả đơn hàng hoàn tất hoặc bị hủy.";
+    if (error.message !== activeOrderErrorMsg) {
+      console.error("Lỗi xóa sản phẩm:", error);
+    }
     return res.status(500).json({
       success: false,
       message: error.message || "Lỗi server khi xóa sản phẩm",

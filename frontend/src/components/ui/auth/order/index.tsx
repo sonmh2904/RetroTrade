@@ -3,11 +3,12 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSelector } from "react-redux";
-import { decodeToken } from '@/utils/jwtHelper';
+import { decodeToken } from "@/utils/jwtHelper";
 import {
   listOrders,
   renterReturn,
   cancelOrder,
+  receiveOrder,
 } from "@/services/auth/order.api";
 import type { Order } from "@/services/auth/order.api";
 import { RootState } from "@/store/redux_store";
@@ -45,10 +46,17 @@ import {
   User,
   ChevronRight,
   ChevronLeft,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { createDispute } from "@/services/moderator/disputeOrder.api";
 
-export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: string) => void }) {
+export default function OrderListPage({
+  onOpenDetail,
+}: {
+  onOpenDetail?: (id: string) => void;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -56,11 +64,16 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   const [openConfirm, setOpenConfirm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; 
+  const itemsPerPage = 10;
   const [openCancelConfirm, setOpenCancelConfirm] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-
+  const [openDisputeDialog, setOpenDisputeDialog] = useState(false);
+  const [disputeTarget, setDisputeTarget] = useState<Order | null>(null);
+  const [disputeReason, setDisputeReason] = useState("");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [disputeEvidence, setDisputeEvidence] = useState<File[]>([]);
+  const [evidencePreview, setEvidencePreview] = useState<string[]>([]);
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
@@ -68,6 +81,58 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   const decodedUser = useMemo(() => decodeToken(accessToken), [accessToken]);
   const userRole = decodedUser?.role?.toLowerCase();
   const userId = decodedUser?._id;
+
+  const handleEvidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Kiểm tra tổng số ảnh (cũ + mới)
+    if (disputeEvidence.length + files.length > 5) {
+      toast.error("Chỉ được upload tối đa 5 ảnh bằng chứng");
+      return;
+    }
+
+    const validFiles: File[] = [];
+    const previews: string[] = [];
+
+    files.forEach((file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`File "${file.name}" quá lớn (tối đa 10MB)`);
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        toast.error(`File "${file.name}" không phải là ảnh`);
+        return;
+      }
+
+      validFiles.push(file);
+      previews.push(URL.createObjectURL(file));
+    });
+
+    setDisputeEvidence((prev) => [...prev, ...validFiles]);
+    setEvidencePreview((prev) => [...prev, ...previews]);
+  };
+
+  // Xóa ảnh đã chọn
+  const removeEvidence = (index: number) => {
+    setDisputeEvidence((prev) => prev.filter((_, i) => i !== index));
+    setEvidencePreview((prev) => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  // Reset khi đóng dialog
+  const closeDisputeDialog = () => {
+    setOpenDisputeDialog(false);
+    setDisputeTarget(null);
+    setDisputeReason("");
+    setDisputeDescription("");
+    setDisputeEvidence([]);
+    // SỬA LỖI: revoke đúng cách
+    evidencePreview.forEach((url) => URL.revokeObjectURL(url));
+    setEvidencePreview([]);
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -77,6 +142,7 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
         if (res.code === 200 && Array.isArray(res.data)) {
           setOrders(res.data);
         }
+        console.log("Fetched orders:", res.data);
       } catch (error) {
         console.error("Error fetching orders:", error);
         toast.error("Không thể tải danh sách đơn hàng");
@@ -86,11 +152,12 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
     };
     fetchOrders();
   }, []);
+
   const handleRenterCancel = async () => {
     if (!cancelTarget) return;
     if (!rejectReason.trim()) {
-       return toast.error("Vui lòng nhập lý do hủy đơn");
-     }
+      return toast.error("Vui lòng nhập lý do hủy đơn");
+    }
 
     try {
       setProcessing(cancelTarget._id);
@@ -119,6 +186,29 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
     }
   };
 
+  // Hàm xử lý xác nhận đã giao
+  const handleConfirmDelivery = async (order: Order) => {
+    if (!order._id) return;
+    try {
+      setProcessing(order._id);
+      const res = await receiveOrder(order._id);
+      if (res.code === 200) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o._id === order._id ? { ...o, orderStatus: "received" } : o
+          )
+        );
+        toast.success("Đơn hàng đã được xác nhận đã giao");
+      } else {
+        toast.error(res.message || "Không thể xác nhận giao hàng");
+      }
+    } catch (err) {
+      console.error("Delivery confirmation error:", err);
+      toast.error("Lỗi khi xác nhận giao hàng");
+    } finally {
+      setProcessing(null);
+    }
+  };
 
   const handleConfirmReturn = async () => {
     if (!selectedOrder) return;
@@ -165,6 +255,17 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
       color: "text-blue-800",
       bgColor: "bg-blue-100 border-blue-200",
     },
+    delivery: {
+      label: "Đã giao hàng",
+      color: "text-green-500",
+      bgColor: "bg-blue-100 border-blue-200",
+    },
+    received: {
+      label: "Đã nhận hàng",
+      color: "text-blue-400",
+      bgColor: "bg-blue-100 border-blue-200",
+    },
+
     progress: {
       label: "Đang thuê",
       color: "text-purple-800",
@@ -186,20 +287,20 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
       bgColor: "bg-red-100 border-red-200",
     },
     disputed: {
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       color: "text-orange-800",
       bgColor: "bg-orange-100 border-orange-200",
     },
   };
 
   const paymentStatusConfig: Record<string, { label: string; color: string }> =
-  {
-    pending: { label: "Chờ thanh toán", color: "text-yellow-700" },
-    not_paid: { label: "Chưa thanh toán", color: "text-yellow-700" },
-    paid: { label: "Đã thanh toán", color: "text-green-700" },
-    refunded: { label: "Đã hoàn tiền", color: "text-blue-700" },
-    partial: { label: "Thanh toán một phần", color: "text-amber-700" },
-  };
+    {
+      pending: { label: "Chờ thanh toán", color: "text-yellow-700" },
+      not_paid: { label: "Chưa thanh toán", color: "text-yellow-700" },
+      paid: { label: "Đã thanh toán", color: "text-green-700" },
+      refunded: { label: "Đã hoàn tiền", color: "text-blue-700" },
+      partial: { label: "Thanh toán một phần", color: "text-amber-700" },
+    };
 
   // Filter orders by status
   const filteredOrders = useMemo(() => {
@@ -208,13 +309,14 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   }, [orders, selectedStatus]);
 
   // Pagination calculations
-  const paginationState: PaginationState = useMemo(() =>
-    createPaginationState({
-      page: currentPage,
-      limit: itemsPerPage,
-      totalItems: filteredOrders.length,
-      totalPages: Math.ceil(filteredOrders.length / itemsPerPage),
-    }),
+  const paginationState: PaginationState = useMemo(
+    () =>
+      createPaginationState({
+        page: currentPage,
+        limit: itemsPerPage,
+        totalItems: filteredOrders.length,
+        totalPages: Math.ceil(filteredOrders.length / itemsPerPage),
+      }),
     [currentPage, itemsPerPage, filteredOrders.length]
   );
 
@@ -232,7 +334,7 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= paginationState.totalPages) {
       setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -247,6 +349,16 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
       key: "confirmed",
       label: "Đã xác nhận",
       count: orders.filter((o) => o.orderStatus === "confirmed").length,
+    },
+    {
+      key: "delivery",
+      label: "Đã giao hàng",
+      count: orders.filter((o) => o.orderStatus === "delivery").length,
+    },
+    {
+      key: "received",
+      label: "Đã nhận  hàng",
+      count: orders.filter((o) => o.orderStatus === "received").length,
     },
     {
       key: "progress",
@@ -270,7 +382,7 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
     },
     {
       key: "disputed",
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       count: orders.filter((o) => o.orderStatus === "disputed").length,
     },
   ];
@@ -285,7 +397,6 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
       </div>
     );
   }
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
@@ -595,6 +706,53 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                                   Thanh toán ngay
                                 </Button>
                               )}
+                            {/* Nút Xác nhận đã giao */}
+                            {order.orderStatus === "delivery" && (
+                              <Button
+                                className="bg-blue-500 hover:bg-blue-600 text-white"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConfirmDelivery(order);
+                                }}
+                                disabled={processing === order._id}
+                              >
+                                {processing === order._id ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Đã nhận hàng
+                                  </>
+                                )}
+                              </Button>
+                            )}
+
+                            {isRenter &&
+                              ["delivery", "received", "returned",].includes(
+                                order.orderStatus
+                              ) &&
+                              order.orderStatus !== "disputed" && (
+                                <Button
+                                  variant="destructive"
+                                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDisputeTarget(order);
+                                    setOpenDisputeDialog(true);
+                                  }}
+                                >
+                                  <AlertCircle className="w-4 h-4 mr-2" />
+                                  Khiếu nại
+                                </Button>
+                              )}
+
+                            {/* Nếu đã Khiếu nạirồi thì hiện thông báo */}
+                            {order.orderStatus === "disputed" && (
+                              <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
+                                <AlertCircle className="w-4 h-4" />
+                                Đơn hàng đang được xử lý Khiếu nại
+                              </div>
+                            )}
                           </div>
 
                           {/* Thời gian cập nhật */}
@@ -774,6 +932,212 @@ export default function OrderListPage({ onOpenDetail }: { onOpenDetail?: (id: st
                 disabled={processing !== null}
               >
                 Xác nhận hủy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Dialog Tạo Khiếu nại*/}
+        <Dialog open={openDisputeDialog} onOpenChange={setOpenDisputeDialog}>
+          <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl p-6  z-200">
+            <DialogHeader className="pb-4 border-b">
+              <DialogTitle className="flex items-center gap-3 text-xl font-bold text-orange-700">
+                <AlertCircle className="w-7 h-7" />
+                Tạo Khiếu nạiđơn hàng
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="mt-5 space-y-5">
+              {/* Thông tin đơn hàng */}
+              {disputeTarget && (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                  <p className="font-semibold text-gray-900">
+                    # {disputeTarget.orderGuid}
+                  </p>
+                  <p className="text-sm text-gray-700 mt-1">
+                    {disputeTarget.itemSnapshot?.title ||
+                      disputeTarget.itemId?.Title}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Chủ nhà: {disputeTarget.ownerId?.fullName || "N/A"}
+                  </p>
+                </div>
+              )}
+
+              {/* Lý do Khiếu nại*/}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Lý do Khiếu nại<span className="text-red-600">*</span>
+                </label>
+                <select
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition"
+                >
+                  <option value="">Chọn lý do...</option>
+                  <option value="Không nhận được hàng">
+                    Không nhận được hàng
+                  </option>
+                  <option value="Hàng bị hư hỏng, bể vỡ">
+                    Hàng bị hư hỏng, bể vỡ
+                  </option>
+                  <option value="Không đúng như mô tả">
+                    Không đúng như mô tả
+                  </option>
+                  <option value="Giao hàng trễ">Giao hàng trễ</option>
+                  <option value="Giao hàng trễ">
+                    Đã trả / chủ sở hữu không xác nhận
+                  </option>
+                  <option value="other">Lý do khác</option>
+                </select>
+              </div>
+
+              {/* Mô tả chi tiết */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Mô tả chi tiết (không bắt buộc nhưng rất quan trọng)
+                </label>
+                <textarea
+                  placeholder="Hãy mô tả rõ vấn đề bạn gặp phải... (ví dụ: hàng bị móp méo, thiếu phụ kiện, chủ nhà không liên lạc được...)"
+                  value={disputeDescription}
+                  onChange={(e) => setDisputeDescription(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition resize-none"
+                />
+              </div>
+
+              {/* Upload ảnh bằng chứng */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Ảnh bằng chứng <span className="text-red-600">*</span> (tối đa
+                  5 ảnh, ≤ 10MB/ảnh)
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-orange-400 transition">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleEvidenceChange}
+                    className="hidden"
+                    id="evidence-upload"
+                  />
+                  <label
+                    htmlFor="evidence-upload"
+                    className="cursor-pointer inline-flex items-center gap-2 px-5 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
+                  >
+                    Chọn ảnh từ thiết bị
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {disputeEvidence.length}/5 ảnh đã chọn
+                  </p>
+                </div>
+
+                {/* Preview ảnh */}
+                {evidencePreview.length > 0 && (
+                  <div className="grid grid-cols-3 gap-3 mt-4">
+                    {evidencePreview.map((src, idx) => (
+                      <div
+                        key={idx}
+                        className="relative group rounded-lg overflow-hidden shadow-md"
+                      >
+                        <img
+                          src={src}
+                          alt={`Bằng chứng ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded-lg"
+                        />
+                        <button
+                          onClick={() => removeEvidence(idx)}
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* End space-y-5 */}
+
+            <DialogFooter className="mt-6 pt-4 border-t flex gap-3 flex-col sm:flex-row">
+              <Button
+                variant="outline"
+                onClick={closeDisputeDialog}
+                className="order-2 sm:order-1"
+              >
+                Hủy bỏ
+              </Button>
+              <Button
+                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-8 order-1 sm:order-2 shadow-lg"
+                onClick={async () => {
+                  // Validate bắt buộc
+                  if (!disputeReason.trim()) {
+                    return toast.error("Vui lòng chọn lý do Khiếu nại");
+                  }
+                  if (disputeEvidence.length === 0) {
+                    return toast.error(
+                      "Vui lòng đính kèm ít nhất 1 ảnh bằng chứng"
+                    );
+                  }
+
+                  try {
+                    setProcessing(disputeTarget?._id || "creating");
+
+                    const res = await createDispute({
+                      orderId: disputeTarget!._id,
+                      reason: disputeReason,
+                      description: disputeDescription.trim() || undefined,
+                      evidence: disputeEvidence,
+                    });
+
+                    if (res.code === 201 || res.code === 200) {
+                      toast.success(
+                        "Đã gửi Khiếu nạithành công! Moderator sẽ xử lý trong vòng 24h."
+                      );
+
+                      // Cập nhật trạng thái đơn hàng ngay lập tức trên UI
+                      setOrders((prev) =>
+                        prev.map((o) =>
+                          o._id === disputeTarget!._id
+                            ? { ...o, orderStatus: "disputed" }
+                            : o
+                        )
+                      );
+
+                      closeDisputeDialog();
+                    } else {
+                      toast.error(
+                        res.message ||
+                          "Không thể gửi Khiếu nại, vui lòng thử lại"
+                      );
+                    }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  } catch (err: any) {
+                    console.error("Create dispute error:", err);
+                    toast.error(
+                      err.message || "Có lỗi xảy ra khi gửi Khiếu nại"
+                    );
+                  } finally {
+                    setProcessing(null);
+                  }
+                }}
+                disabled={
+                  processing !== null ||
+                  !disputeReason ||
+                  disputeEvidence.length === 0
+                }
+              >
+                {processing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Đang gửi...
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-5 h-5 mr-2" />
+                    Gửi Khiếu nại
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

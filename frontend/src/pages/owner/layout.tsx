@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSelector, useDispatch } from "react-redux";
 import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
 import { toast } from "sonner";
-import { Home, Package, ShoppingBag, Wallet, Settings } from "lucide-react";
+import { Home, Package, ShoppingBag, Wallet, Settings, BarChart3 } from "lucide-react";
 import OwnerHeader from "@/components/ui/owner/owner-header";
 import { RootState } from "@/store/redux_store";
 import { logout } from "@/store/auth/authReducer";
@@ -76,6 +76,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 
   const menus = [
     { icon: Home, label: "Trang chủ", key: "home", href: "/home" },
+    { icon: BarChart3, label: "Dashboard", key: "dashboard", href: "/owner/dashboard" },
     { icon: Package, label: "Sản phẩm của tôi", key: "products", href: "/owner/myproducts" },
     { icon: ShoppingBag, label: "Yêu cầu thuê hàng", key: "requests", href: "/owner/renter-requests" },
     { icon: Wallet, label: "Ví của tôi", key: "wallet", href: "/owner/mywallet" },
@@ -87,7 +88,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside
         className={`${
-          isSidebarOpen ? "w-64 translate-x-0" : "-translate-x-full w-0"
+          isSidebarOpen ? "mt-20 w-64 translate-x-0" : "-translate-x-full w-0"
         } bg-white shadow-sm border-r border-gray-200 p-6 flex flex-col fixed top-0 bottom-0 left-0 transition-transform duration-300 z-40 overflow-y-auto`}
       >
         <div className="flex items-center gap-2 mb-10">
@@ -119,7 +120,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Header */}
-      <OwnerHeader onToggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} />
+      {/* <OwnerHeader onToggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} /> */}
 
       {/* Main content */}
       <main

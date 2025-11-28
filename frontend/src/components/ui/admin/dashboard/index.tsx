@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/common/card";
 import {
   LineChart,
   DollarSign,
@@ -25,7 +30,7 @@ import {
   Wallet,
   CreditCard,
   Shield,
-  UserCheck
+  UserCheck,
 } from "lucide-react";
 import { RevenueChart } from "./charts/revenue-chart";
 import { UsersChart } from "./charts/users-chart";
@@ -93,21 +98,41 @@ const AnalyticsDashboard = () => {
       try {
         const { dashboardApi } = await import("@/services/admin/dashboard.api");
         const statsData = await dashboardApi.getDashboardStats();
-        
+
         // Debug logging to check data
         console.log("Admin Dashboard Stats Data:", statsData);
-        console.log("Revenue change:", statsData.revenue.change, statsData.revenue.changeType);
-        console.log("Users change:", statsData.users.change, statsData.users.changeType);
-        console.log("Orders change:", statsData.orders.change, statsData.orders.changeType);
-        console.log("Products change:", statsData.products.change, statsData.products.changeType);
+        console.log(
+          "Revenue change:",
+          statsData.revenue.change,
+          statsData.revenue.changeType
+        );
+        console.log(
+          "Users change:",
+          statsData.users.change,
+          statsData.users.changeType
+        );
+        console.log(
+          "Orders change:",
+          statsData.orders.change,
+          statsData.orders.changeType
+        );
+        console.log(
+          "Products change:",
+          statsData.products.change,
+          statsData.products.changeType
+        );
 
         // Helper function to ensure consistent change values
-        const normalizeChange = (change: number | undefined, changeType: string | undefined) => {
+        const normalizeChange = (
+          change: number | undefined,
+          changeType: string | undefined
+        ) => {
           const changeValue = change || 0;
-          const type = changeType || (changeValue >= 0 ? "increase" : "decrease");
+          const type =
+            changeType || (changeValue >= 0 ? "increase" : "decrease");
           return {
             change: parseFloat(changeValue.toFixed(1)),
-            changeType: type as "increase" | "decrease"
+            changeType: type as "increase" | "decrease",
           };
         };
 
@@ -117,7 +142,10 @@ const AnalyticsDashboard = () => {
             id: "revenue",
             label: "Tổng doanh thu",
             value: statsData.revenue.value,
-            ...normalizeChange(statsData.revenue.change, statsData.revenue.changeType),
+            ...normalizeChange(
+              statsData.revenue.change,
+              statsData.revenue.changeType
+            ),
             icon: DollarSign,
             bgColor: "bg-gradient-to-r from-emerald-50 to-green-50",
             iconColor: "text-emerald-600",
@@ -126,7 +154,10 @@ const AnalyticsDashboard = () => {
             id: "orders",
             label: "Tổng đơn hàng",
             value: statsData.orders.value,
-            ...normalizeChange(statsData.orders.change, statsData.orders.changeType),
+            ...normalizeChange(
+              statsData.orders.change,
+              statsData.orders.changeType
+            ),
             icon: ShoppingCart,
             bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
             iconColor: "text-blue-600",
@@ -135,7 +166,10 @@ const AnalyticsDashboard = () => {
             id: "products",
             label: "Tổng sản phẩm",
             value: statsData.products.value,
-            ...normalizeChange(statsData.products.change, statsData.products.changeType),
+            ...normalizeChange(
+              statsData.products.change,
+              statsData.products.changeType
+            ),
             icon: Package,
             bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
             iconColor: "text-purple-600",
@@ -144,12 +178,15 @@ const AnalyticsDashboard = () => {
             id: "users",
             label: "Tổng người dùng",
             value: statsData.users.value,
-            ...normalizeChange(statsData.users.change, statsData.users.changeType),
+            ...normalizeChange(
+              statsData.users.change,
+              statsData.users.changeType
+            ),
             icon: Users,
             bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
             iconColor: "text-amber-600",
           },
-          
+
           // HOẠT ĐỘNG CẦN XỬ LÝ - 5 items tiếp theo
           {
             id: "complaints",
@@ -161,7 +198,7 @@ const AnalyticsDashboard = () => {
           },
           {
             id: "disputes",
-            label: "Tranh chấp chờ xử lý",
+            label: "Khiếu nạichờ xử lý",
             value: statsData.disputes?.value || "0",
             icon: FileText,
             bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
@@ -175,7 +212,7 @@ const AnalyticsDashboard = () => {
             bgColor: "bg-gradient-to-r from-teal-50 to-cyan-50",
             iconColor: "text-teal-600",
           },
-          
+
           // THỐNG KÊ KHÁC - 5 items cuối
           {
             id: "completedOrders",
@@ -200,7 +237,7 @@ const AnalyticsDashboard = () => {
             icon: Star,
             bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
             iconColor: "text-yellow-600",
-          }
+          },
         ];
         setStats(statsCards);
       } catch (error) {
@@ -228,13 +265,16 @@ const AnalyticsDashboard = () => {
       setTimeout(() => {
         const dashboardElement = document.getElementById("dashboard-content");
         if (dashboardElement) {
-          dashboardElement.scrollIntoView({ behavior: "smooth", block: "start" });
+          dashboardElement.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
         }
       }, 100);
     }
   };
 
-  const activeTabData = tabs.find(tab => tab.id === activeTab);
+  const activeTabData = tabs.find((tab) => tab.id === activeTab);
 
   return (
     <div className="space-y-8 pb-8">
@@ -259,7 +299,10 @@ const AnalyticsDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm" id="dashboard-content">
+      <div
+        className="rounded-xl border border-gray-200 bg-white shadow-sm"
+        id="dashboard-content"
+      >
         <nav className="flex space-x-1 overflow-x-auto p-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -270,13 +313,18 @@ const AnalyticsDashboard = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`
                   group relative flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200
-                  ${isActive
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ${
+                    isActive
+                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }
                 `}
               >
-                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                <Icon
+                  className={`w-5 h-5 transition-transform ${
+                    isActive ? "scale-110" : "group-hover:scale-110"
+                  }`}
+                />
                 <span>{tab.label}</span>
                 {isActive && (
                   <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/20 to-transparent"></div>
@@ -297,21 +345,32 @@ const AnalyticsDashboard = () => {
           {activeTab === "overview" && (
             <div className="space-y-6">
               <div className="rounded-xl bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm">
-                <h2 className="mb-2 text-xl font-bold text-gray-900">Tổng quan thống kê</h2>
+                <h2 className="mb-2 text-xl font-bold text-gray-900">
+                  Tổng quan thống kê
+                </h2>
                 <p className="mb-6 text-sm text-gray-600">
                   Bấm vào các thẻ thống kê để xem biểu đồ và phân tích chi tiết
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
                   {stats.map((stat, index) => {
                     const Icon = stat.icon;
-                    const isClickable = ["revenue", "users", "orders", "products"].includes(stat.id);
+                    const isClickable = [
+                      "revenue",
+                      "users",
+                      "orders",
+                      "products",
+                    ].includes(stat.id);
                     return (
                       <div
                         key={stat.id}
                         className={`
                           group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-6
                           shadow-sm transition-all duration-300 hover:scale-105 hover:shadow-xl
-                          ${isClickable ? 'cursor-pointer hover:border-indigo-400' : 'cursor-default'}
+                          ${
+                            isClickable
+                              ? "cursor-pointer hover:border-indigo-400"
+                              : "cursor-default"
+                          }
                         `}
                         onClick={() => isClickable && handleStatClick(stat.id)}
                         style={{
@@ -320,20 +379,24 @@ const AnalyticsDashboard = () => {
                       >
                         {/* Gradient overlay on hover */}
                         <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
-                        
+
                         {/* Decorative corner */}
                         <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-50"></div>
-                        
+
                         <div className="relative z-10">
                           {/* Icon with gradient background */}
                           <div className="mb-4 flex items-center justify-between">
-                            <div className={`
+                            <div
+                              className={`
                               relative rounded-xl p-3 shadow-lg transition-transform duration-300
                               group-hover:scale-110 group-hover:rotate-3
                               ${stat.bgColor}
-                            `}>
+                            `}
+                            >
                               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/50 to-transparent"></div>
-                              <Icon className={`relative z-10 w-6 h-6 ${stat.iconColor}`} />
+                              <Icon
+                                className={`relative z-10 w-6 h-6 ${stat.iconColor}`}
+                              />
                             </div>
                             {isClickable && (
                               <div className="rounded-full bg-indigo-100 p-1.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
@@ -341,17 +404,17 @@ const AnalyticsDashboard = () => {
                               </div>
                             )}
                           </div>
-                          
+
                           {/* Label */}
                           <h3 className="mb-2 text-sm font-semibold text-gray-600 transition-colors group-hover:text-gray-900">
                             {stat.label}
                           </h3>
-                          
+
                           {/* Value */}
                           <p className="mb-3 text-3xl font-bold text-gray-900 transition-colors">
                             {stat.value}
                           </p>
-                          
+
                           {/* Change indicator */}
                           {stat.change !== undefined && (
                             <div className="flex items-center gap-1.5 rounded-lg bg-gray-50 px-2 py-1">
@@ -369,7 +432,9 @@ const AnalyticsDashboard = () => {
                               >
                                 {Math.abs(stat.change)}%
                               </span>
-                              <span className="text-xs text-gray-500">so với tháng trước</span>
+                              <span className="text-xs text-gray-500">
+                                so với tháng trước
+                              </span>
                             </div>
                           )}
                         </div>
@@ -399,4 +464,3 @@ const AnalyticsDashboard = () => {
 };
 
 export default AnalyticsDashboard;
-

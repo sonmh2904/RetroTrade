@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/common/card";
 import {
   LineChart,
   Users,
@@ -32,7 +37,7 @@ import {
   Trash2,
   MoreVertical,
   AlertTriangle,
-  TrendingUp
+  TrendingUp,
 } from "lucide-react";
 import { ProductsChart } from "./charts/products-chart";
 import { PostsChart } from "./charts/posts-chart";
@@ -62,9 +67,19 @@ interface DashboardData {
   pendingProducts: { value: string; rawValue: number };
   approvedProducts: { value: string; rawValue: number };
   rejectedProducts: { value: string; rawValue: number };
-  totalProducts: { value: string; rawValue: number; change: number; changeType: string };
+  totalProducts: {
+    value: string;
+    rawValue: number;
+    change: number;
+    changeType: string;
+  };
   pendingPosts: { value: string; rawValue: number };
-  totalPosts: { value: string; rawValue: number; change: number; changeType: string };
+  totalPosts: {
+    value: string;
+    rawValue: number;
+    change: number;
+    changeType: string;
+  };
   newPostsToday: { value: string; rawValue: number };
   pendingComments: { value: string; rawValue: number };
   totalComments: { value: string; rawValue: number };
@@ -79,23 +94,44 @@ interface DashboardData {
   totalComplaints: { value: string; rawValue: number };
   newUsersToday: { value: string; rawValue: number };
   newUsersThisMonth: { value: string; rawValue: number };
-  totalUsers: { value: string; rawValue: number; change: number; changeType: string };
+  totalUsers: {
+    value: string;
+    rawValue: number;
+    change: number;
+    changeType: string;
+  };
   verifiedUsers: { value: string; rawValue: number };
-  
+
   // Time series data
   timeSeries?: {
     daily: {
-      products: Array<{ date: string; total: number; pending: number; approved: number; rejected: number }>;
-      posts: Array<{ date: string; total: number; pending: number; active: number }>;
+      products: Array<{
+        date: string;
+        total: number;
+        pending: number;
+        approved: number;
+        rejected: number;
+      }>;
+      posts: Array<{
+        date: string;
+        total: number;
+        pending: number;
+        active: number;
+      }>;
       users: Array<{ date: string; total: number; verified: number }>;
-      reports: Array<{ date: string; total: number; pending: number; resolved: number }>;
+      reports: Array<{
+        date: string;
+        total: number;
+        pending: number;
+        resolved: number;
+      }>;
     };
     hourly: {
       products: Array<{ hour: number; count: number }>;
       users: Array<{ hour: number; count: number }>;
     };
   };
-  
+
   // Distribution data
   distribution?: {
     products: { pending: number; approved: number; rejected: number };
@@ -109,25 +145,35 @@ const ModeratorDashboard = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [stats, setStats] = useState<StatCard[]>([]);
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Chart data states
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [productChartData, setProductChartData] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [postChartData, setPostChartData] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [userChartData, setUserChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
-  
+
   // Individual stats data for charts
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [ownerRequestStats, setOwnerRequestStats] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [complaintStats, setComplaintStats] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reportStats, setReportStats] = useState<any>(null);
-  
+
   // Filter states for charts
-  const [productFilter, setProductFilter] = useState<'30days' | 'all'>('30days');
-  const [postFilter, setPostFilter] = useState<'30days' | 'all'>('30days');
-  const [userFilter, setUserFilter] = useState<'30days' | 'all'>('30days');
+  const [productFilter, setProductFilter] = useState<"30days" | "all">(
+    "30days"
+  );
+  const [postFilter, setPostFilter] = useState<"30days" | "all">("30days");
+  const [userFilter, setUserFilter] = useState<"30days" | "all">("30days");
 
   const tabs = [
     {
@@ -168,7 +214,7 @@ const ModeratorDashboard = () => {
     },
     {
       id: "owner-requests",
-      label: "Yêu cầu cấp quyền Owner",
+      label: "Yêu cầu cấp quyền Cho thuê sản phẩmphẩm",
       icon: FileCheck,
       color: "text-violet-600",
     },
@@ -180,7 +226,7 @@ const ModeratorDashboard = () => {
     },
     {
       id: "reports",
-      label: "Báo cáo xử lí tranh chấp",
+      label: "Báo cáo xử lí Khiếu nại",
       icon: AlertTriangle,
       color: "text-red-600",
     },
@@ -190,7 +236,9 @@ const ModeratorDashboard = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const { moderatorDashboardApi } = await import("@/services/moderator/dashboard.api");
+        const { moderatorDashboardApi } = await import(
+          "@/services/moderator/dashboard.api"
+        );
         const statsData = await moderatorDashboardApi.getDashboardStats();
         setDashboardData(statsData);
 
@@ -205,7 +253,7 @@ const ModeratorDashboard = () => {
             changeType: statsData.totalProducts.changeType,
             icon: Package,
             bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-            iconColor: "text-blue-600"
+            iconColor: "text-blue-600",
           },
           {
             id: "totalPosts",
@@ -215,7 +263,7 @@ const ModeratorDashboard = () => {
             changeType: statsData.totalPosts.changeType,
             icon: FileText,
             bgColor: "bg-gradient-to-r from-green-50 to-emerald-50",
-            iconColor: "text-green-600"
+            iconColor: "text-green-600",
           },
           {
             id: "totalUsers",
@@ -225,17 +273,17 @@ const ModeratorDashboard = () => {
             changeType: statsData.totalUsers.changeType,
             icon: Users,
             bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-            iconColor: "text-purple-600"
+            iconColor: "text-purple-600",
           },
           {
             id: "totalReports",
-            label: "Báo cáo xử lí tranh chấp",
+            label: "Báo cáo xử lí Khiếu nại",
             value: statsData.totalDisputes.value,
             icon: AlertCircle,
             bgColor: "bg-gradient-to-r from-red-50 to-orange-50",
-            iconColor: "text-red-600"
+            iconColor: "text-red-600",
           },
-          
+
           // HOẠT ĐỘNG CẦN XỬ LÝ - 5 items tiếp theo
           {
             id: "pendingProducts",
@@ -246,7 +294,7 @@ const ModeratorDashboard = () => {
             changeType: undefined,
             icon: Clock,
             bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
-            iconColor: "text-amber-600"
+            iconColor: "text-amber-600",
           },
           {
             id: "pendingPosts",
@@ -257,7 +305,7 @@ const ModeratorDashboard = () => {
             changeType: undefined,
             icon: FileText,
             bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
-            iconColor: "text-orange-600"
+            iconColor: "text-orange-600",
           },
           {
             id: "pendingComments",
@@ -265,7 +313,7 @@ const ModeratorDashboard = () => {
             value: statsData.pendingComments.value,
             icon: MessageSquare,
             bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
-            iconColor: "text-yellow-600"
+            iconColor: "text-yellow-600",
           },
           {
             id: "pendingVerifications",
@@ -273,7 +321,7 @@ const ModeratorDashboard = () => {
             value: statsData.pendingVerifications.value,
             icon: Shield,
             bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-            iconColor: "text-purple-600"
+            iconColor: "text-purple-600",
           },
           {
             id: "pendingOwnerRequests",
@@ -281,9 +329,9 @@ const ModeratorDashboard = () => {
             value: statsData.pendingOwnerRequests.value,
             icon: FileCheck,
             bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
-            iconColor: "text-violet-600"
+            iconColor: "text-violet-600",
           },
-          
+
           // KHIẾU NẠI VÀ BÁO CÁO - 3 items cuối
           {
             id: "pendingComplaints",
@@ -291,8 +339,8 @@ const ModeratorDashboard = () => {
             value: statsData.pendingComplaints.value,
             icon: AlertCircle,
             bgColor: "bg-gradient-to-r from-pink-50 to-rose-50",
-            iconColor: "text-pink-600"
-          }
+            iconColor: "text-pink-600",
+          },
         ];
         setStats(statsCards);
       } catch (error) {
@@ -311,13 +359,14 @@ const ModeratorDashboard = () => {
   const fetchIndividualStats = useCallback(async () => {
     try {
       const { chartApi } = await import("@/services/moderator/chart.api");
-      
-      const [ownerRequestsData, complaintsData, reportsData] = await Promise.all([
-        chartApi.getOwnerRequestStats(),
-        chartApi.getComplaintStats(),
-        chartApi.getReportStats()
-      ]);
-      
+
+      const [ownerRequestsData, complaintsData, reportsData] =
+        await Promise.all([
+          chartApi.getOwnerRequestStats(),
+          chartApi.getComplaintStats(),
+          chartApi.getReportStats(),
+        ]);
+
       setOwnerRequestStats(ownerRequestsData);
       setComplaintStats(complaintsData);
       setReportStats(reportsData);
@@ -332,29 +381,36 @@ const ModeratorDashboard = () => {
   }, [fetchIndividualStats]);
 
   // Fetch chart data
-  const fetchChartData = useCallback(async (productFilterValue?: '30days' | 'all', postFilterValue?: '30days' | 'all', userFilterValue?: '30days' | 'all') => {
-    setChartLoading(true);
-    try {
-      const { chartApi } = await import("@/services/moderator/chart.api");
-      
-      const [productsData, postsData, usersData] = await Promise.all([
-        chartApi.getProductChartData(productFilterValue || productFilter),
-        chartApi.getPostChartData(postFilterValue || postFilter),
-        chartApi.getUserChartData(userFilterValue || userFilter)
-      ]);
-      
-      setProductChartData(productsData);
-      setPostChartData(postsData);
-      setUserChartData(usersData);
-    } catch (error) {
-      console.error("Error fetching chart data:", error);
-      setProductChartData([]);
-      setPostChartData([]);
-      setUserChartData([]);
-    } finally {
-      setChartLoading(false);
-    }
-  }, [productFilter, postFilter, userFilter]);
+  const fetchChartData = useCallback(
+    async (
+      productFilterValue?: "30days" | "all",
+      postFilterValue?: "30days" | "all",
+      userFilterValue?: "30days" | "all"
+    ) => {
+      setChartLoading(true);
+      try {
+        const { chartApi } = await import("@/services/moderator/chart.api");
+
+        const [productsData, postsData, usersData] = await Promise.all([
+          chartApi.getProductChartData(productFilterValue || productFilter),
+          chartApi.getPostChartData(postFilterValue || postFilter),
+          chartApi.getUserChartData(userFilterValue || userFilter),
+        ]);
+
+        setProductChartData(productsData);
+        setPostChartData(postsData);
+        setUserChartData(usersData);
+      } catch (error) {
+        console.error("Error fetching chart data:", error);
+        setProductChartData([]);
+        setPostChartData([]);
+        setUserChartData([]);
+      } finally {
+        setChartLoading(false);
+      }
+    },
+    [productFilter, postFilter, userFilter]
+  );
 
   // Initial fetch and refetch when filters change
   useEffect(() => {
@@ -362,17 +418,17 @@ const ModeratorDashboard = () => {
   }, [fetchChartData]);
 
   // Filter handlers
-  const handleProductFilterChange = (newFilter: '30days' | 'all') => {
+  const handleProductFilterChange = (newFilter: "30days" | "all") => {
     setProductFilter(newFilter);
     fetchChartData(newFilter, postFilter, userFilter);
   };
 
-  const handlePostFilterChange = (newFilter: '30days' | 'all') => {
+  const handlePostFilterChange = (newFilter: "30days" | "all") => {
     setPostFilter(newFilter);
     fetchChartData(productFilter, newFilter, userFilter);
   };
 
-  const handleUserFilterChange = (newFilter: '30days' | 'all') => {
+  const handleUserFilterChange = (newFilter: "30days" | "all") => {
     setUserFilter(newFilter);
     fetchChartData(productFilter, postFilter, newFilter);
   };
@@ -415,8 +471,6 @@ const ModeratorDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
-
       {/* Main Content */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Stats Cards Grid - 5 items per row */}
@@ -428,7 +482,9 @@ const ModeratorDashboard = () => {
               <div
                 key={stat.id}
                 className={`relative overflow-hidden rounded-xl border-2 bg-white p-4 sm:p-6 shadow-sm transition-all duration-300 hover:scale-105 hover:shadow-xl cursor-pointer ${
-                  isClickable ? 'hover:border-blue-400' : 'hover:border-gray-300'
+                  isClickable
+                    ? "hover:border-blue-400"
+                    : "hover:border-gray-300"
                 }`}
                 onClick={() => isClickable && handleStatClick(stat.id)}
                 style={{
@@ -436,25 +492,31 @@ const ModeratorDashboard = () => {
                 }}
               >
                 {/* Gradient overlay */}
-                <div className={`absolute inset-0 ${stat.bgColor} opacity-50`}></div>
-                
+                <div
+                  className={`absolute inset-0 ${stat.bgColor} opacity-50`}
+                ></div>
+
                 {/* Content */}
                 <div className="relative z-10">
                   {/* Icon */}
-                  <div className={`mb-3 sm:mb-4 inline-flex p-2 sm:p-3 rounded-lg ${stat.bgColor}`}>
-                    <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.iconColor}`} />
+                  <div
+                    className={`mb-3 sm:mb-4 inline-flex p-2 sm:p-3 rounded-lg ${stat.bgColor}`}
+                  >
+                    <Icon
+                      className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.iconColor}`}
+                    />
                   </div>
-                  
+
                   {/* Label */}
                   <h3 className="mb-1 sm:mb-2 text-xs sm:text-sm font-medium text-gray-600">
                     {stat.label}
                   </h3>
-                  
+
                   {/* Value */}
                   <p className="text-xl sm:text-2xl font-bold text-gray-900">
                     {stat.value}
                   </p>
-                  
+
                   {/* Change indicator */}
                   {stat.change !== undefined && (
                     <div className="flex items-center mt-2 text-sm">
@@ -463,16 +525,22 @@ const ModeratorDashboard = () => {
                       ) : (
                         <ArrowDownRight className="w-4 h-4 text-red-500 mr-1" />
                       )}
-                      <span className={`font-medium ${
-                        stat.changeType === "increase" ? "text-green-500" : "text-red-500"
-                      }`}>
+                      <span
+                        className={`font-medium ${
+                          stat.changeType === "increase"
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
                         {Math.abs(stat.change)}%
                       </span>
-                      <span className="text-gray-500 ml-1">so với tháng trước</span>
+                      <span className="text-gray-500 ml-1">
+                        so với tháng trước
+                      </span>
                     </div>
                   )}
                 </div>
-                
+
                 {/* Hover effect */}
                 <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 transition-opacity duration-300 hover:opacity-100"></div>
               </div>
@@ -493,24 +561,30 @@ const ModeratorDashboard = () => {
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-6">
-                {tabs.filter(tab => tab.id !== "overview").map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                        activeTab === tab.id
-                          ? "border-blue-500 bg-blue-50 shadow-md"
-                          : "border-gray-200 bg-white hover:border-gray-300"
-                      }`}
-                    >
-                      <Icon className={`w-8 h-8 mb-2 ${tab.color}`} />
-                      <span className="text-sm font-medium text-gray-900">{tab.label}</span>
-                      <span className="text-xs text-gray-500 mt-1">Xem chi tiết</span>
-                    </button>
-                  );
-                })}
+                {tabs
+                  .filter((tab) => tab.id !== "overview")
+                  .map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                          activeTab === tab.id
+                            ? "border-blue-500 bg-blue-50 shadow-md"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <Icon className={`w-8 h-8 mb-2 ${tab.color}`} />
+                        <span className="text-sm font-medium text-gray-900">
+                          {tab.label}
+                        </span>
+                        <span className="text-xs text-gray-500 mt-1">
+                          Xem chi tiết
+                        </span>
+                      </button>
+                    );
+                  })}
               </div>
             </CardContent>
           </Card>
@@ -524,17 +598,17 @@ const ModeratorDashboard = () => {
                 {/* Navigation only - overview content removed */}
               </div>
             )}
-            
+
             {activeTab === "products" && (
               <div className="space-y-6">
-                <ProductsChart 
-                  data={productChartData} 
+                <ProductsChart
+                  data={productChartData}
                   loading={chartLoading}
                   statsData={dashboardData}
                   filter={productFilter}
                   onFilterChange={handleProductFilterChange}
                 />
-                
+
                 {/* Product Status Distribution */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                   <Card className="border-0 shadow-lg">
@@ -546,14 +620,34 @@ const ModeratorDashboard = () => {
                     <CardContent className="p-6">
                       <PieChart
                         data={[
-                          { label: "Chờ duyệt", value: dashboardData?.distribution?.products.pending || 0, color: "#f59e0b" },
-                          { label: "Đã duyệt", value: dashboardData?.distribution?.products.approved || 0, color: "#10b981" },
-                          { label: "Bị từ chối", value: dashboardData?.distribution?.products.rejected || 0, color: "#ef4444" }
+                          {
+                            label: "Chờ duyệt",
+                            value:
+                              dashboardData?.distribution?.products.pending ||
+                              0,
+                            color: "#f59e0b",
+                          },
+                          {
+                            label: "Đã duyệt",
+                            value:
+                              dashboardData?.distribution?.products.approved ||
+                              0,
+                            color: "#10b981",
+                          },
+                          {
+                            label: "Bị từ chối",
+                            value:
+                              dashboardData?.distribution?.products.rejected ||
+                              0,
+                            color: "#ef4444",
+                          },
                         ]}
-                        loading={!dashboardData} title={""}                      />
+                        loading={!dashboardData}
+                        title={""}
+                      />
                     </CardContent>
                   </Card>
-                  
+
                   <Card className="border-0 shadow-lg">
                     <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
                       <CardTitle className="text-lg font-semibold text-gray-900">
@@ -566,38 +660,46 @@ const ModeratorDashboard = () => {
                           <Clock className="w-4 h-4 text-amber-600" />
                           <span className="text-sm font-medium">Chờ duyệt</span>
                         </div>
-                        <span className="font-bold text-amber-600">{dashboardData?.pendingProducts.value || '0'}</span>
+                        <span className="font-bold text-amber-600">
+                          {dashboardData?.pendingProducts.value || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-4 h-4 text-emerald-600" />
                           <span className="text-sm font-medium">Đã duyệt</span>
                         </div>
-                        <span className="font-bold text-emerald-600">{dashboardData?.approvedProducts.value || '0'}</span>
+                        <span className="font-bold text-emerald-600">
+                          {dashboardData?.approvedProducts.value || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <XCircle className="w-4 h-4 text-red-600" />
-                          <span className="text-sm font-medium">Bị từ chối</span>
+                          <span className="text-sm font-medium">
+                            Bị từ chối
+                          </span>
                         </div>
-                        <span className="font-bold text-red-600">{dashboardData?.rejectedProducts.value || '0'}</span>
+                        <span className="font-bold text-red-600">
+                          {dashboardData?.rejectedProducts.value || "0"}
+                        </span>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
               </div>
             )}
-            
+
             {activeTab === "posts" && (
               <div className="space-y-6">
-                <PostsChart 
-                  data={postChartData} 
+                <PostsChart
+                  data={postChartData}
                   loading={chartLoading}
                   statsData={dashboardData}
                   filter={postFilter}
                   onFilterChange={handlePostFilterChange}
                 />
-                
+
                 {/* Post Status Distribution */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                   <Card className="border-0 shadow-lg">
@@ -609,13 +711,25 @@ const ModeratorDashboard = () => {
                     <CardContent className="p-6">
                       <PieChart
                         data={[
-                          { label: "Chờ duyệt", value: dashboardData?.distribution?.posts.pending || 0, color: "#f59e0b" },
-                          { label: "Đã kích hoạt", value: dashboardData?.distribution?.posts.active || 0, color: "#10b981" }
+                          {
+                            label: "Chờ duyệt",
+                            value:
+                              dashboardData?.distribution?.posts.pending || 0,
+                            color: "#f59e0b",
+                          },
+                          {
+                            label: "Đã kích hoạt",
+                            value:
+                              dashboardData?.distribution?.posts.active || 0,
+                            color: "#10b981",
+                          },
                         ]}
-                        loading={!dashboardData} title={""}                      />
+                        loading={!dashboardData}
+                        title={""}
+                      />
                     </CardContent>
                   </Card>
-                  
+
                   <Card className="border-0 shadow-lg">
                     <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
                       <CardTitle className="text-lg font-semibold text-gray-900">
@@ -628,38 +742,48 @@ const ModeratorDashboard = () => {
                           <FileText className="w-4 h-4 text-orange-600" />
                           <span className="text-sm font-medium">Chờ duyệt</span>
                         </div>
-                        <span className="font-bold text-orange-600">{dashboardData?.pendingPosts.value || '0'}</span>
+                        <span className="font-bold text-orange-600">
+                          {dashboardData?.pendingPosts.value || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-lime-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <TrendingUp className="w-4 h-4 text-lime-600" />
-                          <span className="text-sm font-medium">Mới hôm nay</span>
+                          <span className="text-sm font-medium">
+                            Mới hôm nay
+                          </span>
                         </div>
-                        <span className="font-bold text-lime-600">{dashboardData?.newPostsToday.value || '0'}</span>
+                        <span className="font-bold text-lime-600">
+                          {dashboardData?.newPostsToday.value || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <MessageSquare className="w-4 h-4 text-yellow-600" />
-                          <span className="text-sm font-medium">Bình luận chờ duyệt</span>
+                          <span className="text-sm font-medium">
+                            Bình luận chờ duyệt
+                          </span>
                         </div>
-                        <span className="font-bold text-yellow-600">{dashboardData?.pendingComments.value || '0'}</span>
+                        <span className="font-bold text-yellow-600">
+                          {dashboardData?.pendingComments.value || "0"}
+                        </span>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
               </div>
             )}
-            
+
             {activeTab === "users" && (
               <div className="space-y-6">
-                <UsersChart 
-                  data={userChartData} 
+                <UsersChart
+                  data={userChartData}
                   loading={chartLoading}
                   statsData={dashboardData}
                   filter={userFilter}
                   onFilterChange={handleUserFilterChange}
                 />
-                
+
                 {/* User Status Distribution */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                   <Card className="border-0 shadow-lg">
@@ -671,13 +795,26 @@ const ModeratorDashboard = () => {
                     <CardContent className="p-6">
                       <PieChart
                         data={[
-                          { label: "Đã xác thực", value: dashboardData?.distribution?.users.verified || 0, color: "#10b981" },
-                          { label: "Chưa xác thực", value: dashboardData?.distribution?.users.unverified || 0, color: "#6b7280" }
+                          {
+                            label: "Đã xác thực",
+                            value:
+                              dashboardData?.distribution?.users.verified || 0,
+                            color: "#10b981",
+                          },
+                          {
+                            label: "Chưa xác thực",
+                            value:
+                              dashboardData?.distribution?.users.unverified ||
+                              0,
+                            color: "#6b7280",
+                          },
                         ]}
-                        loading={!dashboardData} title={""}                      />
+                        loading={!dashboardData}
+                        title={""}
+                      />
                     </CardContent>
                   </Card>
-                  
+
                   <Card className="border-0 shadow-lg">
                     <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b">
                       <CardTitle className="text-lg font-semibold text-gray-900">
@@ -688,23 +825,35 @@ const ModeratorDashboard = () => {
                       <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-blue-600" />
-                          <span className="text-sm font-medium">Tổng người dùng</span>
+                          <span className="text-sm font-medium">
+                            Tổng người dùng
+                          </span>
                         </div>
-                        <span className="font-bold text-blue-600">{dashboardData?.totalUsers.value || '0'}</span>
+                        <span className="font-bold text-blue-600">
+                          {dashboardData?.totalUsers.value || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <UserCheck className="w-4 h-4 text-emerald-600" />
-                          <span className="text-sm font-medium">Đã xác thực</span>
+                          <span className="text-sm font-medium">
+                            Đã xác thực
+                          </span>
                         </div>
-                        <span className="font-bold text-emerald-600">{dashboardData?.verifiedUsers.value || '0'}</span>
+                        <span className="font-bold text-emerald-600">
+                          {dashboardData?.verifiedUsers.value || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <Shield className="w-4 h-4 text-purple-600" />
-                          <span className="text-sm font-medium">Yêu cầu xác minh</span>
+                          <span className="text-sm font-medium">
+                            Yêu cầu xác minh
+                          </span>
                         </div>
-                        <span className="font-bold text-purple-600">{dashboardData?.pendingVerifications.value || '0'}</span>
+                        <span className="font-bold text-purple-600">
+                          {dashboardData?.pendingVerifications.value || "0"}
+                        </span>
                       </div>
                     </CardContent>
                   </Card>
@@ -714,8 +863,8 @@ const ModeratorDashboard = () => {
 
             {activeTab === "comments" && (
               <div className="space-y-6">
-                <CommentsChart 
-                  data={[]} 
+                <CommentsChart
+                  data={[]}
                   loading={false}
                   statsData={dashboardData}
                 />
@@ -724,8 +873,8 @@ const ModeratorDashboard = () => {
 
             {activeTab === "verifications" && (
               <div className="space-y-6">
-                <VerificationsChart 
-                  data={[]} 
+                <VerificationsChart
+                  data={[]}
                   loading={false}
                   statsData={dashboardData}
                 />
@@ -734,8 +883,8 @@ const ModeratorDashboard = () => {
 
             {activeTab === "owner-requests" && (
               <div className="space-y-6">
-                <OwnerRequestsChart 
-                  data={[]} 
+                <OwnerRequestsChart
+                  data={[]}
                   loading={false}
                   statsData={ownerRequestStats}
                 />
@@ -744,8 +893,8 @@ const ModeratorDashboard = () => {
 
             {activeTab === "complaints" && (
               <div className="space-y-6">
-                <ComplaintsChart 
-                  data={[]} 
+                <ComplaintsChart
+                  data={[]}
                   loading={false}
                   statsData={complaintStats}
                 />
@@ -754,8 +903,8 @@ const ModeratorDashboard = () => {
 
             {activeTab === "reports" && (
               <div className="space-y-6">
-                <ReportsChart 
-                  data={[]} 
+                <ReportsChart
+                  data={[]}
                   loading={false}
                   statsData={reportStats}
                 />
@@ -769,4 +918,3 @@ const ModeratorDashboard = () => {
 };
 
 export default ModeratorDashboard;
-

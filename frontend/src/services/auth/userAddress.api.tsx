@@ -58,7 +58,6 @@ const parseResponse = async (response: Response): Promise<ApiResponse<unknown>> 
         code: response.status,
         message: text || 'Unexpected response format',
         data: undefined,
-        success: false,
       };
     }
   } catch (error) {
@@ -67,7 +66,6 @@ const parseResponse = async (response: Response): Promise<ApiResponse<unknown>> 
       code: response.status || 500,
       message: 'Failed to parse response',
       data: undefined,
-      success: false,
     };
   }
 };

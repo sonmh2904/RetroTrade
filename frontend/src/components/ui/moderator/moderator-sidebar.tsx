@@ -12,7 +12,7 @@ import {
   Package,
   MessageCircle,
   AlertTriangle,
-  Users,
+  // Users, // Tạm thời comment
   Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
@@ -27,7 +27,7 @@ interface ModeratorSidebarProps {
     | "blog"
     | "messages"
     | "dispute"
-    | "userManagement"
+    // | "userManagement" // Tạm thời comment
     | "complaints";
   activeProductTab?: "products" | "categories" | "highlights";
   activeBlogTab?: "posts" | "categories" | "comments" | "tags";
@@ -40,7 +40,7 @@ interface ModeratorSidebarProps {
       | "blog"
       | "messages"
       | "dispute"
-      | "userManagement"
+      // | "userManagement" // Tạm thời comment
       | "complaints"
   ) => void;
   onProductTabChange?: (tab: "products" | "categories" | "highlights") => void;
@@ -77,7 +77,6 @@ export function ModeratorSidebar({
     );
     setIsMounted(true);
   }, []);
-
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -145,18 +144,18 @@ export function ModeratorSidebar({
       label: "Xử lý khiếu nại",
       icon: AlertTriangle,
       path: "/moderator/dispute-management",
-      description: "Xử lý tranh chấp và khiếu nại",
+      description: "Xử lý Khiếu nạivà khiếu nại",
     },
-    {
-      id: "userManagement" as const,
-      label: "Quản lý người dùng",
-      icon: Users,
-      path: "/moderator/user-management",
-      description: "Khóa và mở khóa tài khoản",
-    },
+    // {
+    //   id: "userManagement" as const,
+    //   label: "Quản lý người dùng",
+    //   icon: Users,
+    //   path: "/moderator/user-management",
+    //   description: "Khóa và mở khóa tài khoản",
+    // }, // Tạm thời comment
     {
       id: "complaints" as const,
-      label: "Khiếu nại khóa tài khoản",
+      label: "Khiếu nại tài khoản",
       icon: Ban,
       path: "/moderator/complaints",
       description: "Xử lý khiếu nại khóa/mở khóa",
@@ -175,7 +174,6 @@ export function ModeratorSidebar({
       description: "Quản lý bài viết và nội dung",
       hasSubmenu: true,
     },
-  
   ];
 
   const productSubmenuItems: {
@@ -237,7 +235,7 @@ export function ModeratorSidebar({
       | "blog"
       | "messages"
       | "dispute"
-      | "userManagement"
+      // | "userManagement" // Tạm thời comment
       | "complaints"
   ) => {
     if (onTabChange) {
@@ -320,7 +318,7 @@ export function ModeratorSidebar({
       </Button>
 
       <div
-        className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-sm z-20
+        className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-sm z-20 overflow-hidden
           ${
             isMounted ? "transform transition-all duration-300 ease-in-out" : ""
           }
@@ -339,7 +337,7 @@ export function ModeratorSidebar({
         >
           {/* Header with collapse button */}
           <div
-            className={`flex items-center mb-8 ${
+            className={`flex items-center mb-8 flex-shrink-0 ${
               isCollapsed ? "justify-center flex-col gap-2" : "gap-3"
             }`}
           >
@@ -387,7 +385,7 @@ export function ModeratorSidebar({
             </button>
           </div>
 
-          <nav className="space-y-3 flex-1">
+          <nav className="space-y-3 flex-1 overflow-y-auto overflow-x-hidden min-h-0">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -408,7 +406,6 @@ export function ModeratorSidebar({
                     }`}
                     onClick={() => {
                       if (item.hasSubmenu && !isCollapsed) {
-                      
                         if (isProduct && activeTab === "productManagement") {
                           setIsProductDropdownOpen(!isProductDropdownOpen);
                         } else if (isProduct) {

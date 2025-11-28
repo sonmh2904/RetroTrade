@@ -27,9 +27,7 @@ const REASON_OPTIONS = [
   "Hàng không đúng mô tả",
   "Hàng bị hư hỏng / mất linh kiện",
   "Không nhận được hàng",
-  "Giao hàng trễ / sai địa chỉ",
   "Người thuê không trả đúng hạn",
-  "Chủ nhà từ chối nhận lại hàng",
   "Khác (mô tả chi tiết bên dưới)",
 ] as const;
 
@@ -46,7 +44,6 @@ export default function DisputeModal({
   const [submitting, setSubmitting] = useState(false);
 
   const inputId = `evidence-upload-${orderId || "dispute"}`;
-
 
   useEffect(() => {
     return () => {
@@ -114,7 +111,7 @@ export default function DisputeModal({
         description: description.trim(),
         evidence: files,
       });
-      toast.success("Gửi tranh chấp thành công!");
+      toast.success("Gửi Khiếu nạithành công!");
       handleClose(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Lỗi hệ thống");
@@ -132,7 +129,7 @@ export default function DisputeModal({
         <DialogHeader className="p-6 pb-4 bg-red-50 border-b border-red-100">
           <DialogTitle className="text-xl font-bold text-red-700 flex items-center gap-3">
             <AlertCircle className="w-7 h-7" />
-            Báo cáo tranh chấp
+            Báo cáo Khiếu nại
           </DialogTitle>
         </DialogHeader>
 
@@ -251,7 +248,7 @@ export default function DisputeModal({
             }
             className="flex-1 bg-red-600 hover:bg-red-700 font-semibold"
           >
-            {submitting ? "Đang gửi..." : "Gửi tranh chấp"}
+            {submitting ? "Đang gửi..." : "Gửi Khiếu nại"}
           </Button>
         </DialogFooter>
       </DialogContent>

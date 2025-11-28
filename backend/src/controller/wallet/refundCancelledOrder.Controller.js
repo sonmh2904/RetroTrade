@@ -17,10 +17,8 @@ async function refundPendingOrder(orderId, session = null) {
   try {
     const order = await Order.findById(orderId).session(session);
     if (!order) throw new Error("Không tìm thấy đơn hàng");
-    if (!(order.orderStatus === "pending" || order.orderStatus === "cancelled")) throw new Error("Chỉ hoàn tiền cho đơn pending/cancelled");
-
+    if (order.orderStatus !== "cancelled") throw new Error("Chỉ hoàn tiền cho đơn đã bị huỷ");
     if (order.isRefunded) throw new Error("Đơn hàng đã hoàn tiền!");
-
     // Số tiền hoàn lại cho người thuê
     const refundAmount = order.finalAmount ?? order.totalAmount;
 
@@ -119,8 +117,8 @@ const refundCancelledOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
     }
-    if (!(order.orderStatus === "cancelled" || order.orderStatus === "pending") || order.paymentStatus !== "paid") {
-      return res.status(400).json({ error: "Chỉ hoàn tiền cho đơn đã bị huỷ hoặc đang chờ và đã thanh toán" });
+    if (order.orderStatus !== "cancelled" || order.paymentStatus !== "paid") {
+      return res.status(400).json({ error: "Chỉ hoàn tiền cho đơn đã bị huỷ và đã thanh toán" });
     }
     if (order.isRefunded) {
       return res.status(400).json({ error: "Đơn đã hoàn tiền rồi!" });
