@@ -39,6 +39,7 @@ const {
   getFavorites,
 } = require("../../controller/products/favorites.controller");
 const ratingController = require("../../controller/order/rating.controller");
+const OwnerRatingController = require("../../controller/order/onwerRating.controller");
 const { upload } = require("../../middleware/upload.middleware");
 const { authenticateToken } = require("../../middleware/auth");
 
@@ -75,6 +76,11 @@ router.delete("/rating/:id",authenticateToken, ratingController.deleteRating);
 router.get("/rating/item/:itemId", ratingController.getRatingsByItem);
 router.get("/rating/item/:itemId/stats", ratingController.getRatingStats);
 router.get("/rating/owner/:ownerId", getRatingByOwnerId);
+//Owner Rating
+router.post("/owner/rating/", authenticateToken, OwnerRatingController.createOwnerRating);
+router.get("/owner/rating/:ownerId", OwnerRatingController.getOwnerRatings);
+router.put("/owner/rating/:id", authenticateToken, OwnerRatingController.updateOwnerRating);
+router.delete("/owner/rating/:id", authenticateToken, OwnerRatingController.deleteOwnerRating);
 //owner
 router.get("/user", authenticateToken, getUserProducts);
 router.get("/user/addresses",authenticateToken, getUserAddresses);
@@ -88,6 +94,8 @@ router.put(
   updateProduct
 );
 router.delete("/user/:id", authenticateToken, deleteProduct);
+
+
 
 
 module.exports = router;

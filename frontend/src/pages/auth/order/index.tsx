@@ -1301,11 +1301,12 @@ const updateRentalDates = useCallback(
           continue;
         }
 
-        // Xóa khỏi giỏ nếu thanh toán thành công
         if (!item._id.startsWith("temp-")) {
-          await dispatch(removeItemFromCartAction(item._id))
-            .unwrap()
-            .catch(() => {});
+          try {
+            await dispatch(removeItemFromCartAction(item._id));
+          } catch (error) {
+            // Ignore errors when removing items from cart
+          }
         }
       }
 
