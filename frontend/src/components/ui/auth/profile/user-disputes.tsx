@@ -85,8 +85,8 @@ export function UserDisputes() {
   };
 
   const getRefundTargetLabel = (target?: string) => {
-    if (target === "reporter") return "Người khiếu nại (người thuê)";
-    if (target === "reported") return "Người bị khiếu nại (người bán)";
+    if (target === "reporter") return `Người khiếu nại ${dispute.orderId?.productName} `;
+    if (target === "reported") return `Người bị khiếu nại ${dispute.orderId?.productName} `;
     return "Không áp dụng";
   };
 

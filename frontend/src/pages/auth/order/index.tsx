@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useRouter } from "next/router";
 import { createOrderAction } from "@/store/order/orderActions";
@@ -48,37 +48,16 @@ import PopupModal from "@/components/ui/common/PopupModal";
 import { useAppDispatch } from "@/store/hooks";
 import { AddressSelector } from "@/components/ui/auth/address/address-selector";
 import RentalDatePicker from "@/components/ui/common/RentalDatePicker";
-import { CheckoutPhoneInput, validateVietnamesePhone } from "@/components/ui/auth/checkout-phone-input";
+import {
+  CheckoutPhoneInput,
+  validateVietnamesePhone,
+} from "@/components/ui/auth/checkout-phone-input";
+import {
+  getExactRentalUnits,
+  getBillableUnits,
+  validateRentalDuration,
+} from "@/utils/rentalTimeCalculator";
 
-const calculateRentalDays = (item: CartItem): number => {
-  if (!item.rentalStartDate || !item.rentalEndDate) return 0;
-  const start = new Date(item.rentalStartDate);
-  const end = new Date(item.rentalEndDate);
-  const totalHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-
-  let unitCount: number;
-  switch (item.priceUnit.toLowerCase()) {
-    case "hour":
-    case "giờ":
-      unitCount = Math.ceil(totalHours);
-      break;
-    case "day":
-    case "ngày":
-      unitCount = Math.ceil(totalHours / 24);
-      break;
-    case "week":
-    case "tuần":
-      unitCount = Math.ceil(totalHours / (24 * 7));
-      break;
-    case "month":
-    case "tháng":
-      unitCount = Math.ceil(totalHours / (24 * 30));
-      break;
-    default:
-      unitCount = Math.ceil(totalHours / 24);
-  }
-  return Math.max(1, unitCount);
-};
 
 type ApiError = {
   response?: {
@@ -94,7 +73,7 @@ type ApiError = {
 };
 
 export default function Checkout() {
-  const dispatch = useAppDispatch(); 
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -102,6 +81,7 @@ export default function Checkout() {
     fullName: "",
     street: "",
     ward: "",
+    district: "",
     province: "",
     phone: "",
   });
@@ -168,98 +148,101 @@ export default function Checkout() {
   const [discountListError, setDiscountListError] = useState<string | null>(
     null
   );
-  const [paymentOption, setPaymentOption] = useState<"pay_now" | "pay_later">("pay_now"); //Option payment
+  const [paymentOption, setPaymentOption] = useState<"pay_now" | "pay_later">(
+    "pay_now"
+  ); //Option payment
+
 
   // Lấy từ sessionStorage
-useEffect(() => {
-  // CHẶN ADMIN & MODERATOR THUÊ ĐỒ
-  if (accessToken) {
-    try {
-      const decoded = decodeToken(accessToken);
-      const role = decoded?.role as string | undefined;
+  useEffect(() => {
+    // CHẶN ADMIN & MODERATOR THUÊ ĐỒ
+    if (accessToken) {
+      try {
+        const decoded = decodeToken(accessToken);
+        const role = decoded?.role as string | undefined;
 
-      if (role === "admin" || role === "moderator") {
-        toast.error(
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-red-600" />
-            </div>
-            <div>
-              <div className="font-bold text-red-900">
-                Tài khoản quản trị không được phép thuê đồ!
+        if (role === "admin" || role === "moderator") {
+          toast.error(
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
               </div>
-              <div className="text-sm text-red-700 mt-1">
-                Vui lòng sử dụng tài khoản người dùng thường.
+              <div>
+                <div className="font-bold text-red-900">
+                  Tài khoản quản trị không được phép thuê đồ!
+                </div>
+                <div className="text-sm text-red-700 mt-1">
+                  Vui lòng sử dụng tài khoản người dùng thường.
+                </div>
               </div>
-            </div>
-          </div>,
-          {
-            duration: 8000,
-            position: "top-center",
-            style: {
-              background: "#fef2f2",
-              border: "2px solid #fca5a5",
-              borderRadius: "12px",
-              padding: "16px",
-            },
-          }
-        );
+            </div>,
+            {
+              duration: 8000,
+              position: "top-center",
+              style: {
+                background: "#fef2f2",
+                border: "2px solid #fca5a5",
+                borderRadius: "12px",
+                padding: "16px",
+              },
+            }
+          );
 
-        // Tự động chuyển hướng về trang chủ sau 3s
-        const timer = setTimeout(() => {
-          router.replace("/home");
-        }, 3000);
+          // Tự động chuyển hướng về trang chủ sau 3s
+          const timer = setTimeout(() => {
+            router.replace("/home");
+          }, 3000);
 
-        return () => clearTimeout(timer);
-      }
-    } catch (err) {
-      console.error("Decode token error:", err);
-    }
-  }
-
-  // LOAD CHECKOUT ITEMS (logic cũ + cải thiện UX)
-  const itemsStr = sessionStorage.getItem("checkoutItems");
-  if (!itemsStr) {
-    toast.error("Giỏ hàng trống. Hãy thêm sản phẩm trước khi thanh toán!", {
-      duration: 5000,
-    });
-    router.push("/auth/cartitem");
-    return;
-  }
-
-  try {
-    const items: CartItem[] = JSON.parse(itemsStr);
-
-    const invalidItem = items.find(
-      (i) => !i.rentalStartDate || !i.rentalEndDate
-    );
-
-    if (invalidItem) {
-      toast.error(
-        <>
-          <strong>{invalidItem.title}</strong> chưa có ngày thuê hợp lệ
-        </>,
-        {
-          description: "Vui lòng quay lại giỏ hàng để chọn ngày thuê",
-          duration: 6000,
+          return () => clearTimeout(timer);
         }
-      );
+      } catch (err) {
+        console.error("Decode token error:", err);
+      }
+    }
+
+    // LOAD CHECKOUT ITEMS (logic cũ + cải thiện UX)
+    const itemsStr = sessionStorage.getItem("checkoutItems");
+    if (!itemsStr) {
+      toast.error("Giỏ hàng trống. Hãy thêm sản phẩm trước khi thanh toán!", {
+        duration: 5000,
+      });
       router.push("/auth/cartitem");
       return;
     }
 
-    setCartItems(items);
-    setSelectedItemIds(items.map((item) => item._id));
-    setHasInitializedSelection(true);
-  } catch (err) {
-    console.error("Error parsing checkout items from sessionStorage:", err);
-    toast.error("Dữ liệu giỏ hàng bị lỗi", {
-      description: "Đang làm mới giỏ hàng...",
-    });
-    sessionStorage.removeItem("checkoutItems");
-    router.push("/auth/cartitem");
-  }
-}, [accessToken, router]);
+    try {
+      const items: CartItem[] = JSON.parse(itemsStr);
+
+      const invalidItem = items.find(
+        (i) => !i.rentalStartDate || !i.rentalEndDate
+      );
+
+      if (invalidItem) {
+        toast.error(
+          <>
+            <strong>{invalidItem.title}</strong> chưa có ngày thuê hợp lệ
+          </>,
+          {
+            description: "Vui lòng quay lại giỏ hàng để chọn ngày thuê",
+            duration: 6000,
+          }
+        );
+        router.push("/auth/cartitem");
+        return;
+      }
+
+      setCartItems(items);
+      setSelectedItemIds(items.map((item) => item._id));
+      setHasInitializedSelection(true);
+    } catch (err) {
+      console.error("Error parsing checkout items from sessionStorage:", err);
+      toast.error("Dữ liệu giỏ hàng bị lỗi", {
+        description: "Đang làm mới giỏ hàng...",
+      });
+      sessionStorage.removeItem("checkoutItems");
+      router.push("/auth/cartitem");
+    }
+  }, [accessToken, router]);
 
   useEffect(() => {
     const fetchServiceFeeRate = async () => {
@@ -302,7 +285,6 @@ useEffect(() => {
       }
     }
   }, [selectedAddressId, shipping.fullName, accessToken]);
-
 
   useEffect(() => {
     const loadUserInfo = async () => {
@@ -394,39 +376,94 @@ useEffect(() => {
     };
   }, [showDiscountList]);
 
-  // Pagination calculations
-  const totalPages = Math.ceil(cartItems.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentItems = cartItems.slice(startIndex, endIndex);
-  const selectedCartItems = cartItems.filter((item) =>
-    selectedItemIds.includes(item._id)
+  // Cache tính toán billableUnits và exactUnits cho tất cả items (chỉ tính 1 lần)
+  const itemsCalculations = useMemo(() => {
+    const calculations = new Map<string, { billableUnits: number; exactUnits: number }>();
+    
+    cartItems.forEach((item) => {
+      const exactUnits = getExactRentalUnits(item);
+      const billableUnits = getBillableUnits(item);
+      calculations.set(item._id, { billableUnits, exactUnits });
+    });
+    
+    return calculations;
+  }, [cartItems]);
+
+  // Helper function để lấy billableUnits từ cache
+  const getCachedBillableUnits = useCallback((item: CartItem): number => {
+    return itemsCalculations.get(item._id)?.billableUnits ?? getBillableUnits(item);
+  }, [itemsCalculations]);
+
+  // Memoize selectedItemIds as Set for O(1) lookup
+  const selectedItemIdsSet = useMemo(
+    () => new Set(selectedItemIds),
+    [selectedItemIds]
   );
 
-  const rentalTotal = selectedCartItems.reduce((sum, item) => {
-    const days = calculateRentalDays(item);
-    return sum + item.basePrice * item.quantity * days;
-  }, 0);
-  // Tính depositTotal
-  const depositTotal = selectedCartItems.reduce(
-    (sum, item) => sum + item.depositAmount * item.quantity,
-    0
+  // Memoize selected cart items
+  const selectedCartItems = useMemo(
+    () => cartItems.filter((item) => selectedItemIdsSet.has(item._id)),
+    [cartItems, selectedItemIdsSet]
   );
-  // Tính serviceFee trên tiền thuê
-  const serviceFeeAmount = (rentalTotal * serviceFeeRate) / 100;
 
-  // Tính totalDiscountAmount từ public và private discount (chỉ áp dụng khi có sản phẩm được chọn)
-  const effectivePublicDiscountAmount =
-    selectedCartItems.length > 0 ? publicDiscountAmount : 0;
-  const effectivePrivateDiscountAmount =
-    selectedCartItems.length > 0 ? privateDiscountAmount : 0;
-  const totalDiscountAmount =
-    effectivePublicDiscountAmount + effectivePrivateDiscountAmount;
+  // Memoize pagination calculations
+  const totalPages = useMemo(
+    () => Math.ceil(cartItems.length / itemsPerPage),
+    [cartItems.length, itemsPerPage]
+  );
 
-  // Tính grandTotal: Tổng tiền = tiền thuê - discount + tiền cọc + phí dịch vụ
-  const grandTotal = Math.max(
-    0,
-    rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount
+  const currentItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return cartItems.slice(startIndex, endIndex);
+  }, [cartItems, currentPage, itemsPerPage]);
+
+  // Memoize rental calculations
+  const rentalTotal = useMemo(() => {
+    return selectedCartItems.reduce((sum, item) => {
+      const days = getCachedBillableUnits(item);
+      return sum + item.basePrice * item.quantity * days;
+    }, 0);
+  }, [selectedCartItems, getCachedBillableUnits]);
+
+  const depositTotal = useMemo(
+    () =>
+      selectedCartItems.reduce(
+        (sum, item) => sum + item.depositAmount * item.quantity,
+        0
+      ),
+    [selectedCartItems]
+  );
+
+  const serviceFeeAmount = useMemo(
+    () => (rentalTotal * serviceFeeRate) / 100,
+    [rentalTotal, serviceFeeRate]
+  );
+
+  // Memoize discount calculations
+  const effectivePublicDiscountAmount = useMemo(
+    () => (selectedCartItems.length > 0 ? publicDiscountAmount : 0),
+    [selectedCartItems.length, publicDiscountAmount]
+  );
+
+  const effectivePrivateDiscountAmount = useMemo(
+    () => (selectedCartItems.length > 0 ? privateDiscountAmount : 0),
+    [selectedCartItems.length, privateDiscountAmount]
+  );
+
+  const totalDiscountAmount = useMemo(
+    () => effectivePublicDiscountAmount + effectivePrivateDiscountAmount,
+    [effectivePublicDiscountAmount, effectivePrivateDiscountAmount]
+  );
+
+  // Memoize grand total
+  const grandTotal = useMemo(
+    () =>
+      Math.max(
+        0,
+        rentalTotal - totalDiscountAmount + depositTotal + serviceFeeAmount
+      ),
+    [rentalTotal, totalDiscountAmount, depositTotal, serviceFeeAmount]
   );
 
   // Kiểm tra minOrderAmount cho public discount (chỉ kiểm tra trên tiền thuê)
@@ -461,44 +498,53 @@ useEffect(() => {
     }
   }, [privateDiscount, rentalTotal, publicDiscountAmount]);
 
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
+  const goToPage = useCallback(
+    (page: number) => {
+      if (page >= 1 && page <= totalPages) {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [totalPages]
+  );
 
+  const handleToggleItemSelection = useCallback((itemId: string) => {
+    setSelectedItemIds((prev) => {
+      const prevSet = new Set(prev);
+      if (prevSet.has(itemId)) {
+        prevSet.delete(itemId);
+      } else {
+        prevSet.add(itemId);
+      }
+      return Array.from(prevSet);
+    });
+  }, []);
 
-  const handleToggleItemSelection = (itemId: string) => {
-    setSelectedItemIds((prev) =>
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId]
-    );
-  };
-
-  const handleSelectAllItems = () => {
+  const handleSelectAllItems = useCallback(() => {
     setSelectedItemIds(cartItems.map((item) => item._id));
-  };
+  }, [cartItems]);
 
-  const handleDeselectAllItems = () => {
+  const handleDeselectAllItems = useCallback(() => {
     setSelectedItemIds([]);
-  };
+  }, []);
 
   // Helper function to calculate discount amount (same logic as backend)
-  const calculateDiscountAmount = (
-    type: "percent" | "fixed",
-    value: number,
-    baseAmount: number,
-    maxDiscountAmount?: number
-  ): number => {
-    let amount = type === "percent" ? (baseAmount * value) / 100 : value;
-    if (maxDiscountAmount && maxDiscountAmount > 0) {
-      amount = Math.min(amount, maxDiscountAmount);
-    }
-    amount = Math.max(0, Math.min(baseAmount, Math.floor(amount)));
-    return amount;
-  };
+  const calculateDiscountAmount = useCallback(
+    (
+      type: "percent" | "fixed",
+      value: number,
+      baseAmount: number,
+      maxDiscountAmount?: number
+    ): number => {
+      let amount = type === "percent" ? (baseAmount * value) / 100 : value;
+      if (maxDiscountAmount && maxDiscountAmount > 0) {
+        amount = Math.min(amount, maxDiscountAmount);
+      }
+      amount = Math.max(0, Math.min(baseAmount, Math.floor(amount)));
+      return amount;
+    },
+    []
+  );
 
   // Handle discount code
   const handleApplyDiscount = async (code?: string) => {
@@ -896,26 +942,35 @@ useEffect(() => {
     debouncedUpdate(cartItemId, newQuantity);
   };
 
+  // Helper function to format date to datetime-local format
+  const formatToDateTimeLocal = useCallback((isoString?: string): string => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+
+    // Lấy giá trị local time thay vì UTC để tránh nhảy thời gian
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }, []);
+
   // Dates editing - mượn logic từ cart page
   const startEditingDates = useCallback(
     (cartItemId: string, rentalStartDate?: string, rentalEndDate?: string) => {
-      const startDateTime = rentalStartDate
-        ? rentalStartDate.replace("T", "T").substring(0, 16)
-        : "";
-      const endDateTime = rentalEndDate
-        ? rentalEndDate.replace("T", "T").substring(0, 16)
-        : "";
-
       setEditingDates((prev) => ({
         ...prev,
         [cartItemId]: {
-          rentalStartDateTime: startDateTime,
-          rentalEndDateTime: endDateTime,
+          rentalStartDateTime: formatToDateTimeLocal(rentalStartDate),
+          rentalEndDateTime: formatToDateTimeLocal(rentalEndDate),
         },
       }));
-      setItemErrors({ ...itemErrors, [cartItemId]: {} });
+      setItemErrors((prev) => ({ ...prev, [cartItemId]: {} }));
     },
-    [itemErrors]
+    [formatToDateTimeLocal]
   );
 
   const cancelEditingDates = useCallback((cartItemId: string) => {
@@ -949,293 +1004,352 @@ useEffect(() => {
   );
 
   // Update rental dates - mượn logic từ cart page
-  const updateRentalDates = useCallback(
-    async (
-      cartItemId: string,
-      rentalStartDateTime: string,
-      rentalEndDateTime: string
-    ) => {
-      if (!rentalStartDateTime || !rentalEndDateTime) {
-        toast.error("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc");
-        return;
-      }
+const updateRentalDates = useCallback(
+  async (
+    cartItemId: string,
+    rentalStartDateTime: string,
+    rentalEndDateTime: string
+  ) => {
+    if (!rentalStartDateTime || !rentalEndDateTime) {
+      toast.error("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc");
+      return;
+    }
 
-      const startDate = new Date(rentalStartDateTime);
-      const endDate = new Date(rentalEndDateTime);
-      const diffDays = Math.ceil(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (diffDays > 365) {
-        toast.error("Thời gian thuê không được vượt quá 365 ngày");
-        return;
-      }
+    const startDate = new Date(rentalStartDateTime);
+    const endDate = new Date(rentalEndDateTime);
+    const diffHours =
+      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
 
-      try {
-        setUpdatingItems((prev) => new Set(prev).add(cartItemId));
+    if (diffHours <= 0) {
+      toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
+      return;
+    }
 
-        // Temp item - chỉ update local
-        if (cartItemId.startsWith("temp-")) {
-          const updatedItems = cartItems.map((item) =>
-            item._id === cartItemId
-              ? {
-                  ...item,
-                  rentalStartDate: rentalStartDateTime,
-                  rentalEndDate: rentalEndDateTime,
-                }
-              : item
-          );
-          sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
-          setCartItems(updatedItems);
-          cancelEditingDates(cartItemId);
-          toast.success("Đã cập nhật thời gian thuê");
-          return;
-        }
+    if (diffHours > 365 * 24) {
+      toast.error("Thời gian thuê không được vượt quá 365 ngày");
+      return;
+    }
 
-        // Real cart item - update trong database
-        await dispatch(
-          updateCartItemAction(cartItemId, {
-            rentalStartDate: rentalStartDateTime,
-            rentalEndDate: rentalEndDateTime,
-          })
+    const item = cartItems.find((i) => i._id === cartItemId);
+    if (!item) return;
+
+    // Tạo item tạm với thời gian mới để validate
+    const tempItemForValidation = {
+      ...item,
+      rentalStartDate: rentalStartDateTime,
+      rentalEndDate: rentalEndDateTime,
+    };
+
+    // VALIDATE CHÍNH XÁC THEO ĐƠN VỊ GIÁ (giờ/ngày/tuần/tháng) với thời gian mới
+    const validation = validateRentalDuration(tempItemForValidation);
+
+    if (!validation.isValid) {
+      if (validation.exactUnits < validation.min) {
+        toast.error(
+          `"${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
+            `Bạn chỉ chọn ${validation.exactUnits.toFixed(1)} ${validation.unitName}.`,
+          { duration: 8000, }
         );
+      } else if (validation.exactUnits > validation.max) {
+        toast.error(`"${item.title}" chỉ cho thuê tối đa ${validation.max} ${validation.unitName}.`);
+      } else {
+        toast.error(`"${item.title}" có thời gian thuê không hợp lệ.`);
+      }
+      return;
+    }
 
-        await dispatch(fetchCartItems());
+    // Nếu qua hết validate → mới cho lưu
+    try {
+      setUpdatingItems((prev) => new Set(prev).add(cartItemId));
 
-        const updatedItems = cartItems.map((item) =>
-          item._id === cartItemId
+      if (cartItemId.startsWith("temp-")) {
+        const updatedItems = cartItems.map((i) =>
+          i._id === cartItemId
             ? {
-                ...item,
+                ...i,
                 rentalStartDate: rentalStartDateTime,
                 rentalEndDate: rentalEndDateTime,
               }
-            : item
+            : i
         );
         sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
         setCartItems(updatedItems);
-
-        toast.success("Đã cập nhật thời gian thuê thành công");
         cancelEditingDates(cartItemId);
-      } catch {
-        toast.error("Có lỗi xảy ra khi cập nhật thời gian thuê");
-      } finally {
-        setUpdatingItems((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(cartItemId);
-          return newSet;
-        });
-      }
-    },
-    [cartItems, dispatch, cancelEditingDates]
-  );
-
-  // ham submit mơi
-
-const processPayment = async () => {
-  setIsSubmitting(true);
-
-  try {
-    const itemsToProcess = selectedCartItems;
-    const unselectedItems = cartItems.filter(
-      (item) => !selectedItemIds.includes(item._id)
-    );
-
-    const failedItemIds: string[] = [];
-    const failedItemMessages: string[] = [];
-
-    // Tính trước grandTotal cho từng sản phẩm riêng (rất quan trọng!)
-    const getItemGrandTotal = (item: CartItem) => {
-      const itemRental =
-        item.basePrice * item.quantity * calculateRentalDays(item);
-      const itemDeposit = item.depositAmount * item.quantity;
-      const itemServiceFee = (itemRental * serviceFeeRate) / 100;
-
-      // Phân bổ giảm giá (nếu có) theo tỷ lệ tiền thuê của item này
-      let itemDiscount = 0;
-      if (totalDiscountAmount > 0 && rentalTotal > 0) {
-        const itemRatio = itemRental / rentalTotal;
-        itemDiscount = Math.floor(totalDiscountAmount * itemRatio);
+        toast.success("Đã cập nhật thời gian thuê");
+        return;
       }
 
-      return Math.max(
-        0,
-        itemRental - itemDiscount + itemDeposit + itemServiceFee
-      );
-    };
-
-    for (const item of itemsToProcess) {
-      console.log("Bắt đầu xử lý cho:", item.title);
-
-      // Tạo đơn hàng
-      const result = await dispatch(
-        createOrderAction({
-          itemId: item.itemId,
-          quantity: item.quantity,
-          startAt: item.rentalStartDate,
-          endAt: item.rentalEndDate,
-          shippingAddress: shipping,
-          paymentMethod: "Wallet", 
-          note,
-          publicDiscountCode: publicDiscount?.code || null,
-          privateDiscountCode: privateDiscount?.code || null,
+      await dispatch(
+        updateCartItemAction(cartItemId, {
+          rentalStartDate: rentalStartDateTime,
+          rentalEndDate: rentalEndDateTime,
         })
       );
+      
+      // Fetch lại từ server để đảm bảo dữ liệu chính xác
+      await dispatch(fetchCartItems());
 
-      if (!result?.success) {
-        const errorMessage = result?.error || "Không thể tạo đơn hàng";
-        toast.error(`Tạo đơn thất bại: ${item.title} - ${errorMessage}`);
-        failedItemMessages.push(item.title);
-        failedItemIds.push(item._id);
-        continue;
-      }
+      // Cập nhật với giá trị đã lưu thành công (giữ nguyên format từ input)
+      const updatedItems = cartItems.map((i) =>
+        i._id === cartItemId
+          ? {
+              ...i,
+              rentalStartDate: rentalStartDateTime,
+              rentalEndDate: rentalEndDateTime,
+            }
+          : i
+      );
+      sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+      setCartItems(updatedItems);
 
-      const orderId = result.data?._id || result.data?.orderId;
-      if (!orderId) {
-        toast.error(
-          `Lỗi hệ thống: Không lấy được ID đơn hàng cho ${item.title}`
+      toast.success("Đã cập nhật thời gian thuê thành công");
+      cancelEditingDates(cartItemId);
+    } catch {
+      toast.error("Có lỗi xảy ra khi cập nhật thời gian thuê");
+      dispatch(fetchCartItems());
+    } finally {
+      setUpdatingItems((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(cartItemId);
+        return newSet;
+      });
+    }
+  },
+  [cartItems, dispatch, cancelEditingDates]
+);
+  // ham submit mơi
+
+  const processPayment = async () => {
+    setIsSubmitting(true);
+
+    try {
+      const itemsToProcess = selectedCartItems;
+      const unselectedItems = cartItems.filter(
+        (item) => !selectedItemIds.includes(item._id)
+      );
+
+      const failedItemIds: string[] = [];
+      const failedItemMessages: string[] = [];
+
+      // Tính trước grandTotal cho từng sản phẩm riêng (rất quan trọng!)
+      const getItemGrandTotal = (item: CartItem) => {
+        const itemRental =
+          item.basePrice * item.quantity * getCachedBillableUnits(item);
+        const itemDeposit = item.depositAmount * item.quantity;
+        const itemServiceFee = (itemRental * serviceFeeRate) / 100;
+
+        // Phân bổ giảm giá (nếu có) theo tỷ lệ tiền thuê của item này
+        let itemDiscount = 0;
+        if (totalDiscountAmount > 0 && rentalTotal > 0) {
+          const itemRatio = itemRental / rentalTotal;
+          itemDiscount = Math.floor(totalDiscountAmount * itemRatio);
+        }
+
+        return Math.max(
+          0,
+          itemRental - itemDiscount + itemDeposit + itemServiceFee
         );
-        failedItemMessages.push(item.title);
-        failedItemIds.push(item._id);
-        continue;
-      }
+      };
 
-      console.log("Đã tạo đơn:", orderId);
+      for (const item of itemsToProcess) {
+        console.log("Bắt đầu xử lý cho:", item.title);
 
-      // Nếu chọn "Thanh toán sau" → xong, bỏ qua thanh toán
-      if (paymentOption === "pay_later") {
-        console.log("Thanh toán sau → không trừ ví");
+        // Validate rental dates
+        if (!item.rentalStartDate || !item.rentalEndDate) {
+          toast.error(
+            `Vui lòng chọn thời gian thuê cho sản phẩm: ${item.title}`
+          );
+          failedItemMessages.push(item.title);
+          failedItemIds.push(item._id);
+          continue;
+        }
 
-        // Xóa khỏi giỏ (nếu không phải temp)
-        if (!item._id.startsWith("temp-")) {
-  try {
-    await dispatch(removeItemFromCartAction(item._id));
-  } catch (e) {
-    console.error("Remove cart item failed:", e);
-  }
-}
-continue;
+        // Tạo đơn hàng
+        const result = await dispatch(
+          createOrderAction({
+            itemId: item.itemId,
+            unitCount: getCachedBillableUnits(item),
+            startAt: item.rentalStartDate,
+            endAt: item.rentalEndDate,
+            shippingAddress: {
+              ...shipping,
+              district: shipping.ward || "",
+            },
+            paymentMethod: "Wallet",
+            note,
+            discountCode: privateDiscount?.code || publicDiscount?.code,
+          })
+        );
 
-      }
+        if (!result?.success) {
+          const errorMessage = result?.error || "Không thể tạo đơn hàng";
+          toast.error(`Tạo đơn thất bại: ${item.title} - ${errorMessage}`);
+          failedItemMessages.push(item.title);
+          failedItemIds.push(item._id);
+          continue;
+        }
 
-      // CHỈ VÀO ĐÂY KHI CHỌN "THANH TOÁN NGAY"
-      try {
+        const orderId = result.data?._id || result.data?.orderId;
+        if (!orderId) {
+          toast.error(
+            `Lỗi hệ thống: Không lấy được ID đơn hàng cho ${item.title}`
+          );
+          failedItemMessages.push(item.title);
+          failedItemIds.push(item._id);
+          continue;
+        }
+
+        console.log("Đã tạo đơn:", orderId);
+
+        // Nếu chọn "Thanh toán sau" → xong, bỏ qua thanh toán
+        if (paymentOption === "pay_later") {
+          console.log("Thanh toán sau → không trừ ví");
+
+          // Xóa khỏi giỏ (nếu không phải temp)
+          if (!item._id.startsWith("temp-")) {
+            try {
+              await dispatch(removeItemFromCartAction(item._id));
+            } catch (e) {
+              console.error("Remove cart item failed:", e);
+            }
+          }
+          continue;
+        }
+
+        // CHỈ VÀO ĐÂY KHI CHỌN "THANH TOÁN NGAY"
         // Tính số tiền cần trừ cho chính xác từng đơn (không dùng grandTotal chung!)
         const amountToPay = getItemGrandTotal(item);
 
-        const paymentResult = await payOrderWithWallet(orderId);
+        try {
+          const paymentResult = await payOrderWithWallet(orderId);
 
-        if (!paymentResult?.success) {
-          const msg =
-            paymentResult?.message ||
-            paymentResult?.error ||
-            "Thanh toán thất bại";
-          toast.error(`Thanh toán thất bại: ${item.title} - ${msg}`);
+          if (!paymentResult?.success) {
+            const msg =
+              paymentResult?.message ||
+              paymentResult?.error ||
+              "Thanh toán thất bại";
+            toast.error(`Thanh toán thất bại: ${item.title} - ${msg}`);
 
-          // Đặc biệt: nếu ví không đủ → hiện modal + dừng toàn bộ
-          if (msg.includes("không đủ") || msg.includes("insufficient")) {
-            const balance = paymentResult?.balance || 0;
-            const required = paymentResult?.required || amountToPay;
+            // Đặc biệt: nếu ví không đủ → hiện modal + dừng toàn bộ
+            if (msg.includes("không đủ") || msg.includes("insufficient")) {
+              const balance = paymentResult?.balance ?? 0;
+              const required = paymentResult?.required ?? amountToPay;
+              const shortage = required - balance;
+
+              // Chỉ hiển thị modal nếu thực sự thiếu tiền (shortage > 0 và required > 0)
+              if (shortage > 0 && required > 0) {
+                setErrorModalTitle("Ví không đủ tiền");
+                setErrorModalMessage(
+                  `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
+                    `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
+                    `Thiếu: ${shortage.toLocaleString("vi-VN")}₫\n\n` +
+                    `Vui lòng nạp thêm tiền để tiếp tục.`
+                );
+                setIsErrorModalOpen(true);
+
+                // DỪNG LUÔN vòng lặp khi thiếu tiền
+                failedItemIds.push(item._id);
+                failedItemMessages.push(item.title + " (thiếu tiền ví)");
+                break; // ← QUAN TRỌNG: Không xử lý các đơn tiếp theo
+              } else {
+                // Nếu không thực sự thiếu tiền, chỉ log lỗi thông thường
+                failedItemIds.push(item._id);
+                failedItemMessages.push(item.title);
+              }
+            } else {
+              failedItemIds.push(item._id);
+              failedItemMessages.push(item.title);
+            }
+            continue;
+          }
+
+          console.log("Thanh toán thành công:", orderId);
+        } catch (err: unknown) {
+          console.error("Lỗi thanh toán ví:", err);
+
+          // Xử lý lỗi không đủ tiền
+          const apiError = err as ApiError;
+          if (apiError?.response?.data?.balance !== undefined) {
+            const balance = apiError.response.data.balance ?? 0;
+            const required = apiError.response.data.required ?? amountToPay;
             const shortage = required - balance;
 
-            setErrorModalTitle("Ví không đủ tiền");
-            setErrorModalMessage(
-              `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
-                `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
-                `Thiếu: ${shortage.toLocaleString("vi-VN")}₫\n\n` +
-                `Vui lòng nạp thêm tiền để tiếp tục.`
-            );
-            setIsErrorModalOpen(true);
+            // Chỉ hiển thị modal nếu thực sự thiếu tiền (shortage > 0 và required > 0)
+            if (shortage > 0 && required > 0) {
+              setErrorModalTitle("Ví không đủ tiền");
+              setErrorModalMessage(
+                `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
+                  `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
+                  `Thiếu: ${shortage.toLocaleString("vi-VN")}₫`
+              );
+              setIsErrorModalOpen(true);
 
-            // DỪNG LUÔN vòng lặp khi thiếu tiền
-            failedItemIds.push(item._id);
-            failedItemMessages.push(item.title + " (thiếu tiền ví)");
-            break; // ← QUAN TRỌNG: Không xử lý các đơn tiếp theo
+              failedItemIds.push(item._id);
+              failedItemMessages.push(item.title + " (thiếu tiền ví)");
+              break; // Dừng luôn
+            } else {
+              // Nếu không thực sự thiếu tiền, chỉ log lỗi thông thường
+              toast.error(`Thanh toán thất bại: ${item.title}`);
+              failedItemIds.push(item._id);
+              failedItemMessages.push(item.title);
+            }
           } else {
+            toast.error(`Thanh toán thất bại: ${item.title}`);
             failedItemIds.push(item._id);
             failedItemMessages.push(item.title);
           }
           continue;
         }
 
-        console.log("Thanh toán thành công:", orderId);
-      } catch (err: unknown) {
-        console.error("Lỗi thanh toán ví:", err);
-
-        // Xử lý lỗi không đủ tiền
-        const apiError = err as ApiError;
-        if (apiError?.response?.data?.balance !== undefined) {
-          const balance = apiError.response.data.balance || 0;
-          const required = apiError.response.data.required || 0;
-          const shortage = required - balance;
-
-          setErrorModalTitle("Ví không đủ tiền");
-          setErrorModalMessage(
-            `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
-              `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
-              `Thiếu: ${shortage.toLocaleString("vi-VN")}₫`
-          );
-          setIsErrorModalOpen(true);
-
-          failedItemIds.push(item._id);
-          failedItemMessages.push(item.title + " (thiếu tiền ví)");
-          break; // Dừng luôn
-        } else {
-          toast.error(`Thanh toán thất bại: ${item.title}`);
-          failedItemIds.push(item._id);
-          failedItemMessages.push(item.title);
+        // Xóa khỏi giỏ nếu thanh toán thành công
+        if (!item._id.startsWith("temp-")) {
+          await dispatch(removeItemFromCartAction(item._id))
+            .unwrap()
+            .catch(() => {});
         }
-        continue;
       }
 
-      // Xóa khỏi giỏ nếu thanh toán thành công
-      if (!item._id.startsWith("temp-")) {
-        await dispatch(removeItemFromCartAction(item._id))
-          .unwrap()
-          .catch(() => {});
+      // KẾT THÚC XỬ LÝ
+      const successCount = itemsToProcess.length - failedItemIds.length;
+
+      if (failedItemIds.length === 0) {
+        toast.success(
+          paymentOption === "pay_now"
+            ? "Tất cả đơn hàng đã được thanh toán thành công!"
+            : "Tạo đơn thành công! Bạn có thể thanh toán sau trong mục Đơn thuê."
+        );
+
+        sessionStorage.removeItem("checkoutItems");
+        router.push("/auth/my-orders");
+      } else if (successCount > 0) {
+        toast.warning(
+          `Đã xử lý thành công ${successCount} sản phẩm. ` +
+            `${
+              failedItemIds.length
+            } sản phẩm thất bại: ${failedItemMessages.join(", ")}`
+        );
+
+        const remaining = [
+          ...unselectedItems,
+          ...itemsToProcess.filter((i) => failedItemIds.includes(i._id)),
+        ];
+        sessionStorage.setItem("checkoutItems", JSON.stringify(remaining));
+      } else {
+        toast.error("Tất cả đơn hàng đều thất bại. Vui lòng thử lại.");
+        sessionStorage.setItem(
+          "checkoutItems",
+          JSON.stringify([...unselectedItems, ...itemsToProcess])
+        );
       }
+    } catch (err) {
+      console.error("Lỗi checkout:", err);
+      toast.error("Có lỗi xảy ra. Vui lòng thử lại.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // KẾT THÚC XỬ LÝ
-    const successCount = itemsToProcess.length - failedItemIds.length;
-
-    if (failedItemIds.length === 0) {
-      toast.success(
-        paymentOption === "pay_now"
-          ? "Tất cả đơn hàng đã được thanh toán thành công!"
-          : "Tạo đơn thành công! Bạn có thể thanh toán sau trong mục Đơn thuê."
-      );
-
-      sessionStorage.removeItem("checkoutItems");
-      router.push("/auth/my-orders");
-    } else if (successCount > 0) {
-      toast.warning(
-        `Đã xử lý thành công ${successCount} sản phẩm. ` +
-          `${failedItemIds.length} sản phẩm thất bại: ${failedItemMessages.join(
-            ", "
-          )}`
-      );
-
-      const remaining = [
-        ...unselectedItems,
-        ...itemsToProcess.filter((i) => failedItemIds.includes(i._id)),
-      ];
-      sessionStorage.setItem("checkoutItems", JSON.stringify(remaining));
-    } else {
-      toast.error("Tất cả đơn hàng đều thất bại. Vui lòng thử lại.");
-      sessionStorage.setItem(
-        "checkoutItems",
-        JSON.stringify([...unselectedItems, ...itemsToProcess])
-      );
-    }
-  } catch (err) {
-    console.error("Lỗi checkout:", err);
-    toast.error("Có lỗi xảy ra. Vui lòng thử lại.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   const handleSubmit = () => {
-   
     // Check if address is selected or manually filled
     const hasSelectedAddress = selectedAddressId !== null;
     const hasManualAddress = shipping.street && shipping.province;
@@ -1275,6 +1389,30 @@ continue;
       return;
     }
 
+    for (const item of selectedCartItems) {
+      const validation = validateRentalDuration(item);
+
+      if (!validation.isValid) {
+        if (validation.exactUnits < validation.min) {
+          toast.error(
+            `Sản phẩm "${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
+              `Bạn chỉ chọn ${
+                validation.exactUnits === 0 ? "0" : validation.exactUnits.toFixed(1)
+              } ${validation.unitName}.`
+          );
+        } else if (validation.exactUnits > validation.max) {
+          toast.error(
+            `Sản phẩm "${item.title}" chỉ cho thuê tối đa ${validation.max} ${validation.unitName}.`
+          );
+        } else {
+          toast.error(
+            `Sản phẩm "${item.title}" có thời gian thuê không hợp lệ.`
+          );
+        }
+        return;
+      }
+    }
+
     // Hiển thị popup xác nhận thanh toán
     const paymentDetails = [
       `• Tiền thuê: ${rentalTotal.toLocaleString("vi-VN")}₫`,
@@ -1295,9 +1433,9 @@ continue;
     );
 
     const warningText =
-    paymentOption === "pay_now"
-      ? "⚠️ Sau khi xác nhận, tiền sẽ được trừ ngay từ ví của bạn."
-      : "✅ Bạn chỉ tạo đơn hàng, chưa bị trừ tiền ví. Có thể thanh toán sau trong mục Đơn thuê.";
+      paymentOption === "pay_now"
+        ? "⚠️ Sau khi xác nhận, tiền sẽ được trừ ngay từ ví của bạn."
+        : "✅ Bạn chỉ tạo đơn hàng, chưa bị trừ tiền ví. Có thể thanh toán sau trong mục Đơn thuê.";
 
     const message = `Bạn có chắc chắn muốn ${
       paymentOption === "pay_now" ? "thanh toán" : "tạo đơn thuê"
@@ -1312,6 +1450,21 @@ continue;
       onConfirm: processPayment,
     });
   };
+
+  // Kiểm tra xem có pop-up nào đang mở không
+  const isAnyModalOpen = confirmPopup.isOpen || modal.open || isErrorModalOpen;
+
+  // Ngăn scroll body khi pop-up mở
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isAnyModalOpen]);
 
   if (!cartItems.length) {
     return (
@@ -1331,7 +1484,11 @@ continue;
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6">
+      <div 
+        className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6 transition-opacity duration-300 ${
+          isAnyModalOpen ? "pointer-events-none opacity-50" : ""
+        }`}
+      >
         <div className="max-w-7xl mx-auto">
           {/* Breadcrumb Navigation */}
           <nav className="mb-6">
@@ -1434,9 +1591,10 @@ continue;
 
                 <div className="space-y-4">
                   {currentItems.map((item) => {
-                    const isSelected = selectedItemIds.includes(item._id);
-                    const days = calculateRentalDays(item);
-                    const itemTotal = item.basePrice * item.quantity * days;
+                    const isSelected = selectedItemIdsSet.has(item._id);
+                    const billableUnits = getCachedBillableUnits(item);
+                    const itemTotal =
+                      item.basePrice * item.quantity * billableUnits;
                     const itemDeposit = item.depositAmount * item.quantity;
 
                     return (
@@ -1592,6 +1750,7 @@ continue;
                                   <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
                                 )}
                               </div>
+
                               {!editingDates[item._id] &&
                                 !updatingItems.has(item._id) && (
                                   <button
@@ -1611,8 +1770,8 @@ continue;
                                 )}
                             </div>
 
+                            {/* ==================== EDIT MODE ==================== */}
                             {editingDates[item._id] ? (
-                              // Edit mode
                               <div className="space-y-3">
                                 <RentalDatePicker
                                   rentalStartDate={
@@ -1646,6 +1805,35 @@ continue;
                                   disabled={updatingItems.has(item._id)}
                                   itemId={item.itemId}
                                 />
+
+                                {/* VALIDATION MESSAGE - Gộp vào cùng form */}
+                                {(() => {
+                                  const tempItem = {
+                                    ...item,
+                                    rentalStartDate:
+                                      editingDates[item._id]
+                                        .rentalStartDateTime || "",
+                                    rentalEndDate:
+                                      editingDates[item._id]
+                                        .rentalEndDateTime || "",
+                                  };
+
+                                  const validation = validateRentalDuration(tempItem);
+                                   
+                                  return (
+                                    <>
+                                      {/* CẢNH BÁO */}
+                                      {validation.exactUnits > 0 && !validation.isValid && validation.errorMessage && (
+                                        <div className="p-2.5 bg-red-50 border border-red-300 rounded-lg text-red-700 text-xs font-medium flex items-center gap-2 animate-pulse">
+                                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                          {validation.errorMessage}
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+
+                                {/* NÚT LƯU / HỦY */}
                                 <div className="flex justify-center gap-2">
                                   <button
                                     onClick={() =>
@@ -1656,8 +1844,19 @@ continue;
                                         editingDates[item._id].rentalEndDateTime
                                       )
                                     }
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 px-3 text-xs rounded transition-all duration-200 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={updatingItems.has(item._id)}
+                                    disabled={
+                                      updatingItems.has(item._id) ||
+                                      getExactRentalUnits({
+                                        ...item,
+                                        rentalStartDate:
+                                          editingDates[item._id]
+                                            .rentalStartDateTime,
+                                        rentalEndDate:
+                                          editingDates[item._id]
+                                            .rentalEndDateTime,
+                                      }) < (item.minRentalDuration ?? 1)
+                                    }
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 px-4 text-xs rounded font-medium transition-all duration-200 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                                   >
                                     {updatingItems.has(item._id) ? (
                                       <>
@@ -1671,10 +1870,11 @@ continue;
                                       </>
                                     )}
                                   </button>
+
                                   <button
                                     onClick={() => cancelEditingDates(item._id)}
-                                    className="border border-gray-300 text-gray-600 hover:bg-gray-50 h-7 px-3 text-xs rounded transition-all duration-200 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={updatingItems.has(item._id)}
+                                    className="border border-gray-300 text-gray-600 hover:bg-gray-50 h-7 px-4 text-xs rounded font-medium transition-all duration-200 flex items-center gap-1 disabled:opacity-50"
                                   >
                                     <X className="w-3 h-3" />
                                     Hủy
@@ -1682,7 +1882,7 @@ continue;
                                 </div>
                               </div>
                             ) : (
-                              // Display mode
+                              /* ==================== DISPLAY MODE (giữ nguyên) ==================== */
                               <div
                                 className={`transition-all duration-300 ${
                                   updatingItems.has(item._id)
@@ -1870,7 +2070,9 @@ continue;
                     <div>
                       <CheckoutPhoneInput
                         value={shipping.phone}
-                        onChange={(phone) => setShipping({ ...shipping, phone })}
+                        onChange={(phone) =>
+                          setShipping({ ...shipping, phone })
+                        }
                         defaultPhone={defaultPhone}
                       />
                     </div>
@@ -2404,7 +2606,7 @@ continue;
                       {depositTotal.toLocaleString("vi-VN")}₫
                     </span>
                   </div>
-                 
+
                   {totalDiscountAmount > 0 && (
                     <div className="flex justify-between items-center py-2 border-b border-white/20">
                       <span className="text-green-200 flex items-center gap-2">
@@ -2433,8 +2635,10 @@ continue;
                     </span>
                   </div>
                 </div>
-                <div className="mt-6 space-y-3"> 
-                  <h3 className="font-semibold text-lg">Phương thức thanh toán</h3>
+                <div className="mt-6 space-y-3">
+                  <h3 className="font-semibold text-lg">
+                    Phương thức thanh toán
+                  </h3>
 
                   <div className="space-y-2">
                     {/* Thanh toán ngay */}
@@ -2474,7 +2678,7 @@ continue;
                     </label>
                   </div>
                 </div>
-  
+
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
@@ -2505,10 +2709,10 @@ continue;
 
       {/* Confirm Popup */}
       {confirmPopup.isOpen && (
-        <div className="fixed inset-0 z-1000 flex items-center justify-center p-4">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop - ngăn chặn tương tác với phần còn lại */}
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
             onClick={() =>
               setConfirmPopup({
                 isOpen: false,
@@ -2517,6 +2721,7 @@ continue;
                 onConfirm: () => {},
               })
             }
+            onMouseDown={(e) => e.preventDefault()}
           />
 
           {/* Popup */}
@@ -2573,8 +2778,14 @@ continue;
         </div>
       )}
       {modal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+            onClick={() => setModal({ ...modal, open: false })}
+            onMouseDown={(e) => e.preventDefault()}
+          />
+          <div className="relative bg-white rounded-2xl p-6 max-w-sm w-full text-center z-10">
             <h3 className="font-bold text-lg mb-4 text-emerald-700">
               {modal.title}
             </h3>

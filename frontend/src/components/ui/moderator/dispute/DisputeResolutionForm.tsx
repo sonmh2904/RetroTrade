@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,7 +32,7 @@ const DECISIONS = [
   },
   {
     value: "reject",
-    label: "Từ chối tranh chấp",
+    label: "Từ chối Khiếu nại",
     color: "text-gray-600",
     bg: "bg-gray-100",
   },
@@ -62,13 +61,17 @@ type RefundTargetOption = "reporter" | "reported";
 
 interface DisputeResolutionFormProps {
   disputeId: string;
-  totalAmount: number;
+  depositAmount: number; // Chỉ tính hoàn tiền từ tiền cọc
+  reporterName?: string; // Tên người khiếu nại
+  reportedName?: string; // Tên người bị khiếu nại
   onSuccess?: () => void;
 }
 
 export default function DisputeResolutionForm({
   disputeId,
-  totalAmount,
+  depositAmount, // Chỉ tính hoàn tiền từ tiền cọc
+  reporterName,
+  reportedName,
   onSuccess,
 }: DisputeResolutionFormProps) {
   const router = useRouter();
@@ -79,9 +82,10 @@ export default function DisputeResolutionForm({
   const [refundPercentage, setRefundPercentage] = useState<string>("");
 
   const requiresRefund = ["refund_full", "refund_partial"].includes(decision);
+  // Tính hoàn tiền chỉ dựa trên tiền cọc, không động vào tổng tiền
   const calculatedRefund =
     refundPercentage && requiresRefund
-      ? Math.round((totalAmount * Number(refundPercentage)) / 100)
+      ? Math.round((depositAmount * Number(refundPercentage)) / 100)
       : 0;
 
   const handleRefundTargetChange = (value: string) => {
@@ -108,41 +112,38 @@ export default function DisputeResolutionForm({
     }
   }, [decision, refundPercentage]);
 
-const handleSubmit = async () => {
-  if (!decision) return toast.error("Vui lòng chọn quyết định xử lý");
-  if (
-    requiresRefund &&
-    (!refundTarget || !refundPercentage)
-  ) {
-    return toast.error("Vui lòng chọn người nhận và phần trăm hoàn tiền");
-  }
+  const handleSubmit = async () => {
+    if (!decision) return toast.error("Vui lòng chọn quyết định xử lý");
+    if (requiresRefund && (!refundTarget || !refundPercentage)) {
+      return toast.error("Vui lòng chọn người nhận và phần trăm hoàn tiền");
+    }
 
-  setLoading(true);
-  try {
-    await resolveDispute(disputeId, {
-      decision,
-      notes: notes.trim() || undefined,
-      refundTarget: requiresRefund ? (refundTarget as RefundTargetOption) : undefined,
-      refundPercentage: requiresRefund
-        ? Number(refundPercentage)
-        : undefined,
-    });
+    setLoading(true);
+    try {
+      await resolveDispute(disputeId, {
+        decision,
+        notes: notes.trim() || undefined,
+        refundTarget: requiresRefund
+          ? (refundTarget as RefundTargetOption)
+          : undefined,
+        refundPercentage: requiresRefund ? Number(refundPercentage) : undefined,
+      });
 
-    toast.success("Xử lý tranh chấp thành công!");
-    onSuccess?.();
-    router.push("/moderator/dispute");
-  } catch (error) {
-    const apiMessage =
-      (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
-    toast.error(
-      apiMessage ||
-        (error instanceof Error ? error.message : "Xử lý thất bại")
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+      toast.success("Xử lý Khiếu nạithành công!");
+      onSuccess?.();
+      router.push("/moderator/dispute");
+    } catch (error) {
+      const apiMessage = (
+        error as { response?: { data?: { message?: string } } }
+      )?.response?.data?.message;
+      toast.error(
+        apiMessage ||
+          (error instanceof Error ? error.message : "Xử lý thất bại")
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Card className="border-2 border-orange-200 shadow-2xl bg-gradient-to-br from-orange-50 to-amber-50">
@@ -153,7 +154,7 @@ const handleSubmit = async () => {
           </div>
           <div>
             <h2 className="text-3xl font-bold text-orange-800">
-              Xử lý tranh chấp
+              Xử lý Khiếu nại
             </h2>
             <p className="text-orange-600">Hãy đưa ra quyết định công bằng</p>
           </div>
@@ -200,15 +201,22 @@ const handleSubmit = async () => {
                     <SelectValue placeholder="Chọn người nhận..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {REFUND_TARGETS.map((option) => (
-                      <SelectItem
-                        key={option.value}
-                        value={option.value}
-                        className="text-lg py-3"
-                      >
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    {REFUND_TARGETS.map((option) => {
+                      const userName =
+                        option.value === "reporter"
+                          ? reporterName
+                          : reportedName;
+                      return (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          className="text-lg py-3"
+                        >
+                          {option.label}
+                          {userName ? ` - ${userName}` : ""}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -245,11 +253,26 @@ const handleSubmit = async () => {
               </div>
 
               <div className="mt-4 bg-orange-50 rounded-2xl p-4 border border-orange-200">
-                <p className="text-sm text-gray-600">Số tiền dự kiến</p>
-                <p className="text-3xl font-bold text-orange-600">
+                <p className="text-sm text-gray-600 mb-1">
+                  Số tiền dự kiến hoàn trả (từ tiền cọc)
+                </p>
+                <p className="text-3xl font-bold text-orange-600 mb-2">
                   {calculatedRefund
                     ? `${calculatedRefund.toLocaleString()}₫`
                     : "0₫"}
+                </p>
+                {refundTarget && (
+                  <p className="text-sm text-orange-700">
+                    Sẽ hoàn cho:{" "}
+                    <span className="font-semibold">
+                      {refundTarget === "reporter"
+                        ? reporterName || "Người khiếu nại"
+                        : reportedName || "Người bị khiếu nại"}
+                    </span>
+                  </p>
+                )}
+                <p className="text-xs text-orange-600 mt-1">
+                  Tiền cọc: {depositAmount.toLocaleString("vi-VN")}₫
                 </p>
               </div>
             </div>
@@ -296,7 +319,7 @@ const handleSubmit = async () => {
               ) : (
                 <>
                   <Gavel className="mr-2 h-5 w-5" />
-                  Xử lý tranh chấp
+                  Xử lý Khiếu nại
                 </>
               )}
             </Button>

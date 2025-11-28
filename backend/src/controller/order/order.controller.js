@@ -13,6 +13,8 @@ const {
   notifyOrderCompleted,
   notifyOrderCancelled,
   notifyOrderDisputed,
+  notifyOrderDelivery,
+  notifyOrderReceived
 } = require("../../middleware/orderNotification");
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
@@ -100,6 +102,17 @@ module.exports = {
         duration,
         unitName,
       } = calc;
+      if (
+        duration < item.MinRentalDuration ||
+        duration > item.MaxRentalDuration
+      ) {
+        await session.abortTransaction();
+        session.endSession();
+
+        return res.status(400).json({
+          message: `Thời gian thuê phải từ ${item.MinRentalDuration} đến ${item.MaxRentalDuration} ${unitName}`,
+        });
+      }
 
       // === DISCOUNT LOGIC (CHỈ ÁP DỤNG TRÊN TIỀN THUÊ) ===
       const baseForDiscount = rentalAmount; // ← Đây là điểm then chốt
@@ -399,6 +412,91 @@ module.exports = {
     }
   },
 
+  // 2. Owner bấm "Bắt đầu giao hàng" → delivery
+  startDelivery: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const order = await Order.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          ownerId: req.user._id,
+          orderStatus: "confirmed",
+          isDeleted: false,
+        },
+        {
+          orderStatus: "delivery",
+          "lifecycle.deliveryAt": new Date(),
+        },
+        { new: true, session }
+      );
+
+      if (!order) throw new Error("Only confirmed orders can start delivery");
+
+      await session.commitTransaction(); // commit xong là transaction kết thúc
+
+      session.endSession();
+
+      // Post-actions ngoài transaction
+      // console.log("Delivery started for order:", order._id);
+
+      // Notification (nếu có) nên thực hiện ở đây
+      await notifyOrderDelivery(order);
+
+      res.json({
+        success: true,
+        message: "Delivery started",
+        orderGuid: order.orderGuid,
+      });
+    } catch (err) {
+      await session.abortTransaction().catch(() => {}); // chỉ abort nếu chưa commit
+      session.endSession();
+      res.status(400).json({ success: false, message: err.message });
+    }
+  },
+
+  // Khách xác nhận đã nhận hàng
+  receiveOrder: async (req, res) => {
+    try {
+      const renterId = req.user._id;
+      const orderId = req.params.id;
+
+      if (!Types.ObjectId.isValid(orderId))
+        return res.status(400).json({ message: "Invalid order id" });
+
+      const order = await Order.findById(orderId);
+      if (!order || order.isDeleted)
+        return res.status(404).json({ message: "Order not found" });
+
+      if (order.renterId.toString() !== renterId.toString())
+        return res.status(403).json({ message: "Forbidden: not renter" });
+
+      if (order.orderStatus !== "delivery")
+        return res.status(400).json({
+          message: "Order must be in delivery status to mark as received",
+        });
+
+      order.orderStatus = "received";
+      order.lifecycle.receivedAt = new Date();
+      await order.save();
+
+      // Notification
+      await notifyOrderReceived(order);
+
+      return res.json({
+        message: "Order marked as received",
+        orderGuid: order.orderGuid,
+        orderStatus: order.orderStatus,
+      });
+    } catch (err) {
+      console.error("receiveOrder err:", err);
+      return res.status(500).json({
+        message: "Failed to mark order as received",
+        error: err.message,
+      });
+    }
+  },
+
   startOrder: async (req, res) => {
     try {
       const ownerId = req.user._id;
@@ -413,17 +511,11 @@ module.exports = {
       if (order.ownerId.toString() !== ownerId.toString())
         return res.status(403).json({ message: "Forbidden: not owner" });
 
-      if (order.orderStatus !== "confirmed")
-        return res
-          .status(400)
-          .json({ message: "Only confirmed orders can be started" });
-
-      if (order.startAt && new Date(order.startAt) > new Date()) {
+      if (order.orderStatus !== "received")
         return res.status(400).json({
           message:
             "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
         });
-      }
 
       order.orderStatus = "progress";
       order.paymentStatus = "paid";
@@ -761,7 +853,7 @@ module.exports = {
   listOrders: async (req, res) => {
     try {
       const userId = req.user._id;
-      const { status, paymentStatus, search, page = 1, limit = 20 } = req.query;
+      const { status, paymentStatus, search } = req.query;
 
       const filter = {
         isDeleted: false,
@@ -773,15 +865,11 @@ module.exports = {
       if (search)
         filter["itemSnapshot.title"] = { $regex: search, $options: "i" };
 
-      const skip = (Number(page) - 1) * Number(limit);
-
       const [orders, total] = await Promise.all([
         Order.find(filter)
           .populate("renterId", "fullName email")
           .populate("ownerId", "fullName email")
           .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(Number(limit))
           .lean(),
         Order.countDocuments(filter),
       ]);
@@ -791,9 +879,9 @@ module.exports = {
         data: orders,
         pagination: {
           total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
+          page: 1,
+          limit: total,
+          totalPages: 1,
         },
       });
     } catch (err) {
@@ -804,6 +892,7 @@ module.exports = {
       });
     }
   },
+
   listOrdersByOnwer: async (req, res) => {
     try {
       const userId = req.user._id;

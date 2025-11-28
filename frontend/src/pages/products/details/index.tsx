@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
+import { listOrders } from "@/services/auth/order.api";
 
 const ProductComparisonModal = dynamic(
   () => import("@/components/ui/products/ProductComparisonModal"),
@@ -289,7 +290,7 @@ export default function ProductDetailPage() {
       )
       .map((order: Order) => order._id);
   }, [orders, id]);
-
+  
   useEffect(() => {
     console.log("isAuthenticated:", isAuthenticated);
     console.log("orders.length:", orders.length);

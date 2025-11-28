@@ -140,12 +140,12 @@ export default function PopupModal({
           </p>
 
           {/* Buttons */}
-          <div className={`flex gap-3 ${secondaryButtonText ? '' : 'flex-col'}`}>
+          <div className={`flex ${secondaryButtonText ? 'flex-row gap-3' : 'flex-col'}`}>
             {secondaryButtonText && onSecondaryButtonClick && (
               <Button
                 onClick={onSecondaryButtonClick}
                 className={`
-                  w-full py-3 px-6 text-lg font-semibold rounded-lg transition-all duration-200 hover:scale-105
+                  flex-1 py-3 px-4 text-base font-semibold rounded-lg transition-all duration-200 hover:scale-105
                   ${type === "error" 
                     ? "bg-red-100 hover:bg-red-200 text-red-700" 
                     : type === "success"
@@ -160,8 +160,7 @@ export default function PopupModal({
             <Button
               onClick={onClose}
               className={`
-                w-full py-3 px-6 text-lg font-semibold rounded-lg transition-all duration-200 hover:scale-105
-                ${secondaryButtonText ? 'flex-1' : 'w-full'} py-3 px-6 text-lg font-semibold rounded-lg transition-all duration-200 hover:scale-105
+                ${secondaryButtonText ? 'flex-1' : 'w-full'} py-3 px-4 text-base font-semibold rounded-lg transition-all duration-200 hover:scale-105
                 ${type === "error" 
                   ? "bg-red-600 hover:bg-red-700 text-white" 
                   : type === "success"

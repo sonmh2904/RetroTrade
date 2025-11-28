@@ -108,7 +108,7 @@ function OwnerOrdersContent() {
       bgColor: "bg-red-100 border-red-200",
     },
     disputed: {
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       color: "text-orange-800",
       bgColor: "bg-orange-100 border-orange-200",
     },
@@ -189,7 +189,7 @@ function OwnerOrdersContent() {
     },
     {
       key: "disputed",
-      label: "Tranh chấp",
+      label: "Khiếu nại",
       count: orders.filter((o) => o.orderStatus === "disputed").length,
     },
   ];
@@ -556,4 +556,3 @@ function OwnerOrdersContent() {
     </div>
   );
 }
-
