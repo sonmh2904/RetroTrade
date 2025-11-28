@@ -54,7 +54,7 @@ interface SignatureResponse {
 }
 
 interface ContractTemplate {
-  _id: string;
+  _id?: string;
   templateName: string;
   description?: string;
   headerContent?: string;
@@ -221,7 +221,7 @@ export default function SignContractPage() {
         const availableTpls: ContractTemplate[] = Array.isArray(
           contractRes.availableTemplates
         )
-          ? contractRes.availableTemplates
+          ? contractRes.availableTemplates as ContractTemplate[]
           : [];
         setTemplates(availableTpls);
         if (availableTpls.length === 0) {

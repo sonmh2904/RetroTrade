@@ -1,7 +1,7 @@
 import instance from "../customizeAPI";
 
 export interface ContractTemplateData {
-  _id: string;
+  _id?: string;
   templateName: string;
   description?: string;
   templateContent?: string;
