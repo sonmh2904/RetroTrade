@@ -290,13 +290,6 @@ export default function VerificationScript() {
                           <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
                         </div>
                       )}
-                      {/* Progress line */}
-                      {index < steps.length - 1 && (
-                        <div className="absolute top-6 left-full w-full h-0.5 bg-gray-300">
-                          <div className={`h-full transition-all duration-500 ${isCompleted ? 'bg-green-400 w-full' : 'bg-gray-300 w-0'
-                            }`}></div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}

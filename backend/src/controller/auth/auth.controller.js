@@ -405,7 +405,7 @@ module.exports.register = async (req, res) => {
         </head>
         <body>
             <div class="wrap">
-                <div class="head"><h1>Xác minh tài khoản RetroTrade</h1></div>
+                <div class="head"><h1> RetroTrade</h1></div>
                 <div class="body">
                     <p>Xin chào <strong>${fullName}</strong>,</p>
                     <p>Để hoàn tất quá trình xác minh tài khoản của bạn, vui lòng sử dụng mã OTP bên dưới:</p>

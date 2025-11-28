@@ -30,21 +30,50 @@ const getVerifyServiceSid = () => {
  * @returns {string} - Phone number in E.164 format (e.g., +84901234567)
  */
 const formatPhoneForTwilio = (phone) => {
+    if (!phone || typeof phone !== 'string') {
+        throw new Error('Số điện thoại không hợp lệ');
+    }
+
     // Remove all non-digit characters
     const digits = phone.replace(/\D/g, '');
     
+    // Validate minimum length (Vietnamese phone: 9-10 digits after removing leading 0 or country code)
+    if (digits.length < 9) {
+        throw new Error('Số điện thoại phải có ít nhất 9 chữ số');
+    }
+    
     // Handle Vietnamese phone numbers
     if (digits.startsWith('0')) {
-        // Convert 0xxx to +84xxx
-        return '+84' + digits.substring(1);
+        // Convert 0xxx to +84xxx (remove leading 0, add +84)
+        const phoneWithoutZero = digits.substring(1);
+        if (phoneWithoutZero.length < 9) {
+            throw new Error('Số điện thoại không hợp lệ');
+        }
+        return '+84' + phoneWithoutZero;
     }
+    
     if (digits.startsWith('84')) {
+        // Already has country code, just add +
+        const phoneWithoutCountryCode = digits.substring(2);
+        if (phoneWithoutCountryCode.length < 9) {
+            throw new Error('Số điện thoại không hợp lệ');
+        }
         return '+' + digits;
     }
+    
+    // If already starts with +, validate it
     if (phone.startsWith('+')) {
+        const phoneDigits = phone.replace(/\D/g, '');
+        if (phoneDigits.length < 10) { // +84 + 9 digits minimum
+            throw new Error('Số điện thoại không hợp lệ');
+        }
         return phone;
     }
-    // Default: assume it's already in correct format or add +84
+    
+    // Default: add +84 prefix
+    if (digits.length < 9) {
+        throw new Error('Số điện thoại không hợp lệ');
+    }
     return '+84' + digits;
 };
 
@@ -57,7 +86,17 @@ const sendOtp = async (phone) => {
     try {
         const client = initTwilio();
         const serviceSid = getVerifyServiceSid();
+        
+        // Validate and format phone number
+        if (!phone || phone.trim() === '') {
+            return {
+                success: false,
+                error: 'Số điện thoại không được để trống'
+            };
+        }
+
         const formattedPhone = formatPhoneForTwilio(phone);
+        console.log('Sending OTP to:', formattedPhone); // Debug log
 
         const verification = await client.verify.v2
             .services(serviceSid)

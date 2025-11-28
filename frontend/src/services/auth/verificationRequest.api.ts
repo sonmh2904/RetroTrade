@@ -134,7 +134,6 @@ export const verificationRequestAPI = {
         idNumber: string;
         fullName: string;
         dateOfBirth: string;
-        address: string;
       };
     }
   ): Promise<ApiResponse<VerificationRequest>> => {

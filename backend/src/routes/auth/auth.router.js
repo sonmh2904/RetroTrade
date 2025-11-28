@@ -36,8 +36,12 @@ router.post('/phone/verify-otp-firebase', authenticateToken, verifyController.ve
 // ID card OCR preview (1 image: idCardFront) - only extracts info, doesn't create request
 router.post('/verify-face/preview-ocr', authenticateToken, upload.single('image'), verifyController.previewIdCardOcr);
 
-// ID card verification using OCR with file upload (2 images: idCardFront, idCardBack)
-router.post('/verify-face', authenticateToken, upload.array('images', 2), verifyController.verifyFaceImages);
+// ID card verification using OCR with file upload (3 images: idCardFront, idCardBack, userPhoto)
+// Manual verification: sends request to moderator
+router.post('/verify-face', authenticateToken, upload.array('images', 3), verifyController.verifyFaceImages);
+
+// Auto verification: compares faces and auto-approves if similarity > 50%
+router.post('/verify-face/auto', authenticateToken, upload.array('images', 3), verifyController.verifyFaceImagesAuto);
 
 // Verification request routes
 const verificationRequestController = require("../../controller/auth/verificationRequest.controller");

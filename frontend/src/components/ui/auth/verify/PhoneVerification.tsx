@@ -32,10 +32,42 @@ export function PhoneVerification({
   const [failedStep, setFailedStep] = useState<number | null>(null);
 
   const formatPhoneNumber = (phone: string): string => {
+    if (!phone || phone.trim() === '') {
+      throw new Error('Vui lòng nhập số điện thoại');
+    }
+
     const digits = phone.replace(/\D/g, '');
-    if (digits.startsWith('0')) return '+84' + digits.substring(1);
-    if (digits.startsWith('84')) return '+' + digits;
-    if (phone.startsWith('+')) return phone;
+    
+    // Validate minimum length (Vietnamese phone: 9-10 digits)
+    if (digits.length < 9) {
+      throw new Error('Số điện thoại phải có ít nhất 9 chữ số');
+    }
+
+    if (digits.startsWith('0')) {
+      const phoneWithoutZero = digits.substring(1);
+      if (phoneWithoutZero.length < 9) {
+        throw new Error('Số điện thoại không hợp lệ');
+      }
+      return '+84' + phoneWithoutZero;
+    }
+    if (digits.startsWith('84')) {
+      const phoneWithoutCountryCode = digits.substring(2);
+      if (phoneWithoutCountryCode.length < 9) {
+        throw new Error('Số điện thoại không hợp lệ');
+      }
+      return '+' + digits;
+    }
+    if (phone.startsWith('+')) {
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        throw new Error('Số điện thoại không hợp lệ');
+      }
+      return phone;
+    }
+    
+    if (digits.length < 9) {
+      throw new Error('Số điện thoại không hợp lệ');
+    }
     return '+84' + digits;
   };
 
@@ -44,7 +76,13 @@ export function PhoneVerification({
       setIsLoading(true);
       setError('');
       setFailedStep(null);
+      
+      if (!phoneNumber || phoneNumber.trim() === '') {
+        throw new Error('Vui lòng nhập số điện thoại');
+      }
+
       const formatted = formatPhoneNumber(phoneNumber);
+      console.log('Formatted phone:', formatted); // Debug log
 
       const resp = await sendOtp(formatted);
       const data = await resp.json();
