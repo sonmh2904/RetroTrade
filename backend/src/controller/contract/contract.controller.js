@@ -14,6 +14,7 @@ const {
   decryptSignature,
 } = require("../../utils/cryptoHelper");
 const { generatePDF } = require("../../utils/pdfExport");
+const { createNotification } = require("../../middleware/createNotification");
 
 // Tạo mẫu hợp đồng
 exports.createTemplate = async (req, res) => {
@@ -363,6 +364,21 @@ exports.confirmCreateContract = async (req, res) => {
     const saved = await newContract.save({ session });
     await session.commitTransaction();
 
+    //Gửi thông báo cho người thuê (renter) khi hợp đồng được tạo
+    await createNotification(
+      order.renterId._id,
+      "Contract Created",
+      "Hợp đồng thuê mới",
+      `Hợp đồng cho "${
+        order.itemId?.Title || "đơn hàng"
+      }" đã được tạo. Vui lòng kiểm tra và ký để xác nhận giao dịch.`,
+      {
+        contractId: saved._id.toString(),
+        orderId: orderId.toString(),
+        orderGuid: order.orderGuid,
+      }
+    );
+
     const contract = await Contracts.findById(saved._id)
       .populate({
         path: "signatures",
@@ -651,11 +667,13 @@ exports.signContract = async (req, res) => {
       return res.status(400).json({ message: "Hợp đồng không hợp lệ để ký" });
     }
 
-    const order = await OrderModel.findById(contract.rentalOrderId).session(
-      session
-    );
+    const order = await OrderModel.findById(contract.rentalOrderId)
+      .session(session)
+      .populate("renterId", "fullName")
+      .populate("ownerId", "fullName")
+      .populate("itemId", "Title");
     if (
-      ![order.renterId.toString(), order.ownerId.toString()].includes(
+      ![order.renterId._id.toString(), order.ownerId._id.toString()].includes(
         userId.toString()
       )
     ) {
@@ -847,6 +865,77 @@ exports.signContract = async (req, res) => {
       ],
       { session }
     );
+
+    // Gửi thông báo cho 2 bên khi 1 bên ký hợp đồng
+    // Xác định bên ký và bên còn lại
+    const signerRole = isOwner ? "Chủ sở hữu" : "Người thuê";
+    const otherUserId = isOwner ? order.renterId._id : order.ownerId._id;
+    const otherRole = isOwner ? "người thuê" : "chủ sở hữu";
+    const otherName = isOwner
+      ? order.renterId.fullName
+      : order.ownerId.fullName;
+    const itemTitle = order.itemId?.Title || "đơn hàng";
+
+    // Thông báo cho bên còn lại (other)
+    await createNotification(
+      otherUserId,
+      "Contract Signed",
+      "Hợp đồng đã được ký",
+      `${signerRole} "${
+        order[isOwner ? "ownerId" : "renterId"].fullName
+      }" đã ký hợp đồng cho "${itemTitle}". Vui lòng kiểm tra và ký để hoàn tất.`,
+      {
+        contractId: contract._id.toString(),
+        orderId: order._id.toString(),
+        orderGuid: order.orderGuid,
+        signerName: order[isOwner ? "ownerId" : "renterId"].fullName,
+        signerRole: signerRole,
+      }
+    );
+
+    // Thông báo cho bên vừa ký (signer) để xác nhận hành động của họ
+    await createNotification(
+      userId,
+      "Contract Signed",
+      "Xác nhận chữ ký hợp đồng",
+      `Bạn đã ký hợp đồng cho "${itemTitle}". Đang chờ ${otherRole} "${otherName}" ký để hoàn tất.`,
+      {
+        contractId: contract._id.toString(),
+        orderId: order._id.toString(),
+        orderGuid: order.orderGuid,
+        otherName: otherName,
+        otherRole: otherRole,
+      }
+    );
+
+    // Nếu đã ký đủ 2 chữ ký, gửi thông báo hoàn tất cho cả 2 bên
+    if (signaturesCount >= 2) {
+      await createNotification(
+        order.renterId._id,
+        "Contract Fully Signed",
+        "Hợp đồng hoàn tất",
+        `Hợp đồng cho "${itemTitle}" đã được ký đầy đủ bởi cả hai bên.`,
+        {
+          contractId: contract._id.toString(),
+          orderId: order._id.toString(),
+          orderGuid: order.orderGuid,
+          status: "Signed",
+        }
+      );
+
+      await createNotification(
+        order.ownerId._id,
+        "Contract Fully Signed",
+        "Hợp đồng hoàn tất",
+        `Hợp đồng cho "${itemTitle}" đã được ký đầy đủ bởi cả hai bên.`,
+        {
+          contractId: contract._id.toString(),
+          orderId: order._id.toString(),
+          orderGuid: order.orderGuid,
+          status: "Signed",
+        }
+      );
+    }
 
     await session.commitTransaction();
 

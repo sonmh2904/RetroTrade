@@ -384,11 +384,24 @@ export default function OwnerStorePage() {
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (isLoadMoreMode || newPage < 1 || newPage > totalPages) return;
-      setCurrentPage(newPage);
-      fetchStoreData(newPage);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      
+      // Clear items immediately to prevent showing old data
+      setItems([]);
+      
+      // Update URL first (this will trigger useEffect which will handle the fetch)
+      router.push(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, page: newPage },
+        },
+        undefined,
+        { shallow: true }
+      );
+      
+      // Instant scroll to top
+      window.scrollTo({ top: 0, behavior: "auto" });
     },
-    [isLoadMoreMode, totalPages, fetchStoreData]
+    [isLoadMoreMode, totalPages, router]
   );
 
   if (loading) {
