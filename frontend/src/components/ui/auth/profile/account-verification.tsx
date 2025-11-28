@@ -1,10 +1,12 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PhoneVerification } from '@/components/ui/auth/verify/PhoneVerification';
 import ImageUpload from '@/components/ui/auth/verify/ImageUpload';
 import ResultDisplay from '@/components/ui/auth/verify/ResultDisplay';
 import { FaceVerificationResponse } from '@/services/auth/faceVerification.api';
 import VerificationScript from '@/components/ui/auth/verify/VerificationScript';
+import PopupModal from '@/components/ui/common/PopupModal';
+import { verificationRequestAPI } from '@/services/auth/verificationRequest.api';
 
 type AccountVerificationProps = { className?: string };
 
@@ -16,6 +18,38 @@ export function AccountVerification({ className }: AccountVerificationProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [failedStep, setFailedStep] = useState<number | null>(null);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
+  const [isCheckingPending, setIsCheckingPending] = useState(true);
+  const [showPendingModal, setShowPendingModal] = useState(false);
+
+  // Kiểm tra yêu cầu xác minh đang chờ khi component mount
+  useEffect(() => {
+    const checkPendingRequest = async () => {
+      try {
+        setIsCheckingPending(true);
+        // Kiểm tra cả Pending và In Progress
+        const [pendingResponse, inProgressResponse] = await Promise.all([
+          verificationRequestAPI.getMyVerificationRequests({ status: 'Pending' }),
+          verificationRequestAPI.getMyVerificationRequests({ status: 'In Progress' })
+        ]);
+        
+        const pendingRequests = pendingResponse.data || [];
+        const inProgressRequests = inProgressResponse.data || [];
+        
+        if (pendingRequests.length > 0 || inProgressRequests.length > 0) {
+          setHasPendingRequest(true);
+          setShowPendingModal(true);
+        }
+      } catch (error) {
+        console.error('Error checking pending request:', error);
+        // Không block user nếu check fail
+      } finally {
+        setIsCheckingPending(false);
+      }
+    };
+
+    checkPendingRequest();
+  }, []);
 
   // Callback khi PhoneVerification hoàn thành (đã xác minh số điện thoại + OTP)
   const handlePhoneVerified = (verifiedPhone: string) => {
@@ -155,7 +189,23 @@ export function AccountVerification({ className }: AccountVerificationProps) {
     <div className={className}>
       <VerificationScript />
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      {/* PopupModal thông báo đã có yêu cầu xác minh đang chờ */}
+      <PopupModal
+        isOpen={showPendingModal}
+        onClose={() => setShowPendingModal(false)}
+        type="info"
+        title="Yêu cầu xác minh đang chờ xử lý"
+        message="Bạn đã có yêu cầu xác minh đang chờ kiểm duyệt viên xử lý. Vui lòng kiểm tra lịch sử xác minh hoặc chờ kiểm duyệt viên xử lý trước khi tạo yêu cầu mới."
+        buttonText="Đã hiểu"
+      />
+
+      <div className={`bg-white rounded-xl border border-gray-200 shadow-sm p-6 ${hasPendingRequest ? 'opacity-50 pointer-events-none' : ''}`}>
+        {isCheckingPending && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-600">
+            Đang kiểm tra trạng thái xác minh...
+          </div>
+        )}
+
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Xác minh tài khoản</h2>
 
         {error && (
