@@ -54,7 +54,6 @@ try {
 
   const orders = await Order.find({
     orderStatus: "pending",
-    paymentStatus: { $ne: "paid" },
     startAt: { $lte: now },
   });
 

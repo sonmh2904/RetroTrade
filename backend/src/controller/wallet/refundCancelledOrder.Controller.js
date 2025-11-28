@@ -17,8 +17,13 @@ async function refundPendingOrder(orderId, session = null) {
   try {
     const order = await Order.findById(orderId).session(session);
     if (!order) throw new Error("Không tìm thấy đơn hàng");
-    if (order.orderStatus !== "cancelled") throw new Error("Chỉ hoàn tiền cho đơn đã bị huỷ");
-    if (order.isRefunded) throw new Error("Đơn hàng đã hoàn tiền!");
+    if (order.orderStatus !== "cancelled")
+      throw new Error("Chỉ hoàn tiền cho đơn đã bị huỷ");
+    if (order.paymentStatus !== "paid")
+      throw new Error("Đơn chưa thanh toán, không cần hoàn tiền");
+    if (order.isRefunded)
+      throw new Error("Đơn hàng đã hoàn tiền!");
+
     // Số tiền hoàn lại cho người thuê
     const refundAmount = order.finalAmount ?? order.totalAmount;
 
@@ -61,9 +66,7 @@ async function refundPendingOrder(orderId, session = null) {
 
     order.isRefunded = true;
     order.refundedAt = new Date();
-    order.orderStatus = "cancelled"; // cập nhật trạng thái luôn là cancelled
     await order.save({ session });
-
     await Notification.create({
       user: order.renterId,
       notificationType: "Order Cancelled Refunded",

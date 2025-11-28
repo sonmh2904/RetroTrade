@@ -53,7 +53,7 @@ const addBankAccount = async (req, res) => {
         // Kiểm tra số tài khoản đã tồn tại cùng user chưa để tránh duplicate
         const exists = await BankAccount.findOne({ userId, accountNumber });
         if (exists) {
-            return res.status(409).json({ message: "Số tài khoản này đã được lưu trước đó." });
+            return res.status(400).json({ message: "Số tài khoản này đã được lưu trước đó." });
         }
 
         // Nếu đặt là mặc định, reset các tài khoản khác thành false

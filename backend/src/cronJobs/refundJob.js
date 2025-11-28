@@ -1,9 +1,7 @@
 const cron = require("node-cron");
 const Order = require("../models/Order/Order.model");
 const { refundOrder } = require("../controller/wallet/userRefund.Controller");
-const {
-  refundPendingOrder,
-} = require("../controller/wallet/refundCancelledOrder.Controller");
+const {refundPendingOrder} = require("../controller/wallet/refundCancelledOrder.Controller");
 
 cron.schedule("*/1 * * * *", async () => {
   const now = new Date();
@@ -51,13 +49,13 @@ cron.schedule("*/1 * * * *", async () => {
   }
 });
 
-// HOÀN TIỀN ĐƠN BỊ HUỶ (cancelled/pending đã thanh toán)
+// HOÀN TIỀN ĐƠN BỊ HUỶ (cancelled  đã thanh toán)
 cron.schedule("*/1 * * * *", async () => {
   try {
     const cancelledOrders = await Order.find({
       isRefunded: false,
       paymentStatus: "paid",
-      orderStatus: { $in: ["cancelled"] },
+      orderStatus: "cancelled", 
     });
 
     for (const order of cancelledOrders) {
