@@ -174,24 +174,24 @@ const confirmDelete = async () => {
     <Card className="bg-white/10 backdrop-blur-md border-white/20">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-white">
+          <CardTitle className="flex items-center gap-2 ">
             <FolderOpen className="w-5 h-5" />
             Quản lý danh mục
           </CardTitle>
 
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 /50 w-4 h-4" />
               <Input
                 placeholder="Tìm kiếm..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 bg-white/5 border-white/20 text-white placeholder-white/40 w-56"
+                className="pl-9 bg-white/5 border-white/20  placeholder-white/40 w-56"
               />
             </div>
 
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-emerald-600 hover:bg-emerald-700 "
               onClick={() => setOpenAdd(true)}
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -206,11 +206,11 @@ const confirmDelete = async () => {
           <Table>
             <TableHeader>
               <TableRow className="border-white/20">
-                <TableHead className="text-white/70">Tên danh mục</TableHead>
-                <TableHead className="text-white/70">Mô tả</TableHead>
-                <TableHead className="text-white/70">Trạng thái</TableHead>
-                <TableHead className="text-white/70">Ngày tạo</TableHead>
-                <TableHead className="text-white/70 text-left">
+                <TableHead className="/70">Tên danh mục</TableHead>
+                <TableHead className="/70">Mô tả</TableHead>
+                <TableHead className="/70">Trạng thái</TableHead>
+                <TableHead className="/70">Ngày tạo</TableHead>
+                <TableHead className="/70 text-left">
                   Hành động
                 </TableHead>
               </TableRow>
@@ -219,14 +219,14 @@ const confirmDelete = async () => {
             <TableBody>
               {filteredCategories.map((category) => (
                 <TableRow key={category._id} className="border-white/20">
-                  <TableCell className="text-white font-medium">
+                  <TableCell className=" font-medium">
                     {category.name}
                   </TableCell>
-                  <TableCell className="text-white/70">
+                  <TableCell className="/70">
                     {category.description || "—"}
                   </TableCell>
                   <TableCell>{getStatusBadge(category.isDeleted)}</TableCell>
-                  <TableCell className="text-white/70">
+                  <TableCell className="/70">
                     {new Date(category.createdAt).toLocaleDateString("vi-VN")}
                   </TableCell>
                   <TableCell>
@@ -261,7 +261,7 @@ const confirmDelete = async () => {
 
       {/* Dialog thêm danh mục */}
       <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-        <DialogContent className="bg-white/10 backdrop-blur-md border-white/20 text-white">
+        <DialogContent className="bg-white/10 backdrop-blur-md border-white/20 ">
           <DialogHeader>
             <DialogTitle>Thêm danh mục mới</DialogTitle>
           </DialogHeader>
@@ -276,7 +276,7 @@ const confirmDelete = async () => {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 placeholder="Nhập tên danh mục..."
-                className="bg-white/5 border-white/20 text-white placeholder-white/40"
+                className="bg-white/5 border-white/20  placeholder-white/40"
               />
             </div>
 
@@ -288,7 +288,7 @@ const confirmDelete = async () => {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 placeholder="Nhập mô tả (tùy chọn)..."
-                className="bg-white/5 border-white/20 text-white placeholder-white/40"
+                className="bg-white/5 border-white/20  placeholder-white/40"
               />
             </div>
 
@@ -303,7 +303,7 @@ const confirmDelete = async () => {
               </Button>
               <Button
                 type="submit"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-emerald-600 hover:bg-emerald-700 "
               >
                 Lưu
               </Button>
@@ -314,7 +314,7 @@ const confirmDelete = async () => {
 
       {/* Dialog sửa danh mục */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent className="bg-white/10 backdrop-blur-md border-white/20 text-white">
+        <DialogContent className="">
           <DialogHeader>
             <DialogTitle>Cập nhật danh mục</DialogTitle>
           </DialogHeader>
@@ -329,7 +329,7 @@ const confirmDelete = async () => {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 placeholder="Nhập tên danh mục..."
-                className="bg-white/5 border-white/20 text-white placeholder-white/40"
+                className="bg-white/5 border-white/20  placeholder-white/40"
               />
             </div>
 
@@ -341,7 +341,7 @@ const confirmDelete = async () => {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 placeholder="Nhập mô tả..."
-                className="bg-white/5 border-white/20 text-white placeholder-white/40"
+                className="bg-white/5 border-white/20  placeholder-white/40"
               />
             </div>
 
@@ -350,13 +350,13 @@ const confirmDelete = async () => {
                 type="button"
                 variant="ghost"
                 onClick={() => setOpenEdit(false)}
-                className="text-gray-300 hover:bg-white/10"
+               
               >
                 Hủy
               </Button>
               <Button
                 type="submit"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-emerald-600 hover:bg-emerald-700 "
               >
                 Cập nhật
               </Button>
@@ -366,7 +366,7 @@ const confirmDelete = async () => {
       </Dialog>
      
       <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-        <DialogContent className="bg-white/10 backdrop-blur-md border-white/20 text-white max-w-sm">
+        <DialogContent className=" backdrop-blur-md border-white/20  max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-center text-lg font-bold">
               Xóa danh mục?
@@ -379,7 +379,7 @@ const confirmDelete = async () => {
               alt="warning"
               className="w-20 opacity-90"
             />
-            <p className="text-center text-white/80">
+            <p className="text-center /80">
               Hành động này sẽ{" "}
               <span className="text-red-400 font-semibold">xóa vĩnh viễn</span>{" "}
               danh mục.
@@ -389,13 +389,13 @@ const confirmDelete = async () => {
           <DialogFooter className="justify-center gap-3">
             <Button
               variant="ghost"
-              className="text-gray-300 hover:bg-white/10"
+              className="hover:bg-blue"
               onClick={() => setOpenDelete(false)}
             >
               Hủy
             </Button>
             <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 "
               onClick={confirmDelete}
             >
               Xóa

@@ -19,6 +19,8 @@ const {
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
+const { logOrderAudit } = require("../../middleware/auditLog.service");
+
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
@@ -293,6 +295,12 @@ module.exports = {
       );
 
       await notifyOrderCreated(newOrder);
+      await logOrderAudit({
+        orderId: newOrder._id,
+        operation: "INSERT",
+        userId: renterId,
+        changeSummary: `Order created: (status: ${newOrder.orderStatus}) | total=${totalAmount}, discount=${totalDiscountAmount}, final=${finalOrderAmount}`,
+      });
 
       return res.status(201).json({
         message: "Tạo đơn hàng thành công",
@@ -398,6 +406,13 @@ module.exports = {
       }
 
       await notifyOrderConfirmed(order); // Gửi notification khi xác nhận đơn
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: pending → confirmed`,
+      });
+
       return res.json({
         message: "Order confirmed and inventory reserved",
         orderGuid: order.orderGuid,
@@ -433,7 +448,7 @@ module.exports = {
 
       if (!order) throw new Error("Only confirmed orders can start delivery");
 
-      await session.commitTransaction(); // commit xong là transaction kết thúc
+      await session.commitTransaction(); 
 
       session.endSession();
 
@@ -442,6 +457,12 @@ module.exports = {
 
       // Notification (nếu có) nên thực hiện ở đây
       await notifyOrderDelivery(order);
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: order.ownerId,
+        changeSummary: `Order status changed: confirmed → delivery`,
+      });
 
       res.json({
         success: true,
@@ -482,7 +503,13 @@ module.exports = {
 
       // Notification
       await notifyOrderReceived(order);
-
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: renterId,
+        changeSummary: `Order status changed: delivery → received (item handed to renter)`,
+      });
+  
       return res.json({
         message: "Order marked as received",
         orderGuid: order.orderGuid,
@@ -522,6 +549,13 @@ module.exports = {
       order.lifecycle.startedAt = new Date();
       await order.save();
       await notifyOrderStarted(order); // Gửi notification khi bắt đầu thuê
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: received → progress`,
+      });
+
       return res.json({
         message: "Order started",
         orderGuid: order.orderGuid,
@@ -562,6 +596,13 @@ module.exports = {
       order.returnInfo.notes = notes || "";
       await order.save();
       await notifyOrderReturned(order); // Gửi notification khi trả sản phẩm
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: renterId,
+        changeSummary: `Order status changed: progress → returned`,
+      });
+
       return res.status(200).json({
         message: "Order marked as returned",
         orderGuid: order.orderGuid,
@@ -662,6 +703,13 @@ module.exports = {
       session.endSession();
 
       await notifyOrderCompleted(order); // Gửi notification khi hoàn tất đơn
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: returned → completed`,
+      });
+
       return res.json({
         message: "Order completed",
         orderGuid: order.orderGuid,
@@ -740,6 +788,13 @@ module.exports = {
         await order.save({ session });
 
         await notifyOrderCancelled(order); // Gửi notification
+        await logOrderAudit({
+          orderId: order._id,
+          operation: "UPDATE",
+          userId: userId,
+          changeSummary: `Order cancelled`,
+        });
+
         await session.commitTransaction();
         session.endSession();
         return res.json({
@@ -794,6 +849,13 @@ module.exports = {
       order.lifecycle.disputedAt = new Date();
       await order.save();
       await notifyOrderDisputed(order); // Gửi notification
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: userId,
+        changeSummary: `Order cancelled`,
+      });
+
       return res.json({
         message: "Dispute opened",
         orderGuid: order.orderGuid,

@@ -48,6 +48,7 @@ import {
   ChevronLeft,
   AlertCircle,
   X,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createDispute } from "@/services/moderator/disputeOrder.api";
@@ -500,6 +501,16 @@ export default function OrderListPage({
                     key={order._id}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300"
                   >
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+                        <ClipboardList className="w-4 h-4" />
+                        Mã đơn:
+                        <span className="font-mono">
+                          #{order.orderGuid.slice(0, 8).toUpperCase()}
+                        </span>
+                      </p>
+                    </div>
+
                     <div className="flex flex-col md:flex-row gap-6">
                       {/* Product Image */}
                       <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full md:w-32 h-32 flex-shrink-0 overflow-hidden">
@@ -526,11 +537,13 @@ export default function OrderListPage({
                       <div className="flex-1 space-y-4">
                         {/* Product Name */}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                            {order.itemSnapshot?.title ||
-                              order.itemId?.Title ||
-                              "Sản phẩm không xác định"}
-                          </h3>
+                          <Link href={`/products/details?id=${order.itemId}`}>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                              {order.itemSnapshot?.title ||
+                                order.itemId?.Title ||
+                                "Sản phẩm không xác định"}
+                            </h3>
+                          </Link>
                         </div>
 
                         {/* Order Status & Payment Status */}
@@ -728,7 +741,7 @@ export default function OrderListPage({
                             )}
 
                             {isRenter &&
-                              ["delivery", "received", "returned",].includes(
+                              ["delivery", "received", "returned"].includes(
                                 order.orderStatus
                               ) &&
                               order.orderStatus !== "disputed" && (
