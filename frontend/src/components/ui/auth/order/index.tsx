@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSelector } from "react-redux";
 import { decodeToken } from "@/utils/jwtHelper";
 import {
-  listOrders,
+  listOrdersByRenter,
   renterReturn,
   cancelOrder,
   receiveOrder,
@@ -139,7 +139,7 @@ export default function OrderListPage({
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        const res = await listOrders();
+        const res = await listOrdersByRenter();
         if (res.code === 200 && Array.isArray(res.data)) {
           setOrders(res.data);
         }

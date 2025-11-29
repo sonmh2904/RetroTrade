@@ -195,6 +195,26 @@ export const listOrdersByOwner = async (params?: {
   return await parseResponse<Order[]>(response);
 };
 
+export const listOrdersByRenter = async (params?: {
+  status?: string;
+  paymentStatus?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ApiResponse<Order[]>> => {
+  const query = new URLSearchParams(
+    Object.entries(params || {}).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        acc[key] = String(value);
+      }
+      return acc;
+    }, {} as Record<string, string>)
+  ).toString();
+
+  const response = await api.get(`/order/renter${query ? `?${query}` : ""}`);
+  return await parseResponse<Order[]>(response);
+};
+
 // Bắt đầu giao hàng (chuyển trạng thái order => delivery)
 export const startDelivery = async (
   orderId: string
