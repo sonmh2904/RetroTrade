@@ -152,7 +152,7 @@ const OwnerDashboard = () => {
         {
           id: "activeRentals",
           label: "Đang cho thuê",
-          value: formatNumber(ordersData.statistics.in_progress.count),
+          value: formatNumber(ordersData.statistics.progress.count),
           icon: Package,
           bgColor: "bg-gradient-to-r from-cyan-50 to-blue-50",
           iconColor: "text-cyan-600",
@@ -197,9 +197,13 @@ const OwnerDashboard = () => {
     switch (status) {
       case "completed": return "text-green-600 bg-green-50";
       case "confirmed": return "text-blue-600 bg-blue-50";
-      case "in_progress": return "text-amber-600 bg-amber-50";
+      case "progress": return "text-amber-600 bg-amber-50";
       case "pending": return "text-gray-600 bg-gray-50";
       case "cancelled": return "text-red-600 bg-red-50";
+      case "delivery": return "text-indigo-600 bg-indigo-50";
+      case "received": return "text-teal-600 bg-teal-50";
+      case "returned": return "text-orange-600 bg-orange-50";
+      case "disputed": return "text-rose-600 bg-rose-50";
       default: return "text-gray-600 bg-gray-50";
     }
   };
@@ -207,10 +211,14 @@ const OwnerDashboard = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case "completed": return "Hoàn thành";
-      case "confirmed": return "Xác nhận";
-      case "in_progress": return "Đang thuê";
+      case "confirmed": return "Đã xác nhận";
+      case "progress": return "Đang thuê";
       case "pending": return "Chờ xử lý";
       case "cancelled": return "Đã hủy";
+      case "delivery": return "Đang giao hàng";
+      case "received": return "Đã nhận hàng";
+      case "returned": return "Đã trả hàng";
+      case "disputed": return "Tranh chấp";
       default: return status;
     }
   };
