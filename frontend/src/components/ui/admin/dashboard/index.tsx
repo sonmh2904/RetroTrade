@@ -84,12 +84,6 @@ const AnalyticsDashboard = () => {
       icon: Package,
       color: "text-pink-600",
     },
-    {
-      id: "trends",
-      label: "Xu hướng",
-      icon: TrendingUp,
-      color: "text-indigo-600",
-    },
   ];
 
   useEffect(() => {
@@ -444,18 +438,6 @@ const AnalyticsDashboard = () => {
                 </div>
               </div>
             </div>
-          )}
-          {activeTab === "trends" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Xu hướng</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  Phân tích xu hướng sẽ được hiển thị tại đây.
-                </p>
-              </CardContent>
-            </Card>
           )}
         </div>
       )}

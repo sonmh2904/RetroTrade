@@ -62,12 +62,6 @@ const OwnerDashboard = () => {
       icon: DollarSign,
       color: "text-green-600",
     },
-    {
-      id: "analytics",
-      label: "Phân tích",
-      icon: BarChart3,
-      color: "text-purple-600",
-    },
   ];
 
   const fetchData = async (showRefresh = false) => {
@@ -148,15 +142,6 @@ const OwnerDashboard = () => {
           bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
           iconColor: "text-purple-600",
           format: "currency"
-        },
-        {
-          id: "activeRentals",
-          label: "Đang cho thuê",
-          value: formatNumber(ordersData.statistics.progress.count),
-          icon: Package,
-          bgColor: "bg-gradient-to-r from-cyan-50 to-blue-50",
-          iconColor: "text-cyan-600",
-          format: "number"
         }
       ];
 
@@ -183,8 +168,7 @@ const OwnerDashboard = () => {
       totalOrders: "orders",
       completedOrders: "orders",
       pendingOrders: "orders",
-      avgOrderValue: "analytics",
-      activeRentals: "orders",
+      avgOrderValue: "revenue",
     };
 
     const tabId = statToTabMap[statId];
@@ -317,7 +301,7 @@ const OwnerDashboard = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 sm:gap-6">
                     {stats.map((stat, index) => {
                       const Icon = stat.icon;
-                      const isClickable = ["totalRevenue", "totalOrders", "completedOrders", "pendingOrders", "avgOrderValue", "activeRentals"].includes(stat.id);
+                      const isClickable = ["totalRevenue", "totalOrders", "completedOrders", "pendingOrders", "avgOrderValue"].includes(stat.id);
                       return (
                         <div
                           key={stat.id}
@@ -390,19 +374,6 @@ const OwnerDashboard = () => {
             {activeTab === "orders" && <OwnerOrdersChart />}
 
             {activeTab === "revenue" && <OwnerRevenueChart />}
-
-            {activeTab === "analytics" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Phân tích chi tiết</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">
-                    Các biểu đồ và phân tích chi tiết sẽ được hiển thị tại đây.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
           </div>
         )}
       </div>
