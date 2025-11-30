@@ -42,6 +42,7 @@ const ratingController = require("../../controller/order/rating.controller");
 const OwnerRatingController = require("../../controller/order/onwerRating.controller");
 const { upload } = require("../../middleware/upload.middleware");
 const { authenticateToken } = require("../../middleware/auth");
+const { uploadRating } = require("../../middleware/uploadRating.middleware");
 
 const router = express.Router();
 
@@ -70,8 +71,24 @@ router.delete('/:productId/favorite', authenticateToken, removeFromFavorites);
 router.get('/favorites', authenticateToken, getFavorites);
 
 // Rating
-router.post("/rating/",authenticateToken, upload.array("images", 5), ratingController.createRating);
-router.put("/rating/:id",authenticateToken,upload.array("images", 5), ratingController.updateRating);
+router.post(
+  "/rating/",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  ratingController.createRating
+);
+router.put(
+  "/rating/:id",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 }, 
+  ]),
+  ratingController.updateRating
+);
 router.delete("/rating/:id",authenticateToken, ratingController.deleteRating);
 router.get("/rating/item/:itemId", ratingController.getRatingsByItem);
 router.get("/rating/item/:itemId/stats", ratingController.getRatingStats);

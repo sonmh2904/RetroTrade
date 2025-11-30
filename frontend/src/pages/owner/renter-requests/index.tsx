@@ -61,6 +61,8 @@ function RenterRequestsContent() {
 
   const [selectedStatus, setSelectedStatus] = useState("all");
   const router = useRouter();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   // Tabs & Đếm
   const getCount = (status: string) => {
@@ -137,6 +139,18 @@ function RenterRequestsContent() {
       : orders.filter((o) => o.orderStatus === selectedStatus);
 
   const formatDate = (date: string) => format(new Date(date), "dd/MM/yyyy");
+
+  const totalOrders = filteredOrders.length;
+  const totalPages = Math.ceil(totalOrders / limit);
+
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * limit,
+    currentPage * limit
+  );
+useEffect(() => {
+  setCurrentPage(1);
+}, [selectedStatus]);
+
 
   // Xử lý hành động
   const handleConfirm = async (orderId: string) => {
@@ -291,11 +305,11 @@ function RenterRequestsContent() {
         </p>
       ) : (
         <div className="space-y-4">
-          {filteredOrders.map((order) => (
+          {paginatedOrders.map((order) => (
             <Card
               key={order._id}
               className="transition hover:shadow-lg cursor-pointer"
-              onClick={() => router.push(`/owner/orders/${order._id}`)}
+              onClick={() => router.push(`/owner/renter-requests/${order._id}`)}
             >
               {/* Header mã đơn */}
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 border-b border-blue-200">
@@ -486,6 +500,38 @@ function RenterRequestsContent() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+      {/* Modal Phân trang */}
+      {totalPages > 1 && (
+        <div className="flex justify-center mt-6 gap-2">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="px-3 py-1 border rounded disabled:opacity-50"
+          >
+            ← Trước
+          </button>
+
+          {[...Array(totalPages)].map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`px-3 py-1 border rounded ${
+                currentPage === i + 1 ? "bg-blue-600 text-white" : "bg-white"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="px-3 py-1 border rounded disabled:opacity-50"
+          >
+            Sau →
+          </button>
         </div>
       )}
 
