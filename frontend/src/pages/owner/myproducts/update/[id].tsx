@@ -108,7 +108,6 @@ const UpdateProductPage: React.FC = () => {
   const [districtLoading, setDistrictLoading] = useState(false);
 
   // Searchable dropdown states for wards
-  const [districtSearchTerm, setDistrictSearchTerm] = useState("");
   const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
   const districtDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -266,33 +265,23 @@ const UpdateProductPage: React.FC = () => {
     }
   }, []);
 
-  const loadWardsForCity = useCallback(
-    async (provinceCode: number) => {
-      if (provinceCode <= 0) {
-        setWards([]);
-        setDistrict("");
-        setDistrictSearchTerm("");
-        return;
-      }
-      setDistrictLoading(true);
-      try {
-        const wardsData = await getWardsByProvinceCode(provinceCode);
-        setWards(wardsData);
-        // If district from existing data doesn't match any ward, keep it as free text
-        if (district && !wardsData.some((ward) => ward.ward === district)) {
-          // Keep the existing district as is (free text)
-          setDistrictSearchTerm(district);
-        }
-      } catch (error) {
-        console.error("Error loading wards:", error);
-        toast.error("Không thể tải danh sách xã/phường");
-        setWards([]);
-      } finally {
-        setDistrictLoading(false);
-      }
-    },
-    [district]
-  );
+  const loadWardsForCity = useCallback(async (provinceCode: number) => {
+    if (provinceCode <= 0) {
+      setWards([]);
+      return;
+    }
+    setDistrictLoading(true);
+    try {
+      const wardsData = await getWardsByProvinceCode(provinceCode);
+      setWards(wardsData);
+    } catch (error) {
+      console.error("Error loading wards:", error);
+      toast.error("Không thể tải danh sách xã/phường");
+      setWards([]);
+    } finally {
+      setDistrictLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -332,8 +321,6 @@ const UpdateProductPage: React.FC = () => {
       loadWardsForCity(cityCode);
     } else {
       setWards([]);
-      setDistrict("");
-      setDistrictSearchTerm("");
     }
   }, [cityCode, provinces.length, loadWardsForCity]);
 
@@ -344,20 +331,17 @@ const UpdateProductPage: React.FC = () => {
       if (selectedProvince) {
         setCityCode(selectedProvince.province_code);
       } else {
-        // If no match, keep cityCode as 0 (treat as free text or fallback)
         setCityCode(0);
-        toast.info(
-          "Tỉnh/Thành phố không khớp với dữ liệu hiện tại, vui lòng kiểm tra lại."
-        );
+        if (!fetchLoading) {
+          toast.info(
+            "Tỉnh/Thành phố không khớp với dữ liệu hiện tại, vui lòng kiểm tra lại."
+          );
+        }
       }
     } else {
       setCityCode(0);
     }
-  }, [city, provinces]);
-
-  useEffect(() => {
-    setDistrictSearchTerm(district);
-  }, [district]);
+  }, [city, provinces, fetchLoading]);
 
   // Handle outside click for district dropdown
   useEffect(() => {
@@ -620,20 +604,20 @@ const UpdateProductPage: React.FC = () => {
     setCity(selectedName);
     setCityCode(selectedProvince ? selectedProvince.province_code : 0);
     setDistrict("");
-    setDistrictSearchTerm("");
+    setShowDistrictDropdown(false);
   };
 
   // Searchable dropdown functions for wards
   const filteredWards = wards.filter((ward) =>
-    ward.ward.toLowerCase().includes(districtSearchTerm.toLowerCase())
+    ward.ward.toLowerCase().includes(district.toLowerCase())
   );
 
   const handleDistrictInputChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setDistrictSearchTerm(e.target.value);
-    setDistrict(e.target.value); // Allow free text input
-    if (!showDistrictDropdown) {
+    const value = e.target.value;
+    setDistrict(value); // Chỉ set một state
+    if (!showDistrictDropdown && wards.length > 0) {
       setShowDistrictDropdown(true);
     }
   };
@@ -646,8 +630,8 @@ const UpdateProductPage: React.FC = () => {
 
   const selectDistrict = (wardName: string) => {
     setDistrict(wardName);
-    setDistrictSearchTerm(wardName);
     setShowDistrictDropdown(false);
+    districtInputRef.current?.focus();
   };
 
   const handleDistrictKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1165,8 +1149,9 @@ const UpdateProductPage: React.FC = () => {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                     <input
                       ref={districtInputRef}
+                      key="district-input"
                       type="text"
-                      value={districtSearchTerm}
+                      value={district}
                       onChange={handleDistrictInputChange}
                       onFocus={handleDistrictFocus}
                       onKeyDown={handleDistrictKeyDown}
@@ -1191,7 +1176,10 @@ const UpdateProductPage: React.FC = () => {
                           <div
                             key={idx}
                             className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-black"
-                            onClick={() => selectDistrict(ward.ward)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              selectDistrict(ward.ward);
+                            }}
                           >
                             {ward.ward}
                           </div>
@@ -1204,11 +1192,14 @@ const UpdateProductPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {city && wards.length === 0 && !districtLoading && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Không có dữ liệu xã/phường cho tỉnh này.
-                  </p>
-                )}
+                {city &&
+                  wards.length === 0 &&
+                  !districtLoading &&
+                  cityCode === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Không có dữ liệu xã/phường cho tỉnh này. Nhập thủ công.
+                    </p>
+                  )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
