@@ -111,7 +111,7 @@ module.exports.getDashboardStats = async (req, res) => {
             verifiedUsers,
             activeUsers
         ] = await Promise.all([
-            Order.countDocuments({ orderStatus: { $in: ["pending", "confirmed", "progress"] } }),
+            Order.countDocuments({ orderStatus: "pending" }),
             Order.countDocuments({ orderStatus: "completed" }),
             Order.countDocuments({ orderStatus: "cancelled" }),
             Item.countDocuments({ IsDeleted: { $ne: true }, StatusId: 1 }),
@@ -481,9 +481,24 @@ module.exports.getOrderStats = async (req, res) => {
                             $cond: [{ $eq: ["$orderStatus", "confirmed"] }, 1, 0]
                         }
                     },
-                    in_progress: {
+                    delivery: {
                         $sum: {
-                            $cond: [{ $eq: ["$orderStatus", "in_progress"] }, 1, 0]
+                            $cond: [{ $eq: ["$orderStatus", "delivery"] }, 1, 0]
+                        }
+                    },
+                    received: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "received"] }, 1, 0]
+                        }
+                    },
+                    progress: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "progress"] }, 1, 0]
+                        }
+                    },
+                    returned: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "returned"] }, 1, 0]
                         }
                     },
                     completed: {
@@ -494,6 +509,11 @@ module.exports.getOrderStats = async (req, res) => {
                     cancelled: {
                         $sum: {
                             $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0]
+                        }
+                    },
+                    disputed: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "disputed"] }, 1, 0]
                         }
                     }
                 }
@@ -517,20 +537,53 @@ module.exports.getOrderStats = async (req, res) => {
                 orders: dayData ? dayData.orders : 0,
                 revenue: dayData ? dayData.totalAmount : 0,
                 pending: dayData ? dayData.pending : 0,
+                confirmed: dayData ? dayData.confirmed : 0,
+                delivery: dayData ? dayData.delivery : 0,
+                received: dayData ? dayData.received : 0,
+                progress: dayData ? dayData.progress : 0,
+                returned: dayData ? dayData.returned : 0,
                 completed: dayData ? dayData.completed : 0,
-                cancelled: dayData ? dayData.cancelled : 0
+                cancelled: dayData ? dayData.cancelled : 0,
+                disputed: dayData ? dayData.disputed : 0
             });
             
             currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        // Get orders by status for totals
-        const [totalOrders, pendingOrders, completedOrders, cancelledOrders] = await Promise.all([
-            Order.countDocuments({}),
-            Order.countDocuments({ orderStatus: "pending" }),
-            Order.countDocuments({ orderStatus: "completed" }),
-            Order.countDocuments({ orderStatus: "cancelled" })
+        // Get orders by status for totals with Vietnamese labels
+        const stats = {
+            pending: { count: 0, amount: 0, label: "Chờ xử lý" },
+            confirmed: { count: 0, amount: 0, label: "Đã xác nhận" },
+            delivery: { count: 0, amount: 0, label: "Đang giao hàng" },
+            received: { count: 0, amount: 0, label: "Đã nhận hàng" },
+            progress: { count: 0, amount: 0, label: "Đang thuê" },
+            returned: { count: 0, amount: 0, label: "Đã trả hàng" },
+            completed: { count: 0, amount: 0, label: "Hoàn thành" },
+            cancelled: { count: 0, amount: 0, label: "Đã hủy" },
+            disputed: { count: 0, amount: 0, label: "Tranh chấp" }
+        };
+
+        const statusCounts = await Order.aggregate([
+            {
+                $match: {}
+            },
+            {
+                $group: {
+                    _id: "$orderStatus",
+                    count: { $sum: 1 },
+                    amount: { $sum: "$totalAmount" }
+                }
+            }
         ]);
+
+        statusCounts.forEach(item => {
+            if (stats[item._id]) {
+                stats[item._id].count = item.count;
+                stats[item._id].amount = item.amount;
+            }
+        });
+
+        const totalOrders = await Order.countDocuments({});
 
         return res.json({
             code: 200,
@@ -538,11 +591,9 @@ module.exports.getOrderStats = async (req, res) => {
             status: "success",
             data: {
                 timeline: filledStats,
-                totals: {
-                    total: totalOrders,
-                    pending: pendingOrders,
-                    completed: completedOrders,
-                    cancelled: cancelledOrders
+                statistics: stats,
+                pagination: {
+                    totalOrders
                 }
             }
         });

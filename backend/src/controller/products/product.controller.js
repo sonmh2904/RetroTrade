@@ -16,7 +16,7 @@ const Order = require("../../models/Order/Order.model");
 
 const cloudinary = require("cloudinary").v2;
 
-const MAX_PRICE = 100000000; // 100 triệu VND - giá trị tối đa cho BasePrice và DepositAmount
+const MAX_PRICE = 1000000000; // 1 tỷ VND - giá trị tối đa cho BasePrice và DepositAmount
 const MAX_DURATION = 365; // 365 ngày - giá trị tối đa cho MinRentalDuration và MaxRentalDuration
 
 const extractPublicId = (url) => {

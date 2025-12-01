@@ -20,6 +20,7 @@ import TopHighlightTable from "@/components/ui/moderator/product/top-highlight-t
 import { DisputeManagement } from "@/components/ui/moderator/dispute/dispute-management";
 // import { ModeratorUserManagementTable } from "@/components/ui/moderator/user-management-table";
 import { ComplaintManagement } from "@/components/ui/moderator/complaints/complaint-management";
+import { CategoryManagementTable } from "@/components/ui/moderator/blog/category-management-table";
 
 export default function ModeratorDashboard() {
   console.log(
@@ -230,11 +231,7 @@ export default function ModeratorDashboard() {
         case "posts":
           return <BlogManagementTable />;
         case "categories":
-          return (
-            <div className="text-gray-900 p-8 text-center">
-              Quản lý danh mục blog (Chưa triển khai)
-            </div>
-          );
+          return <CategoryManagementTable/>;
         case "comments":
           return <CommentManagementTable />;
         case "tags":

@@ -356,10 +356,6 @@ export default function VerificationHistoryPage() {
                           : "N/A"}
                       </p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Địa chỉ thường trú</label>
-                      <p className="text-gray-900 font-semibold">{selectedRequest.idCardInfo.address || "N/A"}</p>
-                    </div>
                   </div>
                 </div>
               ) : (
@@ -374,7 +370,7 @@ export default function VerificationHistoryPage() {
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <ImageIcon className="w-5 h-5" />
-                    Tài liệu đã upload
+                    Ảnh đã upload
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     {selectedRequest.documents.map((doc, index) => (
@@ -384,6 +380,8 @@ export default function VerificationHistoryPage() {
                             ? "Mặt trước CCCD"
                             : doc.documentType === "idCardBack"
                             ? "Mặt sau CCCD"
+                            : doc.documentType === "userPhoto"
+                            ? "Ảnh người dùng"
                             : "Tài liệu"}
                         </p>
                         <div className="relative w-full h-48 rounded overflow-hidden">

@@ -12,6 +12,8 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@payos/node": "^2.0.0",
+    "@vladmandic/face-api": "^1.7.14",
+    "canvas": "^2.11.2",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
@@ -37,6 +39,7 @@
     "slugify": "^1.6.6",
     "socket.io": "^4.8.1",
     "tesseract.js": "^5.0.4",
+    "twilio": "^5.3.5",
     "vnpay": "^2.4.0",
     "xlsx": "^0.18.5"
   },

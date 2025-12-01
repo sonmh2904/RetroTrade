@@ -88,11 +88,15 @@ module.exports.getOrderByOwnerId = async (req, res) => {
 
         // Format order stats
         const stats = {
-            pending: { count: 0, amount: 0 },
-            confirmed: { count: 0, amount: 0 },
-            in_progress: { count: 0, amount: 0 },
-            completed: { count: 0, amount: 0 },
-            cancelled: { count: 0, amount: 0 }
+            pending: { count: 0, amount: 0, label: "Chờ xử lý" },
+            confirmed: { count: 0, amount: 0, label: "Đã xác nhận" },
+            delivery: { count: 0, amount: 0, label: "Đang giao hàng" },
+            received: { count: 0, amount: 0, label: "Đã nhận hàng" },
+            progress: { count: 0, amount: 0, label: "Đang thuê" },
+            returned: { count: 0, amount: 0, label: "Đã trả hàng" },
+            completed: { count: 0, amount: 0, label: "Hoàn thành" },
+            cancelled: { count: 0, amount: 0, label: "Đã hủy" },
+            disputed: { count: 0, amount: 0, label: "Tranh chấp" }
         };
 
         orderStats.forEach(stat => {
@@ -269,11 +273,15 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
 
         // Format revenue by status
         const statusRevenue = {
-            pending: { count: 0, revenue: 0 },
-            confirmed: { count: 0, revenue: 0 },
-            in_progress: { count: 0, revenue: 0 },
-            completed: { count: 0, revenue: 0 },
-            cancelled: { count: 0, revenue: 0 }
+            pending: { count: 0, revenue: 0, label: "Chờ xử lý" },
+            confirmed: { count: 0, revenue: 0, label: "Đã xác nhận" },
+            delivery: { count: 0, revenue: 0, label: "Đang giao hàng" },
+            received: { count: 0, revenue: 0, label: "Đã nhận hàng" },
+            progress: { count: 0, revenue: 0, label: "Đang thuê" },
+            returned: { count: 0, revenue: 0, label: "Đã trả hàng" },
+            completed: { count: 0, revenue: 0, label: "Hoàn thành" },
+            cancelled: { count: 0, revenue: 0, label: "Đã hủy" },
+            disputed: { count: 0, revenue: 0, label: "Tranh chấp" }
         };
 
         revenueByStatus.forEach(stat => {

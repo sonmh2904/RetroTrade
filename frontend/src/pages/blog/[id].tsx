@@ -96,7 +96,7 @@ export default function BlogDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           <span className="text-sm">Quay lại</span>
         </button>
-       
+
         <nav className="text-sm text-gray-500 mb-4 flex items-center flex-wrap">
           <Link href="/" className="hover:text-blue-600">
             Trang chủ
@@ -111,10 +111,8 @@ export default function BlogDetailPage() {
           </span>
         </nav>
 
-     
         <h1 className="text-3xl font-bold mb-3 text-black">{post.title}</h1>
 
-      
         <div className="flex items-center gap-2 text-gray-500 text-sm mb-5">
           {post.authorId?.avatar ? (
             <img
@@ -124,7 +122,9 @@ export default function BlogDetailPage() {
             />
           ) : (
             <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold">
-              {post.authorId?.email ? post.authorId.email.charAt(0).toUpperCase() : "?"}
+              {post.authorId?.email
+                ? post.authorId.email.charAt(0).toUpperCase()
+                : "?"}
             </div>
           )}
           <span>{post.authorId?.fullName || "Ẩn danh"}</span>•
@@ -132,7 +132,6 @@ export default function BlogDetailPage() {
           <span>5 phút đọc</span>
         </div>
 
-       
         {post.thumbnail ? (
           <img
             src={post.thumbnail}
@@ -153,8 +152,11 @@ export default function BlogDetailPage() {
 
         <div
           className="prose prose-blue max-w-none text-black"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{
+            __html: post.content.replace(/\n/g, "<br/>"),
+          }}
         />
+
         {post && <CommentSection postId={post._id} />}
       </div>
 
@@ -198,7 +200,9 @@ export default function BlogDetailPage() {
                     </div>
                   )}
                   <div className="text-sm">
-                    <p className="font-medium leading-snug text-black">{p.title}</p>
+                    <p className="font-medium leading-snug text-black">
+                      {p.title}
+                    </p>
                     <p className="text-xs text-gray-500">
                       {new Date(p.createdAt).toLocaleDateString("vi-VN")}
                     </p>

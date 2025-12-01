@@ -19,6 +19,8 @@ const {
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
+const { logOrderAudit } = require("../../middleware/auditLog.service");
+
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
@@ -293,6 +295,12 @@ module.exports = {
       );
 
       await notifyOrderCreated(newOrder);
+      await logOrderAudit({
+        orderId: newOrder._id,
+        operation: "INSERT",
+        userId: renterId,
+        changeSummary: `Order created: (status: ${newOrder.orderStatus}) | total=${totalAmount}, discount=${totalDiscountAmount}, final=${finalOrderAmount}`,
+      });
 
       return res.status(201).json({
         message: "Tạo đơn hàng thành công",
@@ -398,6 +406,13 @@ module.exports = {
       }
 
       await notifyOrderConfirmed(order); // Gửi notification khi xác nhận đơn
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: pending → confirmed`,
+      });
+
       return res.json({
         message: "Order confirmed and inventory reserved",
         orderGuid: order.orderGuid,
@@ -433,7 +448,7 @@ module.exports = {
 
       if (!order) throw new Error("Only confirmed orders can start delivery");
 
-      await session.commitTransaction(); // commit xong là transaction kết thúc
+      await session.commitTransaction();
 
       session.endSession();
 
@@ -442,6 +457,12 @@ module.exports = {
 
       // Notification (nếu có) nên thực hiện ở đây
       await notifyOrderDelivery(order);
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: order.ownerId,
+        changeSummary: `Order status changed: confirmed → delivery`,
+      });
 
       res.json({
         success: true,
@@ -482,6 +503,12 @@ module.exports = {
 
       // Notification
       await notifyOrderReceived(order);
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: renterId,
+        changeSummary: `Order status changed: delivery → received (item handed to renter)`,
+      });
 
       return res.json({
         message: "Order marked as received",
@@ -513,8 +540,7 @@ module.exports = {
 
       if (order.orderStatus !== "received")
         return res.status(400).json({
-          message:
-            "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
+          message: "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
         });
 
       order.orderStatus = "progress";
@@ -522,6 +548,13 @@ module.exports = {
       order.lifecycle.startedAt = new Date();
       await order.save();
       await notifyOrderStarted(order); // Gửi notification khi bắt đầu thuê
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: received → progress`,
+      });
+
       return res.json({
         message: "Order started",
         orderGuid: order.orderGuid,
@@ -562,6 +595,13 @@ module.exports = {
       order.returnInfo.notes = notes || "";
       await order.save();
       await notifyOrderReturned(order); // Gửi notification khi trả sản phẩm
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: renterId,
+        changeSummary: `Order status changed: progress → returned`,
+      });
+
       return res.status(200).json({
         message: "Order marked as returned",
         orderGuid: order.orderGuid,
@@ -662,6 +702,13 @@ module.exports = {
       session.endSession();
 
       await notifyOrderCompleted(order); // Gửi notification khi hoàn tất đơn
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: returned → completed`,
+      });
+
       return res.json({
         message: "Order completed",
         orderGuid: order.orderGuid,
@@ -740,6 +787,13 @@ module.exports = {
         await order.save({ session });
 
         await notifyOrderCancelled(order); // Gửi notification
+        await logOrderAudit({
+          orderId: order._id,
+          operation: "UPDATE",
+          userId: userId,
+          changeSummary: `Order cancelled`,
+        });
+
         await session.commitTransaction();
         session.endSession();
         return res.json({
@@ -794,6 +848,13 @@ module.exports = {
       order.lifecycle.disputedAt = new Date();
       await order.save();
       await notifyOrderDisputed(order); // Gửi notification
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: userId,
+        changeSummary: `Order cancelled`,
+      });
+
       return res.json({
         message: "Dispute opened",
         orderGuid: order.orderGuid,
@@ -893,10 +954,10 @@ module.exports = {
     }
   },
 
-  listOrdersByOnwer: async (req, res) => {
+  listOrdersByOwner: async (req, res) => {
     try {
       const userId = req.user._id;
-      const { status, paymentStatus, search, page = 1, limit = 20 } = req.query;
+      const { status, paymentStatus, search, page = 1, limit } = req.query;
 
       const filter = {
         isDeleted: false,
@@ -905,19 +966,25 @@ module.exports = {
 
       if (status) filter.orderStatus = status;
       if (paymentStatus) filter.paymentStatus = paymentStatus;
-      if (search)
-        filter["itemSnapshot.title"] = { $regex: search, $options: "i" };
+      if (search) {
+        filter["itemSnapshot.title"] = { $regex: search.trim(), $options: "i" };
+      }
 
-      const skip = (Number(page) - 1) * Number(limit);
+      // Nếu không có limit → không skip, không limit → trả hết
+      const pageNum = Number(page);
+      const limitNum = limit ? Number(limit) : null;
+      const skip = limitNum ? (pageNum - 1) * limitNum : 0;
+
+      const query = Order.find(filter)
+        .populate("renterId", "fullName email avatarUrl userGuid")
+        .sort({ createdAt: -1 });
+
+      if (limitNum) {
+        query.skip(skip).limit(limitNum);
+      }
 
       const [orders, total] = await Promise.all([
-        Order.find(filter)
-          .populate("renterId", "fullName email")
-          .populate("ownerId", "fullName email")
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(Number(limit))
-          .lean(),
+        query.lean(),
         Order.countDocuments(filter),
       ]);
 
@@ -926,15 +993,82 @@ module.exports = {
         data: orders,
         pagination: {
           total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
+          page: pageNum,
+          limit: limitNum || total, // nếu không có limit thì trả về total
+          totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
         },
       });
     } catch (err) {
-      console.error("listOrdersByOnwer err:", err);
+      console.error("listOrdersByOwner error:", err);
       return res.status(500).json({
-        message: "Failed to list orders",
+        message: "Lỗi khi lấy danh sách đơn hàng",
+        error: err.message,
+      });
+    }
+  },
+
+  listOrdersByRenter: async (req, res) => {
+    try {
+      const renterId = req.user._id;
+
+      const {
+        status,
+        paymentStatus,
+        search,
+        page = 1,
+        limit, // có thể có hoặc không
+      } = req.query;
+
+      const filter = {
+        isDeleted: false,
+        renterId,
+      };
+
+      if (status) filter.orderStatus = status;
+      if (paymentStatus) filter.paymentStatus = paymentStatus;
+      if (search) {
+        filter["itemSnapshot.title"] = { $regex: search.trim(), $options: "i" };
+      }
+
+      const pageNum = Number(page);
+      const limitNum = limit ? Number(limit) : null;
+      const skip = limitNum ? (pageNum - 1) * limitNum : 0;
+
+      const query = Order.find(filter)
+        .populate("ownerId", "fullName avatarUrl userGuid phone")
+        .populate("itemId", "Title Images")
+        .sort({ createdAt: -1 });
+
+      if (limitNum) query.skip(skip).limit(limitNum);
+
+      const [orders, total] = await Promise.all([
+        query.lean(),
+        Order.countDocuments(filter),
+      ]);
+
+      const ordersWithImages = orders.map((order) => ({
+        ...order,
+        _primaryImage:
+          order.itemSnapshot?.images?.[0] ||
+          order.itemId?.Images?.[0]?.Url ||
+          null,
+      }));
+
+  
+      return res.json({
+        message: "Lấy danh sách đơn hàng thành công",
+        data: ordersWithImages, // ← mảng trực tiếp, không bọc trong { data: ... }
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum || total,
+          totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
+        },
+      });
+    } catch (err) {
+      console.error("listOrdersByRenter error:", err);
+      return res.status(500).json({
+        message: "Lỗi khi lấy danh sách đơn hàng",
         error: err.message,
       });
     }

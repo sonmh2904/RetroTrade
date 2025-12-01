@@ -172,8 +172,8 @@ function OwnerOrderDetailContent() {
   const breadcrumbs = [
     { label: "Trang chủ", href: "/home", icon: Home },
     { label: "Quản lý", href: "/owner", icon: ShoppingBag },
-    { label: "Đơn hàng", href: "/owner/orders", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/owner/orders/${id}`, icon: Eye },
+    { label: "Đơn hàng", href: "/owner/renter-requests", icon: ShoppingBag },
+    { label: "Chi tiết đơn hàng", href: `/owner/renter-requests/${order._id}`, icon: Eye },
   ];
 
   return (

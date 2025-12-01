@@ -62,12 +62,6 @@ const OwnerDashboard = () => {
       icon: DollarSign,
       color: "text-green-600",
     },
-    {
-      id: "analytics",
-      label: "Phân tích",
-      icon: BarChart3,
-      color: "text-purple-600",
-    },
   ];
 
   const fetchData = async (showRefresh = false) => {
@@ -148,15 +142,6 @@ const OwnerDashboard = () => {
           bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
           iconColor: "text-purple-600",
           format: "currency"
-        },
-        {
-          id: "activeRentals",
-          label: "Đang cho thuê",
-          value: formatNumber(ordersData.statistics.in_progress.count),
-          icon: Package,
-          bgColor: "bg-gradient-to-r from-cyan-50 to-blue-50",
-          iconColor: "text-cyan-600",
-          format: "number"
         }
       ];
 
@@ -183,8 +168,7 @@ const OwnerDashboard = () => {
       totalOrders: "orders",
       completedOrders: "orders",
       pendingOrders: "orders",
-      avgOrderValue: "analytics",
-      activeRentals: "orders",
+      avgOrderValue: "revenue",
     };
 
     const tabId = statToTabMap[statId];
@@ -197,9 +181,13 @@ const OwnerDashboard = () => {
     switch (status) {
       case "completed": return "text-green-600 bg-green-50";
       case "confirmed": return "text-blue-600 bg-blue-50";
-      case "in_progress": return "text-amber-600 bg-amber-50";
+      case "progress": return "text-amber-600 bg-amber-50";
       case "pending": return "text-gray-600 bg-gray-50";
       case "cancelled": return "text-red-600 bg-red-50";
+      case "delivery": return "text-indigo-600 bg-indigo-50";
+      case "received": return "text-teal-600 bg-teal-50";
+      case "returned": return "text-orange-600 bg-orange-50";
+      case "disputed": return "text-rose-600 bg-rose-50";
       default: return "text-gray-600 bg-gray-50";
     }
   };
@@ -207,10 +195,14 @@ const OwnerDashboard = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case "completed": return "Hoàn thành";
-      case "confirmed": return "Xác nhận";
-      case "in_progress": return "Đang thuê";
+      case "confirmed": return "Đã xác nhận";
+      case "progress": return "Đang thuê";
       case "pending": return "Chờ xử lý";
       case "cancelled": return "Đã hủy";
+      case "delivery": return "Đang giao hàng";
+      case "received": return "Đã nhận hàng";
+      case "returned": return "Đã trả hàng";
+      case "disputed": return "Tranh chấp";
       default: return status;
     }
   };
@@ -309,7 +301,7 @@ const OwnerDashboard = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 sm:gap-6">
                     {stats.map((stat, index) => {
                       const Icon = stat.icon;
-                      const isClickable = ["totalRevenue", "totalOrders", "completedOrders", "pendingOrders", "avgOrderValue", "activeRentals"].includes(stat.id);
+                      const isClickable = ["totalRevenue", "totalOrders", "completedOrders", "pendingOrders", "avgOrderValue"].includes(stat.id);
                       return (
                         <div
                           key={stat.id}
@@ -382,19 +374,6 @@ const OwnerDashboard = () => {
             {activeTab === "orders" && <OwnerOrdersChart />}
 
             {activeTab === "revenue" && <OwnerRevenueChart />}
-
-            {activeTab === "analytics" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Phân tích chi tiết</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">
-                    Các biểu đồ và phân tích chi tiết sẽ được hiển thị tại đây.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
           </div>
         )}
       </div>

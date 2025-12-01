@@ -47,9 +47,13 @@ interface OrderData {
   orders: number;
   pending: number;
   confirmed: number;
-  in_progress: number;
+  delivery: number;
+  received: number;
+  progress: number;
+  returned: number;
   completed: number;
   cancelled: number;
+  disputed: number;
 }
 
 export function OwnerOrdersChart() {
@@ -76,9 +80,13 @@ export function OwnerOrdersChart() {
               orders: 0,
               pending: 0,
               confirmed: 0,
-              in_progress: 0,
+              delivery: 0,
+              received: 0,
+              progress: 0,
+              returned: 0,
               completed: 0,
-              cancelled: 0
+              cancelled: 0,
+              disputed: 0
             });
           }
           
@@ -92,14 +100,26 @@ export function OwnerOrdersChart() {
             case 'confirmed':
               dayData.confirmed++;
               break;
-            case 'in_progress':
-              dayData.in_progress++;
+            case 'delivery':
+              dayData.delivery++;
+              break;
+            case 'received':
+              dayData.received++;
+              break;
+            case 'progress':
+              dayData.progress++;
+              break;
+            case 'returned':
+              dayData.returned++;
               break;
             case 'completed':
               dayData.completed++;
               break;
             case 'cancelled':
               dayData.cancelled++;
+              break;
+            case 'disputed':
+              dayData.disputed++;
               break;
           }
         });
@@ -129,9 +149,13 @@ export function OwnerOrdersChart() {
       const orders = payload.find((p: any) => p.dataKey === 'orders')?.value || 0;
       const pending = payload.find((p: any) => p.dataKey === 'pending')?.value || 0;
       const confirmed = payload.find((p: any) => p.dataKey === 'confirmed')?.value || 0;
-      const inProgress = payload.find((p: any) => p.dataKey === 'in_progress')?.value || 0;
+      const delivery = payload.find((p: any) => p.dataKey === 'delivery')?.value || 0;
+      const received = payload.find((p: any) => p.dataKey === 'received')?.value || 0;
+      const progress = payload.find((p: any) => p.dataKey === 'progress')?.value || 0;
+      const returned = payload.find((p: any) => p.dataKey === 'returned')?.value || 0;
       const completed = payload.find((p: any) => p.dataKey === 'completed')?.value || 0;
       const cancelled = payload.find((p: any) => p.dataKey === 'cancelled')?.value || 0;
+      const disputed = payload.find((p: any) => p.dataKey === 'disputed')?.value || 0;
       
       return (
         <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
@@ -147,11 +171,23 @@ export function OwnerOrdersChart() {
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
-              <span className="text-sm">Xác nhận: <span className="font-medium">{formatNumber(confirmed)}</span></span>
+              <span className="text-sm">Đã xác nhận: <span className="font-medium">{formatNumber(confirmed)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đang giao hàng: <span className="font-medium">{formatNumber(delivery)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-teal-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đã nhận hàng: <span className="font-medium">{formatNumber(received)}</span></span>
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
-              <span className="text-sm">Đang thuê: <span className="font-medium">{formatNumber(inProgress)}</span></span>
+              <span className="text-sm">Đang thuê: <span className="font-medium">{formatNumber(progress)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-orange-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đã trả hàng: <span className="font-medium">{formatNumber(returned)}</span></span>
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
@@ -160,6 +196,10 @@ export function OwnerOrdersChart() {
             <div className="flex items-center">
               <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
               <span className="text-sm">Đã hủy: <span className="font-medium">{formatNumber(cancelled)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-rose-500 rounded-full mr-2"></div>
+              <span className="text-sm">Tranh chấp: <span className="font-medium">{formatNumber(disputed)}</span></span>
             </div>
           </div>
         </div>
@@ -220,41 +260,99 @@ export function OwnerOrdersChart() {
       <CardContent>
         {/* Stats Overview */}
         {orderStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="space-y-4 mb-6">
+            {/* Total Orders Card */}
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200">
               <div className="flex items-center justify-between mb-2">
                 <ShoppingCart className="w-5 h-5 text-blue-600" />
-                <span className="text-xs text-blue-600">Tổng</span>
+                <span className="text-xs text-blue-600">Tổng đơn hàng</span>
               </div>
               <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.pagination.totalOrders)}</div>
-              <div className="text-sm text-gray-600">Tổng đơn hàng</div>
+              <div className="text-sm text-gray-600">Tổng số đơn hàng trong khoảng thời gian đã chọn</div>
             </div>
             
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
-              <div className="flex items-center justify-between mb-2">
-                <Clock className="w-5 h-5 text-amber-600" />
-                <span className="text-xs text-amber-600">Chờ xử lý</span>
+            {/* Status Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
+                <div className="flex items-center justify-between mb-2">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  <span className="text-xs text-amber-600">Chờ xử lý</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.pending.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng chờ xử lý</div>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.pending.count)}</div>
-              <div className="text-sm text-gray-600">Đơn hàng chờ xử lý</div>
-            </div>
 
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
-              <div className="flex items-center justify-between mb-2">
-                <Package className="w-5 h-5 text-purple-600" />
-                <span className="text-xs text-purple-600">Đang thuê</span>
+              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <CheckCircle className="w-5 h-5 text-blue-600" />
+                  <span className="text-xs text-blue-600">Đã xác nhận</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.confirmed.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng đã xác nhận</div>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.in_progress.count)}</div>
-              <div className="text-sm text-gray-600">Đơn hàng đang cho thuê</div>
-            </div>
-            
-            <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
-              <div className="flex items-center justify-between mb-2">
-                <CheckCircle className="w-5 h-5 text-emerald-600" />
-                <span className="text-xs text-emerald-600">Hoàn thành</span>
+
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-200">
+                <div className="flex items-center justify-between mb-2">
+                  <Package className="w-5 h-5 text-indigo-600" />
+                  <span className="text-xs text-indigo-600">Đang giao hàng</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.delivery.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng đang giao</div>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.completed.count)}</div>
-              <div className="text-sm text-gray-600">Đơn hàng hoàn thành</div>
+
+              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 p-4 rounded-lg border border-teal-200">
+                <div className="flex items-center justify-between mb-2">
+                  <CheckCircle className="w-5 h-5 text-teal-600" />
+                  <span className="text-xs text-teal-600">Đã nhận hàng</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.received.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng đã nhận</div>
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
+                <div className="flex items-center justify-between mb-2">
+                  <Package className="w-5 h-5 text-purple-600" />
+                  <span className="text-xs text-purple-600">Đang thuê</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.progress.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng đang cho thuê</div>
+              </div>
+
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-lg border border-orange-200">
+                <div className="flex items-center justify-between mb-2">
+                  <Package className="w-5 h-5 text-orange-600" />
+                  <span className="text-xs text-orange-600">Đã trả hàng</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.returned.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng đã trả</div>
+              </div>
+
+              <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
+                <div className="flex items-center justify-between mb-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-600" />
+                  <span className="text-xs text-emerald-600">Hoàn thành</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.completed.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng hoàn thành</div>
+              </div>
+
+              <div className="bg-gradient-to-r from-red-50 to-rose-50 p-4 rounded-lg border border-red-200">
+                <div className="flex items-center justify-between mb-2">
+                  <XCircle className="w-5 h-5 text-red-600" />
+                  <span className="text-xs text-red-600">Đã hủy</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.cancelled.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng đã hủy</div>
+              </div>
+
+              <div className="bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-lg border border-rose-200">
+                <div className="flex items-center justify-between mb-2">
+                  <XCircle className="w-5 h-5 text-rose-600" />
+                  <span className="text-xs text-rose-600">Tranh chấp</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{formatNumber(orderStats.statistics.disputed.count)}</div>
+                <div className="text-sm text-gray-600">Đơn hàng tranh chấp</div>
+              </div>
             </div>
           </div>
         )}
@@ -281,9 +379,21 @@ export function OwnerOrdersChart() {
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.6}/>
                     <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1}/>
                   </linearGradient>
-                  <linearGradient id="colorInProgress" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorDelivery" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorProgress" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.6}/>
                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorReturned" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#f97316" stopOpacity={0.1}/>
                   </linearGradient>
                   <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
@@ -292,6 +402,10 @@ export function OwnerOrdersChart() {
                   <linearGradient id="colorCancelled" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6}/>
                     <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorDisputed" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.1}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
@@ -360,7 +474,7 @@ export function OwnerOrdersChart() {
                 <Area 
                   type="monotone" 
                   dataKey="confirmed" 
-                  name="Xác nhận"
+                  name="Đã xác nhận"
                   stroke="#2563eb" 
                   fillOpacity={1} 
                   fill="url(#colorConfirmed)"
@@ -369,14 +483,53 @@ export function OwnerOrdersChart() {
                   activeDot={{ r: 6, strokeWidth: 0 }}
                 />
                 
-                {/* In Progress Orders Area */}
+                {/* Delivery Orders Area */}
                 <Area 
                   type="monotone" 
-                  dataKey="in_progress"
+                  dataKey="delivery"
+                  name="Đang giao hàng"
+                  stroke="#6366f1" 
+                  fillOpacity={1} 
+                  fill="url(#colorDelivery)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+                
+                {/* Received Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="received"
+                  name="Đã nhận hàng"
+                  stroke="#14b8a6" 
+                  fillOpacity={1} 
+                  fill="url(#colorReceived)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+                
+                {/* Progress Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="progress"
                   name="Đang thuê"
                   stroke="#8b5cf6" 
                   fillOpacity={1} 
-                  fill="url(#colorInProgress)"
+                  fill="url(#colorProgress)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+                
+                {/* Returned Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="returned"
+                  name="Đã trả hàng"
+                  stroke="#f97316" 
+                  fillOpacity={1} 
+                  fill="url(#colorReturned)"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
@@ -403,6 +556,19 @@ export function OwnerOrdersChart() {
                   stroke="#ef4444" 
                   fillOpacity={1} 
                   fill="url(#colorCancelled)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                />
+                
+                {/* Disputed Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="disputed"
+                  name="Tranh chấp"
+                  stroke="#f43f5e" 
+                  fillOpacity={1} 
+                  fill="url(#colorDisputed)"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}

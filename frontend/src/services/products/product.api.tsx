@@ -333,6 +333,25 @@ export const createRating = async (formData: FormData) => {
     throw error;
   }
 };
+export const updateRating = async (id: string, formData: FormData) => {
+  return await instance.put(`/products/rating/${id}`, formData);
+};
+
+// Xóa đánh giá (soft delete)
+export const deleteRating = async (id: string, renterId: string) => {
+  try {
+    const res = await api.delete(`/products/rating/${id}`, {
+      body: JSON.stringify({ renterId }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    return data;
+  } catch (error: any) {
+    console.error("Error deleting rating:", error?.message || error);
+    throw error;
+  }
+};
+
 
 export interface OwnerRating {
   _id: string;
@@ -398,28 +417,3 @@ export const getRatingsByOwner = async (
   }
 };
 // Cập nhật đánh giá
-export const updateRating = async (id: string, payload: any) => {
-  try {
-    const res = await api.put(`/products/rating/${id}`, payload);
-    const data = await res.json();
-    return data;
-  } catch (error: any) {
-    console.error("Error updating rating:", error?.message || error);
-    throw error;
-  }
-};
-
-// Xóa đánh giá (soft delete)
-export const deleteRating = async (id: string, renterId: string) => {
-  try {
-    const res = await api.delete(`/products/rating/${id}`, {
-      body: JSON.stringify({ renterId }),
-      headers: { "Content-Type": "application/json" },
-    });
-    const data = await res.json();
-    return data;
-  } catch (error: any) {
-    console.error("Error deleting rating:", error?.message || error);
-    throw error;
-  }
-};

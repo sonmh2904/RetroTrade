@@ -95,8 +95,7 @@ module.exports.createVerificationRequest = async (req, res) => {
         const hasValidIdCardInfo = idCardInfo && (
             idCardInfo.idNumber || 
             idCardInfo.fullName || 
-            idCardInfo.dateOfBirth || 
-            idCardInfo.address
+            idCardInfo.dateOfBirth
         );
 
         const shouldAutoReject = !hasValidIdCardInfo;
@@ -108,8 +107,7 @@ module.exports.createVerificationRequest = async (req, res) => {
                 const idCardData = {
                     idNumber: idCardInfo.idNumber || null,
                     fullName: idCardInfo.fullName || null,
-                    dateOfBirth: idCardInfo.dateOfBirth ? new Date(idCardInfo.dateOfBirth).toISOString() : null,
-                    address: idCardInfo.address || null
+                    dateOfBirth: idCardInfo.dateOfBirth ? new Date(idCardInfo.dateOfBirth).toISOString() : null
                 };
                 const { iv, encryptedData } = encryptObject(idCardData);
                 idCardInfoEncrypted = {
@@ -481,12 +479,7 @@ module.exports.handleVerificationRequest = async (req, res) => {
                     message: "Vui lòng nhập ngày tháng năm sinh"
                 });
             }
-            if (!idCardInfo.address || !idCardInfo.address.trim()) {
-                return res.status(400).json({
-                    code: 400,
-                    message: "Vui lòng nhập địa chỉ thường trú"
-                });
-            }
+           
         }
 
         const request = await VerificationRequest.findById(id)
@@ -526,8 +519,7 @@ module.exports.handleVerificationRequest = async (req, res) => {
                 const idCardData = {
                     idNumber: idCardInfo.idNumber.trim(),
                     fullName: idCardInfo.fullName.trim(),
-                    dateOfBirth: new Date(idCardInfo.dateOfBirth).toISOString(),
-                    address: idCardInfo.address.trim()
+                    dateOfBirth: new Date(idCardInfo.dateOfBirth).toISOString()
                 };
                 const { iv, encryptedData } = encryptObject(idCardData);
                 request.idCardInfo = null; // Không lưu dữ liệu gốc
@@ -558,7 +550,6 @@ module.exports.handleVerificationRequest = async (req, res) => {
                             idNumber: idCardInfo.idNumber.trim(),
                             fullName: idCardInfo.fullName.trim(),
                             dateOfBirth: new Date(idCardInfo.dateOfBirth).toISOString(),
-                            address: idCardInfo.address.trim(),
                             extractedAt: new Date().toISOString(),
                             extractionMethod: 'manual'
                         };
