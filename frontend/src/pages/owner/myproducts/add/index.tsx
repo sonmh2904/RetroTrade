@@ -189,6 +189,10 @@ const AddProductPage: React.FC = () => {
     }
   }, [cityCode]);
 
+  useEffect(() => {
+    setDistrictSearchTerm(district);
+  }, [district]);
+
   // Handle outside click for district dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

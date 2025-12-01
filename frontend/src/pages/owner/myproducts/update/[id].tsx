@@ -159,8 +159,6 @@ const UpdateProductPage: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  const prevUserAddressesRef = useRef<UserAddress[]>([]);
-
   const fetchProductDetails = useCallback(
     async (productId: string) => {
       setFetchLoading(true);
@@ -310,9 +308,11 @@ const UpdateProductPage: React.FC = () => {
     fetchUserAddresses();
   }, [fetchUserAddresses]);
 
+  // Auto-fill default address if fields are empty after all data is loaded
   useEffect(() => {
     if (
-      prevUserAddressesRef.current.length === 0 &&
+      !fetchLoading &&
+      !addressesLoading &&
       userAddresses.length > 0 &&
       !address.trim() &&
       !city.trim() &&
@@ -325,8 +325,7 @@ const UpdateProductPage: React.FC = () => {
         setDistrict(defaultAddress.District || "");
       }
     }
-    prevUserAddressesRef.current = userAddresses;
-  }, [userAddresses, address, city, district]);
+  }, [fetchLoading, addressesLoading, userAddresses, address, city, district]);
 
   useEffect(() => {
     if (cityCode > 0 && provinces.length > 0) {
@@ -355,6 +354,10 @@ const UpdateProductPage: React.FC = () => {
       setCityCode(0);
     }
   }, [city, provinces]);
+
+  useEffect(() => {
+    setDistrictSearchTerm(district);
+  }, [district]);
 
   // Handle outside click for district dropdown
   useEffect(() => {
