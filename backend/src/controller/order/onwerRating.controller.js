@@ -3,36 +3,53 @@ const Order = require("../../models/Order/Order.model");
 const {uploadRatingToCloudinary} = require("../../middleware/uploadRating.middleware");
 
 // CREATE - renter tạo đánh giá owner
+
+
 exports.createOwnerRating = async (req, res) => {
   try {
     const renterId = req.user._id;
     const { orderId, rating, comment } = req.body;
 
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order không tồn tại" });
+    // 1. Tìm đơn hàng + kiểm tra quyền + trạng thái hợp lệ để đánh giá
+    const order = await Order.findOne({
+      _id: orderId,
+      renterId: renterId, // phải là người mua đơn này
+      orderStatus: { $in: ["completed"] },
+    });
 
-    if (String(order.renterId) !== String(renterId)) {
-      return res
-        .status(403)
-        .json({ message: "Không thể đánh giá đơn của người khác" });
+    if (!order) {
+      return res.status(400).json({
+        message: "Bạn cần hoàn thành đơn hàng mới để đánh giá",
+      });
     }
 
+    // 2. QUAN TRỌNG NHẤT: Chỉ kiểm tra theo orderId (không quan tâm khách mua bao nhiêu lần)
+    const alreadyRated = await OwnerRating.findOne({
+      orderId: orderId, // mỗi đơn chỉ được đánh giá 1 lần duy nhất
+      // renterId không cần thiết ở đây vì orderId đã đủ unique rồi
+    });
+
+    if (alreadyRated) {
+      return res.status(400).json({
+        message: "Đơn hàng này đã được đánh giá rồi!",
+      });
+    }
+
+    // 3. Upload ảnh/video nếu có
     let images = [];
     let videos = [];
 
-    // Upload ảnh
     if (req.files?.images?.length > 0) {
       const uploaded = await uploadRatingToCloudinary(req.files.images);
       images = uploaded.images || [];
     }
-
-    // Upload video
     if (req.files?.videos?.length > 0) {
       const uploaded = await uploadRatingToCloudinary(req.files.videos);
       videos = uploaded.videos || [];
     }
 
-    const ownerRating = await OwnerRating.create({
+    // 4. Tạo đánh giá mới
+    const newRating = await OwnerRating.create({
       orderId,
       ownerId: order.ownerId,
       renterId,
@@ -42,12 +59,17 @@ exports.createOwnerRating = async (req, res) => {
       videos,
     });
 
-    res.json({ message: "Đánh giá chủ shop thành công", data: ownerRating });
+    return res.status(201).json({
+      message: "Đánh giá thành công!",
+      data: newRating,
+    });
+
   } catch (error) {
+    console.error("Lỗi đánh giá:", error);
     if (error.code === 11000) {
-      return res.status(400).json({ message: "Đơn này đã được đánh giá" });
+      return res.status(400).json({ message: "Đơn hàng này đã được đánh giá rồi!" });
     }
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
 

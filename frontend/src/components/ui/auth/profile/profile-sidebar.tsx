@@ -3,7 +3,7 @@
 import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar";
 
-type MenuKey = "discounts" | "messages" | "settings" | "security" | "addresses" | "ownership" | "disputes" | "changePassword" | "signature" | "loyalty" | "details";
+type MenuKey = "discounts" | "messages" | "settings" | "security" | "addresses" | "ownership" | "disputes" | "changePassword" | "signature" | "loyalty" | "details"|"rating";
 
 export interface ProfileSidebarProps {
   active: MenuKey | null;
@@ -11,7 +11,10 @@ export interface ProfileSidebarProps {
   user?: { fullName?: string; email: string; avatarUrl?: string };
 }
 
-const MENU_SECTIONS: Array<{ title: string; items: Array<{ key: MenuKey; label: string }> }> = [
+const MENU_SECTIONS: Array<{
+  title: string;
+  items: Array<{ key: MenuKey; label: string }>;
+}> = [
   {
     title: "Hoạt động",
     items: [
@@ -28,6 +31,7 @@ const MENU_SECTIONS: Array<{ title: string; items: Array<{ key: MenuKey; label: 
       { key: "security", label: "Bảo mật" },
       { key: "addresses", label: "Địa chỉ" },
       { key: "signature", label: "Chữ ký số" },
+      { key: "rating", label: "Đánh giá" },
     ],
   },
   {

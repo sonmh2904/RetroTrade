@@ -602,28 +602,7 @@ export default function OrderListPage({
                           </div>
 
                           {/* User Info */}
-                          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                            <div className="flex items-start gap-3">
-                              <div className="p-2 bg-blue-100 rounded-lg">
-                                <User className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500 mb-1">
-                                  {isRenter ? "Người cho thuê" : "Người thuê"}
-                                </p>
-                                <p className="text-sm font-medium text-gray-800">
-                                  {isRenter
-                                    ? order.ownerId?.fullName || "N/A"
-                                    : order.renterId?.fullName || "N/A"}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {isRenter
-                                    ? order.ownerId?.email
-                                    : order.renterId?.email}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
+                          
                           {/* Actions */}
                           <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
                             <div className="flex flex-wrap items-center gap-3">
