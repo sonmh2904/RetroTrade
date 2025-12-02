@@ -647,9 +647,15 @@ export default function ProductPage() {
 
   // Fetch sorted data when sort options change
   useEffect(() => {
-    if (sortBy !== 'CreatedAt' || sortOrder !== 'desc') {
-      fetchSortedData();
-    }
+    // Save current scroll position before fetching new data
+    const scrollY = window.scrollY;
+    
+    fetchSortedData().then(() => {
+      // Use requestAnimationFrame to ensure DOM is updated before restoring scroll
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+      });
+    });
   }, [sortBy, sortOrder, fetchSortedData]);
 
   // Reset all filters
@@ -684,6 +690,9 @@ export default function ProductPage() {
 
   // Filter items
   useEffect(() => {
+    // Save current scroll position before filtering
+    const scrollY = window.scrollY;
+    
     let filtered = [...allItems];
     console.log('DEBUG - Filter start - Total items:', filtered.length);
     console.log('DEBUG - Selected category:', selectedCategory);
@@ -741,6 +750,11 @@ export default function ProductPage() {
     console.log('DEBUG - Final filtered items:', filtered.length);
     setItems(filtered);
     setCurrentPage(1);
+    
+    // Restore scroll position after filtering is complete
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
   }, [
     selectedCategory,
     minPrice,
@@ -797,6 +811,7 @@ export default function ProductPage() {
   const handleCategorySelect = (categoryId: string) => {
     const newSelectedCategory = categoryId === '' ? null : (selectedCategory === categoryId ? null : categoryId);
     setSelectedCategory(newSelectedCategory);
+    // ... (rest of the code remains the same)
     
     // Update URL with full category path
     if (newSelectedCategory) {
