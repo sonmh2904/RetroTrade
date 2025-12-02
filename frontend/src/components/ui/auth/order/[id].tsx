@@ -4,30 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { getOrderDetails } from "@/services/auth/order.api";
 import { format } from "date-fns";
-import {
-  Package,
-  Truck,
-  MapPin,
-  CreditCard,
-  Clock,
-  FileText,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-  Download,
-  Share2,
-  Eye,
-  User,
-  Mail,
-  Store,
-  ArrowLeft,
-} from "lucide-react";
+import {Package,Truck,MapPin,CreditCard,Clock,FileText,AlertCircle,CheckCircle2,XCircle,RefreshCw,Download,Share2,Eye,User,Mail,Store,ArrowLeft} from "lucide-react";
 import type { Order } from "@/services/auth/order.api";
 import Image from "next/image";
 import Link from "next/link";
-import { payOrderWithWallet, getMyWallet } from "@/services/wallet/wallet.api"; // Đảm bảo import đúng
+import { payOrderWithWallet, getMyWallet, requestPaymentOtp } from "@/services/wallet/wallet.api"; // Đảm bảo import đúng
 import { toast } from "sonner";
+
 
 interface TimelineStep {
   status: string;
@@ -109,7 +92,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [pendingAction] = useState<() => Promise<void>>(() => async () => {});
+  const [pendingAction] = useState<() => Promise<void>>(() => async () => { });
   const [isPaying, setIsPaying] = useState(false); //Thanh toan
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -131,6 +114,15 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
     requiredAmount: 0,
     shortage: 0,
   });
+  // Thêm state cho OTP
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+
+
+
   useEffect(() => {
     async function fetchOrder() {
       if (id) {
@@ -182,44 +174,83 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
       requiredAmount,
     });
   };
+  // Đếm ngược OTP 3 phút
+  useEffect(() => {
+    if (!isOtpModalOpen || otpCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isOtpModalOpen, otpCountdown]);
+  // hàm gửi OTP
+  const sendOtpForPayment = async () => {
+    if (!order) return;
+    try {
+      setIsSendingOtp(true);
+      setOtpError("");
+      await requestPaymentOtp();
+      toast.success("Đã gửi mã OTP xác nhận thanh toán về email của bạn.");
+      setIsOtpModalOpen(true);
+      setOtpCountdown(180); // 3 phút
+    } catch (e) {
+      console.error("Gửi OTP thanh toán lỗi:", e);
+      toast.error("Không gửi được OTP thanh toán. Vui lòng thử lại.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+  // Hàm xử lý khi người dùng bấm "Xác nhận" trong modal OTP
+  const handlePayOrderWithOtp = async () => {
+    if (!order) return;
 
-  // Hàm thực hiện thanh toán (gọi khi người dùng bấm "Xác nhận" trong modal)
-  const executeWalletPayment = async () => {
-    if (isPaying || !order) return;
-
-    setIsPaying(true);
-    setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
+    if (!otpInput.trim()) {
+      setOtpError("Vui lòng nhập mã OTP");
+      return;
+    }
+    if (otpCountdown <= 0) {
+      setOtpError("OTP đã hết hạn, vui lòng bấm Gửi lại OTP.");
+      return;
+    }
 
     try {
-      await payOrderWithWallet(order._id);
-      toast.success("Thanh toán thành công bằng ví!");
-      await loadOrder();
+      setLoading(true);
+      const res = await payOrderWithWallet(order._id, otpInput.trim());
 
-      const updated = await getMyWallet();
-      setWalletBalance(updated.balance ?? 0);
-    } catch (error: unknown) {
-      const msg = getErrorMessage(error) || "Thanh toán thất bại";
-      toast.error(msg);
-
-      if (
-        msg.toLowerCase().includes("không đủ") ||
-        msg.toLowerCase().includes("insufficient")
-      ) {
-        const required =
-          (order.finalAmount ?? 0) +
-          (order.depositAmount ?? 0) +
-          (order.serviceFee ?? 0);
-        setInsufficientModal({
-          isOpen: true,
-          requiredAmount: required,
-          shortage: required - walletBalance,
-        });
+      if (res?.success) {
+        toast.success("Thanh toán đơn hàng thành công");
+        setIsOtpModalOpen(false);
+        setOtpInput("");
+        setOtpError("");
+        // TODO: refetch order detail ở đây (nếu bạn đã có hàm fetchOrder())
+        await loadOrder();
+      } else {
+        const msg =
+          res?.message ||
+          (res as any)?.error ||
+          "Thanh toán thất bại";
+        if (msg.includes("OTP")) {
+          setOtpError(msg); // hiển thị trong modal, không đóng
+        } else {
+          toast.error(msg);
+        }
+      }
+    } catch (e: any) {
+      const apiError = e as any;
+      const msg =
+        apiError?.response?.data?.message ||
+        apiError?.message ||
+        "Thanh toán thất bại";
+      if (msg.includes("OTP")) {
+        setOtpError(msg);
+      } else {
+        toast.error(msg);
       }
     } finally {
-      setIsPaying(false);
+      setLoading(false);
     }
   };
 
+  // Hàm tải đơn hàng
   const loadOrder = async () => {
     setLoading(true);
     try {
@@ -365,15 +396,14 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
             <div className="text-right">
               <span
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-                ${
-                  order.orderStatus === "completed"
+                ${order.orderStatus === "completed"
                     ? "bg-green-100 text-green-700"
                     : order.orderStatus === "cancelled"
-                    ? "bg-red-100 text-red-700"
-                    : order.orderStatus === "progress"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-yellow-100 text-yellow-700"
-                }`}
+                      ? "bg-red-100 text-red-700"
+                      : order.orderStatus === "progress"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-yellow-100 text-yellow-700"
+                  }`}
               >
                 {getOrderStatusLabel(order.orderStatus)}
               </span>
@@ -559,9 +589,8 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   </div>
                   <div className="pt-4 mt-4 border-t border-emerald-200">
                     <Link
-                      href={`/store/${
-                        order.ownerId.userGuid || order.ownerId._id
-                      }`}
+                      href={`/store/${order.ownerId.userGuid || order.ownerId._id
+                        }`}
                     >
                       <button className="w-full px-4 py-2 text-sm font-medium text-emerald-600 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2">
                         <Store className="w-4 h-4" />
@@ -693,13 +722,12 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                             {/* Icon */}
                             <div className="relative z-10 mb-3">
                               <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-all duration-300 ${
-                                  step.current
-                                    ? "bg-emerald-600 text-white scale-110 ring-4 ring-emerald-200"
-                                    : step.active
+                                className={`w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-all duration-300 ${step.current
+                                  ? "bg-emerald-600 text-white scale-110 ring-4 ring-emerald-200"
+                                  : step.active
                                     ? "bg-emerald-100 text-emerald-700"
                                     : "bg-gray-200 text-gray-400"
-                                }`}
+                                  }`}
                               >
                                 {getStepIcon()}
                               </div>
@@ -708,11 +736,10 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                             {/* Connecting line - horizontal */}
                             {!isLast && (
                               <div
-                                className={`absolute top-6 left-1/2 w-full h-0.5 ${
-                                  arr[idx + 1]?.active
-                                    ? "bg-emerald-300"
-                                    : "bg-gray-200"
-                                }`}
+                                className={`absolute top-6 left-1/2 w-full h-0.5 ${arr[idx + 1]?.active
+                                  ? "bg-emerald-300"
+                                  : "bg-gray-200"
+                                  }`}
                                 style={{
                                   width: "calc(100% - 48px)",
                                   left: "calc(50% + 24px)",
@@ -723,22 +750,20 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                             {/* Content */}
                             <div className="text-center w-full">
                               <div
-                                className={`rounded-lg p-3 transition-all duration-300 ${
-                                  step.current
-                                    ? "bg-emerald-50 border-2 border-emerald-200 shadow-sm"
-                                    : step.active
+                                className={`rounded-lg p-3 transition-all duration-300 ${step.current
+                                  ? "bg-emerald-50 border-2 border-emerald-200 shadow-sm"
+                                  : step.active
                                     ? "bg-gray-50 border border-gray-200"
                                     : "bg-transparent"
-                                }`}
+                                  }`}
                               >
                                 <p
-                                  className={`font-semibold text-sm mb-1 ${
-                                    step.current
-                                      ? "text-emerald-700"
-                                      : step.active
+                                  className={`font-semibold text-sm mb-1 ${step.current
+                                    ? "text-emerald-700"
+                                    : step.active
                                       ? "text-gray-800"
                                       : "text-gray-400"
-                                  }`}
+                                    }`}
                                 >
                                   {step.label}
                                 </p>
@@ -914,8 +939,8 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                                   {discount.type === "percent"
                                     ? `(${discount.value}%)`
                                     : `(${(discount.value ?? 0).toLocaleString(
-                                        "vi-VN"
-                                      )}₫)`}{" "}
+                                      "vi-VN"
+                                    )}₫)`}{" "}
                                   -{" "}
                                   {(discount.amountApplied || 0).toLocaleString(
                                     "vi-VN"
@@ -932,8 +957,8 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                                   {discount.secondaryType === "percent"
                                     ? `(${discount.secondaryValue}%)`
                                     : `(${(
-                                        discount.secondaryValue ?? 0
-                                      ).toLocaleString("vi-VN")}₫)`}{" "}
+                                      discount.secondaryValue ?? 0
+                                    ).toLocaleString("vi-VN")}₫)`}{" "}
                                   -{" "}
                                   {(
                                     discount.secondaryAmountApplied || 0
@@ -960,11 +985,10 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-gray-700">Thanh toán</span>
                 <span
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
-                    order.paymentStatus === "paid"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${order.paymentStatus === "paid"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                    }`}
                 >
                   {order.paymentStatus === "paid" ? (
                     <CheckCircle2 className="w-4 h-4" />
@@ -1028,11 +1052,10 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-gray-700">Hợp đồng</span>
                   <span
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
-                      order.isContractSigned
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${order.isContractSigned
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                      }`}
                   >
                     {order.isContractSigned ? (
                       <>
@@ -1260,11 +1283,88 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                   Hủy
                 </button>
                 <button
-                  onClick={executeWalletPayment}
+                  onClick={async () => {
+                    setConfirmPayModal((prev) => ({ ...prev, isOpen: false }));
+                    await sendOtpForPayment();   // gửi OTP + mở modal OTP
+                  }}
                   disabled={isPaying}
-                  className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-70 flex items-center justify-center gap-2"
+                  className="..."
                 >
-                  {isPaying ? <>Đang xử lý...</> : "Thanh toán"}
+                  Xác nhận
+                </button>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal: Nhập OTP thanh toán */}
+      {isOtpModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-2">Xác nhận thanh toán</h3>
+            <p className="text-sm text-gray-600 mb-1">
+              Nhập mã OTP đã được gửi tới email của bạn để xác nhận thanh toán bằng ví.
+            </p>
+
+            {otpCountdown > 0 ? (
+              <p className="text-xs text-gray-500 mb-2">
+                OTP sẽ hết hạn sau {otpCountdown}s
+              </p>
+            ) : (
+              <p className="text-xs text-red-500 mb-2">
+                OTP đã hết hạn. Vui lòng bấm "Gửi lại OTP".
+              </p>
+            )}
+
+            <input
+              type="text"
+              value={otpInput}
+              onChange={(e) => {
+                setOtpInput(e.target.value);
+                setOtpError("");
+              }}
+              className="w-full border rounded px-3 py-2 mb-2"
+              placeholder="Nhập mã OTP"
+            />
+
+            {otpError && (
+              <p className="text-xs text-red-500 mb-2">{otpError}</p>
+            )}
+
+            <div className="flex justify-between items-center mt-2">
+              <button
+                type="button"
+                className="px-3 py-2 text-sm border rounded"
+                onClick={() => {
+                  setIsOtpModalOpen(false);
+                  setOtpInput("");
+                  setOtpCountdown(0);
+                  setOtpError("");
+                }}
+              >
+                Hủy
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={isSendingOtp || otpCountdown > 0}
+                  className="px-3 py-2 text-xs border rounded disabled:opacity-50"
+                  onClick={async () => {
+                    if (otpCountdown > 0) return;
+                    await sendOtpForPayment(); // gửi lại OTP
+                  }}
+                >
+                  {isSendingOtp ? "Đang gửi..." : "Gửi lại OTP"}
+                </button>
+
+                <button
+                  type="button"
+                  className="px-4 py-2 text-sm bg-emerald-600 text-white rounded"
+                  onClick={handlePayOrderWithOtp}
+                >
+                  Xác nhận
                 </button>
               </div>
             </div>
