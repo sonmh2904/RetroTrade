@@ -264,7 +264,6 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
   ) => {
     const value = e.target.value;
     setDistrictSearchTerm(value);
-    setNewAddress(prev => ({ ...prev, District: value })); // Allow free text input
     if (!showDistrictDropdown) {
       setShowDistrictDropdown(true);
     }
