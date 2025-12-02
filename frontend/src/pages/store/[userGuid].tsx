@@ -27,6 +27,32 @@ import type { OwnerRatingStats } from "@/components/owner/OwnerRatingsSection";
 import AddToCartButton from "@/components/ui/common/AddToCartButton";
 import { toast } from "sonner";
 
+// Helper function to render stars with precise fractional star support
+const renderStars = (rating: number) => {
+  const fullStars = Math.floor(rating);
+  const decimalPart = rating % 1;
+  const emptyStars = 5 - fullStars - (decimalPart > 0 ? 1 : 0);
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(fullStars)].map((_, i) => (
+        <Star key={`full-${i}`} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+      ))}
+      {decimalPart > 0 && (
+        <div className="relative">
+          <Star className="w-4 h-4 text-gray-300" />
+          <div className="absolute inset-0 overflow-hidden" style={{ width: `${decimalPart * 100}%` }}>
+            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+          </div>
+        </div>
+      )}
+      {[...Array(emptyStars)].map((_, i) => (
+        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
+      ))}
+    </div>
+  );
+};
+
 interface Product {
   DepositAmount: number;
   IsHighlighted: boolean;
@@ -475,8 +501,14 @@ export default function OwnerStorePage() {
                 </span>
               </div>
               <div className="flex items-center gap-4 mb-4 text-sm text-gray-600 flex-wrap">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                <div className="flex items-center gap-2">
+                  {renderStars(
+                    parseFloat(
+                      ownerRatingStats?.average?.toFixed(1) ||
+                      ownerInfo.reputationScore?.toFixed(1) ||
+                      "5.0"
+                    )
+                  )}
                   <span className="font-semibold text-gray-900">
                     {ownerRatingStats?.average?.toFixed(1) ||
                       ownerInfo.reputationScore?.toFixed(1) ||
