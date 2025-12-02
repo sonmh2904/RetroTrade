@@ -43,7 +43,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { type UserAddress } from "@/services/auth/userAddress.api";
-import { payOrderWithWallet } from "@/services/wallet/wallet.api";
+import { payOrderWithWallet, requestPaymentOtp } from "@/services/wallet/wallet.api";
 import PopupModal from "@/components/ui/common/PopupModal";
 import { useAppDispatch } from "@/store/hooks";
 import { AddressSelector } from "@/components/ui/auth/address/address-selector";
@@ -129,7 +129,7 @@ export default function Checkout() {
     isOpen: false,
     title: "Xác nhận",
     message: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
   // thanh toan
   const [modal, setModal] = useState({ open: false, title: "", message: "" });
@@ -148,6 +148,13 @@ export default function Checkout() {
   const [discountListError, setDiscountListError] = useState<string | null>(
     null
   );
+  // OTP state
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [currentOrderIdForOtp, setCurrentOrderIdForOtp] = useState<string | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0); // giây
+  const [otpError, setOtpError] = useState("");
   const [paymentOption, setPaymentOption] = useState<"pay_now" | "pay_later">(
     "pay_now"
   ); //Option payment
@@ -379,13 +386,13 @@ export default function Checkout() {
   // Cache tính toán billableUnits và exactUnits cho tất cả items (chỉ tính 1 lần)
   const itemsCalculations = useMemo(() => {
     const calculations = new Map<string, { billableUnits: number; exactUnits: number }>();
-    
+
     cartItems.forEach((item) => {
       const exactUnits = getExactRentalUnits(item);
       const billableUnits = getBillableUnits(item);
       calculations.set(item._id, { billableUnits, exactUnits });
     });
-    
+
     return calculations;
   }, [cartItems]);
 
@@ -1004,119 +1011,119 @@ export default function Checkout() {
   );
 
   // Update rental dates - mượn logic từ cart page
-const updateRentalDates = useCallback(
-  async (
-    cartItemId: string,
-    rentalStartDateTime: string,
-    rentalEndDateTime: string
-  ) => {
-    if (!rentalStartDateTime || !rentalEndDateTime) {
-      toast.error("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc");
-      return;
-    }
-
-    const startDate = new Date(rentalStartDateTime);
-    const endDate = new Date(rentalEndDateTime);
-    const diffHours =
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
-
-    if (diffHours <= 0) {
-      toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
-      return;
-    }
-
-    if (diffHours > 365 * 24) {
-      toast.error("Thời gian thuê không được vượt quá 365 ngày");
-      return;
-    }
-
-    const item = cartItems.find((i) => i._id === cartItemId);
-    if (!item) return;
-
-    // Tạo item tạm với thời gian mới để validate
-    const tempItemForValidation = {
-      ...item,
-      rentalStartDate: rentalStartDateTime,
-      rentalEndDate: rentalEndDateTime,
-    };
-
-    // VALIDATE CHÍNH XÁC THEO ĐƠN VỊ GIÁ (giờ/ngày/tuần/tháng) với thời gian mới
-    const validation = validateRentalDuration(tempItemForValidation);
-
-    if (!validation.isValid) {
-      if (validation.exactUnits < validation.min) {
-        toast.error(
-          `"${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
-            `Bạn chỉ chọn ${validation.exactUnits.toFixed(1)} ${validation.unitName}.`,
-          { duration: 8000, }
-        );
-      } else if (validation.exactUnits > validation.max) {
-        toast.error(`"${item.title}" chỉ cho thuê tối đa ${validation.max} ${validation.unitName}.`);
-      } else {
-        toast.error(`"${item.title}" có thời gian thuê không hợp lệ.`);
+  const updateRentalDates = useCallback(
+    async (
+      cartItemId: string,
+      rentalStartDateTime: string,
+      rentalEndDateTime: string
+    ) => {
+      if (!rentalStartDateTime || !rentalEndDateTime) {
+        toast.error("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc");
+        return;
       }
-      return;
-    }
 
-    // Nếu qua hết validate → mới cho lưu
-    try {
-      setUpdatingItems((prev) => new Set(prev).add(cartItemId));
+      const startDate = new Date(rentalStartDateTime);
+      const endDate = new Date(rentalEndDateTime);
+      const diffHours =
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
 
-      if (cartItemId.startsWith("temp-")) {
-        const updatedItems = cartItems.map((i) =>
-          i._id === cartItemId
-            ? {
+      if (diffHours <= 0) {
+        toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
+        return;
+      }
+
+      if (diffHours > 365 * 24) {
+        toast.error("Thời gian thuê không được vượt quá 365 ngày");
+        return;
+      }
+
+      const item = cartItems.find((i) => i._id === cartItemId);
+      if (!item) return;
+
+      // Tạo item tạm với thời gian mới để validate
+      const tempItemForValidation = {
+        ...item,
+        rentalStartDate: rentalStartDateTime,
+        rentalEndDate: rentalEndDateTime,
+      };
+
+      // VALIDATE CHÍNH XÁC THEO ĐƠN VỊ GIÁ (giờ/ngày/tuần/tháng) với thời gian mới
+      const validation = validateRentalDuration(tempItemForValidation);
+
+      if (!validation.isValid) {
+        if (validation.exactUnits < validation.min) {
+          toast.error(
+            `"${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
+            `Bạn chỉ chọn ${validation.exactUnits.toFixed(1)} ${validation.unitName}.`,
+            { duration: 8000, }
+          );
+        } else if (validation.exactUnits > validation.max) {
+          toast.error(`"${item.title}" chỉ cho thuê tối đa ${validation.max} ${validation.unitName}.`);
+        } else {
+          toast.error(`"${item.title}" có thời gian thuê không hợp lệ.`);
+        }
+        return;
+      }
+
+      // Nếu qua hết validate → mới cho lưu
+      try {
+        setUpdatingItems((prev) => new Set(prev).add(cartItemId));
+
+        if (cartItemId.startsWith("temp-")) {
+          const updatedItems = cartItems.map((i) =>
+            i._id === cartItemId
+              ? {
                 ...i,
                 rentalStartDate: rentalStartDateTime,
                 rentalEndDate: rentalEndDateTime,
               }
-            : i
+              : i
+          );
+          sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+          setCartItems(updatedItems);
+          cancelEditingDates(cartItemId);
+          toast.success("Đã cập nhật thời gian thuê");
+          return;
+        }
+
+        await dispatch(
+          updateCartItemAction(cartItemId, {
+            rentalStartDate: rentalStartDateTime,
+            rentalEndDate: rentalEndDateTime,
+          })
         );
-        sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
-        setCartItems(updatedItems);
-        cancelEditingDates(cartItemId);
-        toast.success("Đã cập nhật thời gian thuê");
-        return;
-      }
 
-      await dispatch(
-        updateCartItemAction(cartItemId, {
-          rentalStartDate: rentalStartDateTime,
-          rentalEndDate: rentalEndDateTime,
-        })
-      );
-      
-      // Fetch lại từ server để đảm bảo dữ liệu chính xác
-      await dispatch(fetchCartItems());
+        // Fetch lại từ server để đảm bảo dữ liệu chính xác
+        await dispatch(fetchCartItems());
 
-      // Cập nhật với giá trị đã lưu thành công (giữ nguyên format từ input)
-      const updatedItems = cartItems.map((i) =>
-        i._id === cartItemId
-          ? {
+        // Cập nhật với giá trị đã lưu thành công (giữ nguyên format từ input)
+        const updatedItems = cartItems.map((i) =>
+          i._id === cartItemId
+            ? {
               ...i,
               rentalStartDate: rentalStartDateTime,
               rentalEndDate: rentalEndDateTime,
             }
-          : i
-      );
-      sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
-      setCartItems(updatedItems);
+            : i
+        );
+        sessionStorage.setItem("checkoutItems", JSON.stringify(updatedItems));
+        setCartItems(updatedItems);
 
-      toast.success("Đã cập nhật thời gian thuê thành công");
-      cancelEditingDates(cartItemId);
-    } catch {
-      toast.error("Có lỗi xảy ra khi cập nhật thời gian thuê");
-      dispatch(fetchCartItems());
-    } finally {
-      setUpdatingItems((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(cartItemId);
-        return newSet;
-      });
-    }
-  },
-  [cartItems, dispatch, cancelEditingDates]
-);
+        toast.success("Đã cập nhật thời gian thuê thành công");
+        cancelEditingDates(cartItemId);
+      } catch {
+        toast.error("Có lỗi xảy ra khi cập nhật thời gian thuê");
+        dispatch(fetchCartItems());
+      } finally {
+        setUpdatingItems((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(cartItemId);
+          return newSet;
+        });
+      }
+    },
+    [cartItems, dispatch, cancelEditingDates]
+  );
   // ham submit mơi
 
   const processPayment = async () => {
@@ -1150,7 +1157,6 @@ const updateRentalDates = useCallback(
           itemRental - itemDiscount + itemDeposit + itemServiceFee
         );
       };
-
       for (const item of itemsToProcess) {
         console.log("Bắt đầu xử lý cho:", item.title);
 
@@ -1220,15 +1226,38 @@ const updateRentalDates = useCallback(
         // Tính số tiền cần trừ cho chính xác từng đơn (không dùng grandTotal chung!)
         const amountToPay = getItemGrandTotal(item);
 
+        // Bắt buộc có OTP khi pay_now
+        if (paymentOption === "pay_now") {
+          if (!otpInput || otpInput.trim().length === 0) {
+            setOtpError("Vui lòng nhập mã OTP để xác nhận thanh toán.");
+            return; // không đánh dấu fail, để user nhập tiếp
+          }
+        }
+
         try {
-          const paymentResult = await payOrderWithWallet(orderId);
+
+          const paymentResult = await payOrderWithWallet(orderId, otpInput.trim());
+
 
           if (!paymentResult?.success) {
             const msg =
               paymentResult?.message ||
               paymentResult?.error ||
               "Thanh toán thất bại";
+            // Nếu là lỗi OTP -> hiển thị trong modal, không đóng modal, không fail tất cả đơn
+            if (msg.includes("OTP")) {
+              setOtpError(msg); // "OTP không hợp lệ hoặc đã hết hạn"
+              return;           // dừng processPayment, user sửa OTP
+            }
             toast.error(`Thanh toán thất bại: ${item.title} - ${msg}`);
+
+            // Nếu là OTP sai/hết hạn → cho nhập lại
+            if (msg.includes("OTP")) {
+              // không đánh dấu failed toàn bộ, chỉ break/return để user mở lại modal
+              failedItemIds.push(item._id);
+              failedItemMessages.push(item.title + " (OTP lỗi)");
+              break;
+            }
 
             // Đặc biệt: nếu ví không đủ → hiện modal + dừng toàn bộ
             if (msg.includes("không đủ") || msg.includes("insufficient")) {
@@ -1241,9 +1270,9 @@ const updateRentalDates = useCallback(
                 setErrorModalTitle("Ví không đủ tiền");
                 setErrorModalMessage(
                   `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
-                    `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
-                    `Thiếu: ${shortage.toLocaleString("vi-VN")}₫\n\n` +
-                    `Vui lòng nạp thêm tiền để tiếp tục.`
+                  `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
+                  `Thiếu: ${shortage.toLocaleString("vi-VN")}₫\n\n` +
+                  `Vui lòng nạp thêm tiền để tiếp tục.`
                 );
                 setIsErrorModalOpen(true);
 
@@ -1279,8 +1308,8 @@ const updateRentalDates = useCallback(
               setErrorModalTitle("Ví không đủ tiền");
               setErrorModalMessage(
                 `Số dư ví: ${balance.toLocaleString("vi-VN")}₫\n\n` +
-                  `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
-                  `Thiếu: ${shortage.toLocaleString("vi-VN")}₫`
+                `Cần thanh toán: ${required.toLocaleString("vi-VN")}₫\n\n` +
+                `Thiếu: ${shortage.toLocaleString("vi-VN")}₫`
               );
               setIsErrorModalOpen(true);
 
@@ -1324,9 +1353,8 @@ const updateRentalDates = useCallback(
       } else if (successCount > 0) {
         toast.warning(
           `Đã xử lý thành công ${successCount} sản phẩm. ` +
-            `${
-              failedItemIds.length
-            } sản phẩm thất bại: ${failedItemMessages.join(", ")}`
+          `${failedItemIds.length
+          } sản phẩm thất bại: ${failedItemMessages.join(", ")}`
         );
 
         const remaining = [
@@ -1348,6 +1376,34 @@ const updateRentalDates = useCallback(
       setIsSubmitting(false);
     }
   };
+  // OTP cho thanh toán
+  const sendOtpForPayment = async () => {
+    try {
+      setIsSendingOtp(true);
+      setOtpError("");
+      await requestPaymentOtp();
+      toast.success("Đã gửi mã OTP xác nhận thanh toán về email của bạn.");
+      setIsOtpModalOpen(true);
+      setOtpCountdown(180); // 3 phút
+    } catch (e) {
+      console.error("Gửi OTP thanh toán lỗi:", e);
+      toast.error("Không gửi được OTP thanh toán. Vui lòng thử lại.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // Đếm ngược OTP 3 phút 
+  useEffect(() => {
+    if (!isOtpModalOpen || otpCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isOtpModalOpen, otpCountdown]);
+
+
+
 
   const handleSubmit = () => {
     // Check if address is selected or manually filled
@@ -1396,9 +1452,8 @@ const updateRentalDates = useCallback(
         if (validation.exactUnits < validation.min) {
           toast.error(
             `Sản phẩm "${item.title}" yêu cầu thuê tối thiểu ${validation.min} ${validation.unitName}.\n` +
-              `Bạn chỉ chọn ${
-                validation.exactUnits === 0 ? "0" : validation.exactUnits.toFixed(1)
-              } ${validation.unitName}.`
+            `Bạn chỉ chọn ${validation.exactUnits === 0 ? "0" : validation.exactUnits.toFixed(1)
+            } ${validation.unitName}.`
           );
         } else if (validation.exactUnits > validation.max) {
           toast.error(
@@ -1437,17 +1492,22 @@ const updateRentalDates = useCallback(
         ? "⚠️ Sau khi xác nhận, tiền sẽ được trừ ngay từ ví của bạn."
         : "✅ Bạn chỉ tạo đơn hàng, chưa bị trừ tiền ví. Có thể thanh toán sau trong mục Đơn thuê.";
 
-    const message = `Bạn có chắc chắn muốn ${
-      paymentOption === "pay_now" ? "thanh toán" : "tạo đơn thuê"
-    } ${selectedCartItems.length} sản phẩm?\n\n${paymentDetails.join(
-      "\n"
-    )}\n\n${warningText}`;
+    const message = `Bạn có chắc chắn muốn ${paymentOption === "pay_now" ? "thanh toán" : "tạo đơn thuê"
+      } ${selectedCartItems.length} sản phẩm?\n\n${paymentDetails.join(
+        "\n"
+      )}\n\n${warningText}`;
 
     setConfirmPopup({
       isOpen: true,
       title: "Xác nhận thanh toán",
-      message: message,
-      onConfirm: processPayment,
+      message,
+      onConfirm: async () => {
+        if (paymentOption === "pay_now") {
+          await sendOtpForPayment();   // gửi OTP + mở modal
+        } else {
+          await processPayment();      // pay_later chạy thẳng, không OTP
+        }
+      },
     });
   };
 
@@ -1484,10 +1544,9 @@ const updateRentalDates = useCallback(
 
   return (
     <>
-      <div 
-        className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6 transition-opacity duration-300 ${
-          isAnyModalOpen ? "pointer-events-none opacity-50" : ""
-        }`}
+      <div
+        className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 py-10 px-6 transition-opacity duration-300 ${isAnyModalOpen ? "pointer-events-none opacity-50" : ""
+          }`}
       >
         <div className="max-w-7xl mx-auto">
           {/* Breadcrumb Navigation */}
@@ -1551,11 +1610,10 @@ const updateRentalDates = useCallback(
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-emerald-200 shadow-sm">
                       <CheckCircle2
-                        className={`w-4 h-4 ${
-                          selectedItemIds.length > 0
-                            ? "text-emerald-600"
-                            : "text-gray-400"
-                        }`}
+                        className={`w-4 h-4 ${selectedItemIds.length > 0
+                          ? "text-emerald-600"
+                          : "text-gray-400"
+                          }`}
                       />
                       <span className="text-sm font-semibold text-gray-700">
                         Đã chọn{" "}
@@ -1600,11 +1658,10 @@ const updateRentalDates = useCallback(
                     return (
                       <div
                         key={item._id}
-                        className={`group relative flex gap-4 p-5 rounded-2xl border-2 transition-all duration-300 ${
-                          isSelected
-                            ? "border-emerald-500 bg-gradient-to-br from-emerald-50 to-white shadow-xl ring-2 ring-emerald-200"
-                            : "bg-white border-gray-200 hover:border-emerald-300 hover:shadow-lg"
-                        }`}
+                        className={`group relative flex gap-4 p-5 rounded-2xl border-2 transition-all duration-300 ${isSelected
+                          ? "border-emerald-500 bg-gradient-to-br from-emerald-50 to-white shadow-xl ring-2 ring-emerald-200"
+                          : "bg-white border-gray-200 hover:border-emerald-300 hover:shadow-lg"
+                          }`}
                       >
                         {/* Checkbox at the beginning */}
                         <div className="flex-shrink-0 pt-1">
@@ -1619,11 +1676,10 @@ const updateRentalDates = useCallback(
                               aria-label={`Chọn sản phẩm ${item.title}`}
                             />
                             <div
-                              className={`relative w-6 h-6 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${
-                                isSelected
-                                  ? "bg-emerald-600 border-emerald-600 shadow-md scale-110"
-                                  : "bg-white border-gray-300 group-hover/checkbox:border-emerald-400 group-hover/checkbox:bg-emerald-50"
-                              }`}
+                              className={`relative w-6 h-6 rounded-lg border-2 transition-all duration-200 flex items-center justify-center ${isSelected
+                                ? "bg-emerald-600 border-emerald-600 shadow-md scale-110"
+                                : "bg-white border-gray-300 group-hover/checkbox:border-emerald-400 group-hover/checkbox:bg-emerald-50"
+                                }`}
                             >
                               {isSelected && (
                                 <Check className="w-4 h-4 text-white" />
@@ -1634,11 +1690,10 @@ const updateRentalDates = useCallback(
 
                         {/* Product Image */}
                         <div
-                          className={`relative bg-gray-100 rounded-xl w-32 h-32 flex-shrink-0 overflow-hidden ring-2 transition-all ${
-                            isSelected
-                              ? "ring-emerald-300 shadow-md"
-                              : "ring-gray-200 group-hover:ring-emerald-200"
-                          }`}
+                          className={`relative bg-gray-100 rounded-xl w-32 h-32 flex-shrink-0 overflow-hidden ring-2 transition-all ${isSelected
+                            ? "ring-emerald-300 shadow-md"
+                            : "ring-gray-200 group-hover:ring-emerald-200"
+                            }`}
                         >
                           {item.primaryImage ? (
                             <Image
@@ -1665,11 +1720,10 @@ const updateRentalDates = useCallback(
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <h3
-                                className={`text-xl font-bold line-clamp-2 mb-2 transition-colors ${
-                                  isSelected
-                                    ? "text-emerald-800"
-                                    : "text-gray-800 group-hover:text-emerald-700"
-                                }`}
+                                className={`text-xl font-bold line-clamp-2 mb-2 transition-colors ${isSelected
+                                  ? "text-emerald-800"
+                                  : "text-gray-800 group-hover:text-emerald-700"
+                                  }`}
                               >
                                 {item.title}
                               </h3>
@@ -1728,20 +1782,18 @@ const updateRentalDates = useCallback(
 
                           {/* Rental Dates - chỉnh sửa trực tiếp như cart page */}
                           <div
-                            className={`bg-gray-50 px-4 py-3 rounded-lg transition-all duration-300 ${
-                              updatingItems.has(item._id)
-                                ? "opacity-75 bg-gray-100"
-                                : ""
-                            }`}
+                            className={`bg-gray-50 px-4 py-3 rounded-lg transition-all duration-300 ${updatingItems.has(item._id)
+                              ? "opacity-75 bg-gray-100"
+                              : ""
+                              }`}
                           >
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <Calendar
-                                  className={`w-5 h-5 text-emerald-600 ${
-                                    updatingItems.has(item._id)
-                                      ? "animate-pulse"
-                                      : ""
-                                  }`}
+                                  className={`w-5 h-5 text-emerald-600 ${updatingItems.has(item._id)
+                                    ? "animate-pulse"
+                                    : ""
+                                    }`}
                                 />
                                 <span className="text-base font-medium text-gray-700">
                                   Thời gian thuê:
@@ -1819,7 +1871,7 @@ const updateRentalDates = useCallback(
                                   };
 
                                   const validation = validateRentalDuration(tempItem);
-                                   
+
                                   return (
                                     <>
                                       {/* CẢNH BÁO */}
@@ -1884,11 +1936,10 @@ const updateRentalDates = useCallback(
                             ) : (
                               /* ==================== DISPLAY MODE (giữ nguyên) ==================== */
                               <div
-                                className={`transition-all duration-300 ${
-                                  updatingItems.has(item._id)
-                                    ? "opacity-60"
-                                    : "opacity-100"
-                                }`}
+                                className={`transition-all duration-300 ${updatingItems.has(item._id)
+                                  ? "opacity-60"
+                                  : "opacity-100"
+                                  }`}
                               >
                                 {item.rentalStartDate && item.rentalEndDate ? (
                                   <div className="text-sm text-gray-700">
@@ -1977,11 +2028,10 @@ const updateRentalDates = useCallback(
                     <button
                       onClick={() => goToPage(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className={`flex items-center gap-1 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                        currentPage === 1
-                          ? "text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50"
-                          : "text-gray-700 border-gray-300 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700"
-                      }`}
+                      className={`flex items-center gap-1 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${currentPage === 1
+                        ? "text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50"
+                        : "text-gray-700 border-gray-300 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700"
+                        }`}
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Trước
@@ -2003,11 +2053,10 @@ const updateRentalDates = useCallback(
                         <button
                           key={pageNum}
                           onClick={() => goToPage(pageNum)}
-                          className={`w-10 h-10 flex items-center justify-center rounded-lg border text-sm font-medium transition-all ${
-                            currentPage === pageNum
-                              ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
-                              : "border-gray-300 text-gray-700 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700"
-                          }`}
+                          className={`w-10 h-10 flex items-center justify-center rounded-lg border text-sm font-medium transition-all ${currentPage === pageNum
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
+                            : "border-gray-300 text-gray-700 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700"
+                            }`}
                         >
                           {pageNum}
                         </button>
@@ -2017,11 +2066,10 @@ const updateRentalDates = useCallback(
                     <button
                       onClick={() => goToPage(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className={`flex items-center gap-1 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                        currentPage === totalPages
-                          ? "text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50"
-                          : "text-gray-700 border-gray-300 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700"
-                      }`}
+                      className={`flex items-center gap-1 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${currentPage === totalPages
+                        ? "text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50"
+                        : "text-gray-700 border-gray-300 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700"
+                        }`}
                     >
                       Sau
                       <ChevronRight className="w-4 h-4" />
@@ -2194,17 +2242,16 @@ const updateRentalDates = useCallback(
                               Công khai
                             </span>
                             <span
-                              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
-                                publicDiscount.type === "percent"
-                                  ? "bg-orange-100 text-orange-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
+                              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${publicDiscount.type === "percent"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-emerald-100 text-emerald-700"
+                                }`}
                             >
                               {publicDiscount.type === "percent"
                                 ? `-${publicDiscount.value}%`
                                 : `-${publicDiscount.value.toLocaleString(
-                                    "vi-VN"
-                                  )}₫`}
+                                  "vi-VN"
+                                )}₫`}
                             </span>
                           </div>
                           <p className="text-[10px] text-blue-100/90 font-medium">
@@ -2239,17 +2286,16 @@ const updateRentalDates = useCallback(
                               Riêng tư
                             </span>
                             <span
-                              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
-                                privateDiscount.type === "percent"
-                                  ? "bg-orange-100 text-orange-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
+                              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${privateDiscount.type === "percent"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-emerald-100 text-emerald-700"
+                                }`}
                             >
                               {privateDiscount.type === "percent"
                                 ? `-${privateDiscount.value}%`
                                 : `-${privateDiscount.value.toLocaleString(
-                                    "vi-VN"
-                                  )}₫`}
+                                  "vi-VN"
+                                )}₫`}
                             </span>
                           </div>
                           <p className="text-[10px] text-purple-100/90 font-medium">
@@ -2283,8 +2329,8 @@ const updateRentalDates = useCallback(
                             publicDiscount && !privateDiscount
                               ? "Nhập mã riêng tư"
                               : !publicDiscount && privateDiscount
-                              ? "Nhập mã công khai"
-                              : "Nhập mã giảm giá"
+                                ? "Nhập mã công khai"
+                                : "Nhập mã giảm giá"
                           }
                           value={discountCode}
                           onChange={(e) => {
@@ -2333,8 +2379,8 @@ const updateRentalDates = useCallback(
                                   const isAlreadyApplied = Boolean(
                                     (publicDiscount &&
                                       publicDiscount.code === discount.code) ||
-                                      (privateDiscount &&
-                                        privateDiscount.code === discount.code)
+                                    (privateDiscount &&
+                                      privateDiscount.code === discount.code)
                                   );
                                   const canUse =
                                     discount.active &&
@@ -2348,36 +2394,33 @@ const updateRentalDates = useCallback(
                                         canUse && handleSelectDiscount(discount)
                                       }
                                       disabled={!canUse}
-                                      className={`w-full p-3 text-left transition-all ${
-                                        !canUse
-                                          ? "bg-gray-50 opacity-60 cursor-not-allowed"
-                                          : "hover:bg-emerald-50 hover:shadow-sm"
-                                      }`}
+                                      className={`w-full p-3 text-left transition-all ${!canUse
+                                        ? "bg-gray-50 opacity-60 cursor-not-allowed"
+                                        : "hover:bg-emerald-50 hover:shadow-sm"
+                                        }`}
                                     >
                                       <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 flex-wrap mb-1.5">
                                             <span
-                                              className={`font-bold text-sm ${
-                                                !canUse
-                                                  ? "text-gray-500"
-                                                  : "text-emerald-600"
-                                              }`}
+                                              className={`font-bold text-sm ${!canUse
+                                                ? "text-gray-500"
+                                                : "text-emerald-600"
+                                                }`}
                                             >
                                               {discount.code}
                                             </span>
                                             <span
-                                              className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                                                discount.type === "percent"
-                                                  ? "bg-orange-100 text-orange-700"
-                                                  : "bg-blue-100 text-blue-700"
-                                              }`}
+                                              className={`text-[10px] font-semibold px-2 py-0.5 rounded ${discount.type === "percent"
+                                                ? "bg-orange-100 text-orange-700"
+                                                : "bg-blue-100 text-blue-700"
+                                                }`}
                                             >
                                               {discount.type === "percent"
                                                 ? `-${discount.value}%`
                                                 : `-${discount.value.toLocaleString(
-                                                    "vi-VN"
-                                                  )}₫`}
+                                                  "vi-VN"
+                                                )}₫`}
                                             </span>
                                             {discount.isPublic ? (
                                               <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
@@ -2449,7 +2492,7 @@ const updateRentalDates = useCallback(
                                                 baseAmount = Math.max(
                                                   0,
                                                   rentalTotal -
-                                                    publicDiscountAmount
+                                                  publicDiscountAmount
                                                 );
                                               }
                                               const previewAmount =
@@ -2718,7 +2761,7 @@ const updateRentalDates = useCallback(
                 isOpen: false,
                 title: "",
                 message: "",
-                onConfirm: () => {},
+                onConfirm: () => { },
               })
             }
             onMouseDown={(e) => e.preventDefault()}
@@ -2751,7 +2794,7 @@ const updateRentalDates = useCallback(
                       isOpen: false,
                       title: "",
                       message: "",
-                      onConfirm: () => {},
+                      onConfirm: () => { },
                     })
                   }
                   className="flex-1 py-2.5 px-5 text-base font-semibold rounded-lg transition-all duration-200 hover:scale-105 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
@@ -2765,7 +2808,7 @@ const updateRentalDates = useCallback(
                       isOpen: false,
                       title: "",
                       message: "",
-                      onConfirm: () => {},
+                      onConfirm: () => { },
                     });
                   }}
                   className="flex-1 py-2.5 px-5 text-base font-semibold rounded-lg transition-all duration-200 hover:scale-105 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
@@ -2780,7 +2823,7 @@ const updateRentalDates = useCallback(
       {modal.open && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
             onClick={() => setModal({ ...modal, open: false })}
             onMouseDown={(e) => e.preventDefault()}
@@ -2820,6 +2863,91 @@ const updateRentalDates = useCallback(
             router.push("/wallet");
           }}
         />
+      )}
+      {/* OTP Modal */}
+      {isOtpModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-2">Xác nhận thanh toán</h3>
+            <p className="text-sm text-gray-600 mb-1">
+              Nhập mã OTP đã được gửi tới email của bạn để xác nhận thanh toán bằng ví.
+            </p>
+
+            {otpCountdown > 0 ? (
+              <p className="text-xs text-gray-500 mb-2">
+                OTP sẽ hết hạn sau {otpCountdown}s
+              </p>
+            ) : (
+              <p className="text-xs text-red-500 mb-2">
+                OTP đã hết hạn. Vui lòng bấm "Gửi lại OTP".
+              </p>
+            )}
+
+            <input
+              type="text"
+              value={otpInput}
+              onChange={(e) => {
+                setOtpInput(e.target.value);
+                setOtpError("");
+              }}
+              className="w-full border rounded px-3 py-2 mb-2"
+              placeholder="Nhập mã OTP"
+            />
+
+            {otpError && (
+              <p className="text-xs text-red-500 mb-2">
+                {otpError}
+              </p>
+            )}
+
+            <div className="flex justify-between items-center mt-2">
+              <button
+                type="button"
+                className="px-3 py-2 text-sm border rounded"
+                onClick={() => {
+                  setIsOtpModalOpen(false);
+                  setOtpInput("");
+                  setOtpCountdown(0);
+                  setOtpError("");
+                }}
+              >
+                Hủy
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={isSendingOtp || otpCountdown > 0}
+                  className="px-3 py-2 text-xs border rounded disabled:opacity-50"
+                  onClick={async () => {
+                    if (otpCountdown > 0) return;
+                    await sendOtpForPayment(); // gửi lại OTP
+                  }}
+                >
+                  {isSendingOtp ? "Đang gửi..." : "Gửi lại OTP"}
+                </button>
+
+                <button
+                  type="button"
+                  className="px-4 py-2 text-sm bg-emerald-600 text-white rounded"
+                  onClick={async () => {
+                    if (!otpInput.trim()) {
+                      setOtpError("Vui lòng nhập mã OTP");
+                      return;
+                    }
+                    if (otpCountdown <= 0) {
+                      setOtpError("OTP đã hết hạn, vui lòng Gửi lại OTP.");
+                      return;
+                    }
+                    await processPayment(); // nếu OTP sai, modal vẫn mở và otpError được set
+                  }}
+                >
+                  Xác nhận
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
