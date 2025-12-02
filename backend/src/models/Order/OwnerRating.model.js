@@ -41,6 +41,12 @@ const ownerRatingSchema = new mongoose.Schema(
       },
     ],
 
+    videos: [
+      {
+        type: String,
+      },
+    ],
+
     isEdited: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
   },
