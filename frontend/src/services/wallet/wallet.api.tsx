@@ -129,12 +129,9 @@ export const deleteBankAccount = async (id: string) => {
   }
 };
 // API thanh toán đơn hàng sử dụng ví của người dùng
-export const payOrderWithWallet = async (orderId: string, userId?: string) => {
+export const payOrderWithWallet = async (orderId: string, otp: string, userId?: string) => {
   try {
-    const payload = {
-      orderId,
-      userId,
-    };
+    const payload = {orderId,userId,otp};
     const res = await instance.post("/wallet/order/payment", payload);
     return await parseFetchResponse(res);
   } catch (error) {
@@ -142,6 +139,17 @@ export const payOrderWithWallet = async (orderId: string, userId?: string) => {
     throw error;
   }
 };
+// Gửi OTP xác nhận thanh toán ví
+export const requestPaymentOtp = async () => {
+  try {
+    const res = await instance.post("/wallet/order/payment/otp");
+    return await parseFetchResponse(res);
+  } catch (error) {
+    console.error("[wallet.api] requestPaymentOtp error:", error);
+    throw error;
+  }
+};
+
 
 // Gọi API rút tiền từ ví
 export const withdrawFromWallet = async (amount: number, note: string, bankAccountId: string) => {
