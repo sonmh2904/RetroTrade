@@ -49,7 +49,7 @@ module.exports = {
         paymentMethod = "Wallet",
         shippingAddress,
         note = "",
-        discountCode, // legacy
+        discountCode,
         publicDiscountCode,
         privateDiscountCode,
       } = req.body;
@@ -57,7 +57,7 @@ module.exports = {
       const finalStartAt = startAt || rentalStartDate;
       const finalEndAt = endAt || rentalEndDate;
 
-      // === VALIDATE REQUIRED FIELDS ===
+   
       if (!itemId || !finalStartAt || !finalEndAt || !shippingAddress) {
         await session.abortTransaction();
         return res.status(400).json({ message: "Thiếu các trường bắt buộc" });

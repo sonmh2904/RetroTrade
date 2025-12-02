@@ -94,9 +94,25 @@ router.get("/rating/item/:itemId", ratingController.getRatingsByItem);
 router.get("/rating/item/:itemId/stats", ratingController.getRatingStats);
 router.get("/rating/owner/:ownerId", getRatingByOwnerId);
 //Owner Rating
-router.post("/owner/rating/", authenticateToken, OwnerRatingController.createOwnerRating);
+router.post(
+  "/owner/rating/",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  OwnerRatingController.createOwnerRating
+);
 router.get("/owner/rating/:ownerId", OwnerRatingController.getOwnerRatings);
-router.put("/owner/rating/:id", authenticateToken, OwnerRatingController.updateOwnerRating);
+router.put(
+  "/owner/rating/:id",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  OwnerRatingController.updateOwnerRating
+);
 router.delete("/owner/rating/:id", authenticateToken, OwnerRatingController.deleteOwnerRating);
 //owner
 router.get("/user", authenticateToken, getUserProducts);

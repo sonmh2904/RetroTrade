@@ -491,292 +491,291 @@ export default function OrderListPage({
                 const isRenter =
                   userRole === "renter" ||
                   order.renterId?._id?.toString() === userId?.toString();
-                const canReturn =
-                  isRenter &&
-                  order.orderStatus === "progress" &&
-                  order.renterId?._id?.toString() === userId?.toString();
+               
+                  const isCurrentUserTheRenter =
+                    String(order.renterId) === String(userId);
 
-                return (
-                  <div
-                    key={order._id}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="flex items-center gap-2 text-sm font-semibold text-blue-700">
-                        <ClipboardList className="w-4 h-4" />
-                        Mã đơn:
-                        <span className="font-mono">
-                          #{order.orderGuid.slice(0, 8).toUpperCase()}
-                        </span>
-                      </p>
-                    </div>
+                  const canShowReturnButton =
+                    order.orderStatus === "progress" && isCurrentUserTheRenter;
 
-                    <div className="flex flex-col md:flex-row gap-6">
-                      {/* Product Image */}
-                      <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full md:w-32 h-32 flex-shrink-0 overflow-hidden">
-                        {order.itemSnapshot?.images?.[0] ||
-                        order.itemId?.Images?.[0] ? (
-                          <img
-                            src={
-                              order.itemSnapshot?.images?.[0] ||
-                              order.itemId?.Images?.[0]
-                            }
-                            alt={
-                              order.itemSnapshot?.title || order.itemId?.Title
-                            }
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            <Package className="w-14 h-14" />
-                          </div>
-                        )}
+                  return (
+                    <div
+                      key={order._id}
+                      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+                          <ClipboardList className="w-4 h-4" />
+                          Mã đơn:
+                          <span className="font-mono">
+                            #{order.orderGuid.slice(0, 8).toUpperCase()}
+                          </span>
+                        </p>
                       </div>
 
-                      {/* Order Details */}
-                      <div className="flex-1 space-y-4">
-                        {/* Product Name */}
-                        <div>
-                          <Link href={`/products/details?id=${order.itemId}`}>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                              {order.itemSnapshot?.title ||
-                                order.itemId?.Title ||
-                                "Sản phẩm không xác định"}
-                            </h3>
-                          </Link>
+                      <div className="flex flex-col md:flex-row gap-6">
+                        {/* Product Image */}
+                        <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full md:w-32 h-32 flex-shrink-0 overflow-hidden">
+                          {order.itemSnapshot?.images?.[0] ||
+                          order.itemId?.Images?.[0] ? (
+                            <img
+                              src={
+                                order.itemSnapshot?.images?.[0] ||
+                                order.itemId?.Images?.[0]
+                              }
+                              alt={
+                                order.itemSnapshot?.title || order.itemId?.Title
+                              }
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <Package className="w-14 h-14" />
+                            </div>
+                          )}
                         </div>
 
-                        {/* Order Status & Payment Status */}
-                        <div className="flex flex-wrap items-center gap-3">
-                          <div
-                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${statusInfo.bgColor} ${statusInfo.color}`}
-                          >
-                            {statusInfo.label}
-                          </div>
-                          <div
-                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${paymentInfo.color}`}
-                          >
-                            {paymentInfo.label}
-                          </div>
-                        </div>
-
-                        {/* Rental Period & Details */}
-                        <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <Calendar className="w-5 h-5 text-emerald-600" />
-                              <span className="font-medium">
-                                Thời gian thuê:
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-600 ml-7">
-                              {formatDateTime(order.startAt)} →{" "}
-                              {formatDateTime(order.endAt)}
-                            </div>
-                            {order.rentalDuration && (
-                              <div className="text-xs text-gray-500 ml-7">
-                                Thời lượng: {order.rentalDuration}{" "}
-                                {order.rentalUnit || "ngày"}
-                              </div>
-                            )}
+                        {/* Order Details */}
+                        <div className="flex-1 space-y-4">
+                          {/* Product Name */}
+                          <div>
+                            <Link href={`/products/details?id=${order.itemId}`}>
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                {order.itemSnapshot?.title ||
+                                  order.itemId?.Title ||
+                                  "Sản phẩm không xác định"}
+                              </h3>
+                            </Link>
                           </div>
 
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <Package className="w-5 h-5 text-blue-600" />
-                              <span className="font-medium">Số lượng:</span>
-                            </div>
-                            <div className="text-sm text-gray-600 ml-7">
-                              {order.unitCount} cái
-                            </div>
-                            {order.depositAmount && (
-                              <div className="text-xs text-gray-500 ml-7">
-                                Cọc:{" "}
-                                {order.depositAmount.toLocaleString("vi-VN")}{" "}
-                                {order.currency}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* User Info */}
-                        <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                          <div className="flex items-start gap-3">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                              <User className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">
-                                {isRenter ? "Người cho thuê" : "Người thuê"}
-                              </p>
-                              <p className="text-sm font-medium text-gray-800">
-                                {isRenter
-                                  ? order.ownerId?.fullName || "N/A"
-                                  : order.renterId?.fullName || "N/A"}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {isRenter
-                                  ? order.ownerId?.email
-                                  : order.renterId?.email}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Actions */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
+                          {/* Order Status & Payment Status */}
                           <div className="flex flex-wrap items-center gap-3">
-                            {/* Nút Xem chi tiết */}
-                            {onOpenDetail ? (
-                              <Button
-                                variant="outline"
-                                className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  onOpenDetail(order._id);
-                                }}
-                              >
-                                <Eye className="w-4 h-4 mr-2" />
-                                Xem chi tiết
-                              </Button>
-                            ) : (
-                              <Link href={`/auth/my-orders/${order._id}`}>
+                            <div
+                              className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${statusInfo.bgColor} ${statusInfo.color}`}
+                            >
+                              {statusInfo.label}
+                            </div>
+                            <div
+                              className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${paymentInfo.color}`}
+                            >
+                              {paymentInfo.label}
+                            </div>
+                          </div>
+
+                          {/* Rental Period & Details */}
+                          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <Calendar className="w-5 h-5 text-emerald-600" />
+                                <span className="font-medium">
+                                  Thời gian thuê:
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-600 ml-7">
+                                {formatDateTime(order.startAt)} →{" "}
+                                {formatDateTime(order.endAt)}
+                              </div>
+                              {order.rentalDuration && (
+                                <div className="text-xs text-gray-500 ml-7">
+                                  Thời lượng: {order.rentalDuration}{" "}
+                                  {order.rentalUnit || "ngày"}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <Package className="w-5 h-5 text-blue-600" />
+                                <span className="font-medium">Số lượng:</span>
+                              </div>
+                              <div className="text-sm text-gray-600 ml-7">
+                                {order.unitCount} cái
+                              </div>
+                              {order.depositAmount && (
+                                <div className="text-xs text-gray-500 ml-7">
+                                  Cọc:{" "}
+                                  {order.depositAmount.toLocaleString("vi-VN")}{" "}
+                                  {order.currency}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* User Info */}
+                          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 bg-blue-100 rounded-lg">
+                                <User className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">
+                                  {isRenter ? "Người cho thuê" : "Người thuê"}
+                                </p>
+                                <p className="text-sm font-medium text-gray-800">
+                                  {isRenter
+                                    ? order.ownerId?.fullName || "N/A"
+                                    : order.renterId?.fullName || "N/A"}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {isRenter
+                                    ? order.ownerId?.email
+                                    : order.renterId?.email}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Actions */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
+                            <div className="flex flex-wrap items-center gap-3">
+                              {/* Nút Xem chi tiết */}
+                              {onOpenDetail ? (
                                 <Button
                                   variant="outline"
                                   className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onOpenDetail(order._id);
+                                  }}
                                 >
                                   <Eye className="w-4 h-4 mr-2" />
                                   Xem chi tiết
                                 </Button>
-                              </Link>
-                            )}
-                            {/* Nút Huy hàng */}
-                            {order.orderStatus === "pending" && (
-                              <Button
-                                variant="destructive"
-                                className="bg-white text-red-600 border border-red-600 hover:bg-red-600 hover:text-white transition"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setCancelTarget(order);
-                                  setOpenCancelConfirm(true);
-                                }}
-                              >
-                                Hủy đơn
-                              </Button>
-                            )}
-
-                            {/* Nút Trả hàng (giữ nguyên) */}
-                            {canReturn && (
-                              <Button
-                                className="bg-teal-600 hover:bg-teal-700 text-white"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrder(order);
-                                  setOpenConfirm(true);
-                                }}
-                                disabled={processing === order._id}
-                              >
-                                {processing === order._id ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Đang xử lý...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Trả hàng
-                                  </>
-                                )}
-                              </Button>
-                            )}
-
-                            {/* NÚT THANH TOÁN NGAY - CHỈ HIỆN KHI: ĐÃ XÁC NHẬN + CHƯA THANH TOÁN */}
-                            {order.orderStatus === "confirmed" &&
-                              ["pending", "not_paid"].includes(
-                                order.paymentStatus
-                              ) && (
-                                <Button
-                                  className="bg-red-600 hover:bg-red-700 text-white font-medium shadow-md"
-                                  onClick={() => {
-                                    // Điều hướng đến trang thanh toán của đơn hàng
-                                    window.location.href = `/auth/my-orders/${order._id}?tab=payment`;
-                                  }}
-                                >
-                                  <svg
-                                    className="w-4 h-4 mr-2"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
+                              ) : (
+                                <Link href={`/auth/my-orders/${order._id}`}>
+                                  <Button
+                                    variant="outline"
+                                    className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
                                   >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M17 9V7a5 5 0 00-10 0v2m-1 4h14l1 8H5l1-8z"
-                                    />
-                                  </svg>
-                                  Thanh toán ngay
-                                </Button>
+                                    <Eye className="w-4 h-4 mr-2" />
+                                    Xem chi tiết
+                                  </Button>
+                                </Link>
                               )}
-                            {/* Nút Xác nhận đã giao */}
-                            {order.orderStatus === "delivery" && (
-                              <Button
-                                className="bg-blue-500 hover:bg-blue-600 text-white"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleConfirmDelivery(order);
-                                }}
-                                disabled={processing === order._id}
-                              >
-                                {processing === order._id ? (
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                  <>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Đã nhận hàng
-                                  </>
-                                )}
-                              </Button>
-                            )}
-
-                            {isRenter &&
-                              ["delivery", "received", "returned"].includes(
-                                order.orderStatus
-                              ) &&
-                              order.orderStatus !== "disputed" && (
+                              {/* Nút Huy hàng */}
+                              {order.orderStatus === "pending" && (
                                 <Button
                                   variant="destructive"
-                                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                                  className="bg-white text-red-600 border border-red-600 hover:bg-red-600 hover:text-white transition"
                                   onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
-                                    setDisputeTarget(order);
-                                    setOpenDisputeDialog(true);
+                                    setCancelTarget(order);
+                                    setOpenCancelConfirm(true);
                                   }}
                                 >
-                                  <AlertCircle className="w-4 h-4 mr-2" />
-                                  Khiếu nại
+                                  Hủy đơn
                                 </Button>
                               )}
 
-                            {/* Nếu đã Khiếu nạirồi thì hiện thông báo */}
-                            {order.orderStatus === "disputed" && (
-                              <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
-                                <AlertCircle className="w-4 h-4" />
-                                Đơn hàng đang được xử lý Khiếu nại
-                              </div>
-                            )}
-                          </div>
+                              {/* Nút Trả hàng (giữ nguyên) */}
+                              {canShowReturnButton && (
+                                <Button
+                                  className="bg-teal-600 hover:bg-teal-700 text-white"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedOrder(order);
+                                    setOpenConfirm(true);
+                                  }}
+                                  disabled={processing === order._id}
+                                >
+                                  {processing === order._id ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Đang xử lý...
+                                    </>
+                                  ) : (
+                                    <>Trả hàng</>
+                                  )}
+                                </Button>
+                              )}
 
-                          {/* Thời gian cập nhật */}
-                          <div className="text-xs text-gray-500">
-                            Cập nhật: {formatDateTime(order.updatedAt)}
+                              {/* NÚT THANH TOÁN NGAY - CHỈ HIỆN KHI: ĐÃ XÁC NHẬN + CHƯA THANH TOÁN */}
+                              {order.orderStatus === "confirmed" &&
+                                ["pending", "not_paid"].includes(
+                                  order.paymentStatus
+                                ) && (
+                                  <Button
+                                    className="bg-red-600 hover:bg-red-700 text-white font-medium shadow-md"
+                                    onClick={() => {
+                                      // Điều hướng đến trang thanh toán của đơn hàng
+                                      window.location.href = `/auth/my-orders/${order._id}?tab=payment`;
+                                    }}
+                                  >
+                                    <svg
+                                      className="w-4 h-4 mr-2"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M17 9V7a5 5 0 00-10 0v2m-1 4h14l1 8H5l1-8z"
+                                      />
+                                    </svg>
+                                    Thanh toán ngay
+                                  </Button>
+                                )}
+                              {/* Nút Xác nhận đã giao */}
+                              {order.orderStatus === "delivery" && (
+                                <Button
+                                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConfirmDelivery(order);
+                                  }}
+                                  disabled={processing === order._id}
+                                >
+                                  {processing === order._id ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="w-4 h-4 mr-2" />
+                                      Đã nhận hàng
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+
+                              {isRenter &&
+                                ["delivery", "received", "returned"].includes(
+                                  order.orderStatus
+                                ) &&
+                                order.orderStatus !== "disputed" && (
+                                  <Button
+                                    variant="destructive"
+                                    className="bg-orange-600 hover:bg-orange-700 text-white"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDisputeTarget(order);
+                                      setOpenDisputeDialog(true);
+                                    }}
+                                  >
+                                    <AlertCircle className="w-4 h-4 mr-2" />
+                                    Khiếu nại
+                                  </Button>
+                                )}
+
+                              {/* Nếu đã Khiếu nạirồi thì hiện thông báo */}
+                              {order.orderStatus === "disputed" && (
+                                <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
+                                  <AlertCircle className="w-4 h-4" />
+                                  Đơn hàng đang được xử lý Khiếu nại
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Thời gian cập nhật */}
+                            <div className="text-xs text-gray-500">
+                              Cập nhật: {formatDateTime(order.updatedAt)}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
+                  );
               })}
             </div>
 
@@ -869,7 +868,7 @@ export default function OrderListPage({
             <div className="space-y-4">
               <p className="text-gray-700">
                 Bạn có chắc chắn muốn xác nhận đã trả hàng cho đơn hàng này
-                không?
+                không? 
               </p>
               {selectedOrder && (
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
@@ -955,7 +954,7 @@ export default function OrderListPage({
             <DialogHeader className="pb-4 border-b">
               <DialogTitle className="flex items-center gap-3 text-xl font-bold text-orange-700">
                 <AlertCircle className="w-7 h-7" />
-                Tạo Khiếu nạiđơn hàng
+                Tạo Khiếu nại đơn hàng
               </DialogTitle>
             </DialogHeader>
 

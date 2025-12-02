@@ -46,6 +46,7 @@ interface JwtPayload {
 
 interface Props {
   itemId: string;
+  orders?: any;
 }
 
 const RatingSection: React.FC<Props> = ({ itemId }) => {
