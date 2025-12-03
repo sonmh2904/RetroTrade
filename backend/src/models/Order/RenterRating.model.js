@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const { Types } = mongoose;
 
-const ownerRatingSchema = new mongoose.Schema(
+const renterRatingSchema = new mongoose.Schema(
   {
     orderId: {
       type: Types.ObjectId,
@@ -52,11 +52,11 @@ const ownerRatingSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "owner_ratings",
+    collection: "renter_ratings",
   }
 );
 
-// 1 order chỉ được rate 1 lần cho owner
-ownerRatingSchema.index({ orderId: 1, renterId: 1 }, { unique: true });
+// 1 order chỉ được rate 1 lần cho renter bởi owner
+renterRatingSchema.index({ orderId: 1, ownerId: 1 }, { unique: true });
 
-module.exports = mongoose.model("OwnerRating", ownerRatingSchema);
+module.exports = mongoose.model("RenterRating", renterRatingSchema);

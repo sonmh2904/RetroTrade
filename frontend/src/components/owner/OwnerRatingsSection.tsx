@@ -4,6 +4,32 @@ import { toast } from "sonner";
 import { getRatingsByOwner } from "@/services/products/product.api";
 import type { OwnerRating } from "@/services/products/product.api";
 
+// Helper function to render stars with precise fractional star support
+const renderStars = (rating: number, size: number = 24) => {
+  const fullStars = Math.floor(rating);
+  const decimalPart = rating % 1;
+  const emptyStars = 5 - fullStars - (decimalPart > 0 ? 1 : 0);
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(fullStars)].map((_, i) => (
+        <Star key={`full-${i}`} className={`${size === 16 ? 'w-4 h-4' : 'w-6 h-6'} text-yellow-500 fill-yellow-500`} />
+      ))}
+      {decimalPart > 0 && (
+        <div className="relative">
+          <Star className={`${size === 16 ? 'w-4 h-4' : 'w-6 h-6'} text-gray-300`} />
+          <div className="absolute inset-0 overflow-hidden" style={{ width: `${decimalPart * 100}%` }}>
+            <Star className={`${size === 16 ? 'w-4 h-4' : 'w-6 h-6'} text-yellow-500 fill-yellow-500`} />
+          </div>
+        </div>
+      )}
+      {[...Array(emptyStars)].map((_, i) => (
+        <Star key={`empty-${i}`} className={`${size === 16 ? 'w-4 h-4' : 'w-6 h-6'} text-gray-300`} />
+      ))}
+    </div>
+  );
+};
+
 const OWNER_RATING_PAGE_SIZE = 6;
 
 interface OwnerRatingsSectionProps {
@@ -136,12 +162,7 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
             {hasRatings ? ownerRatingStats.average.toFixed(1) : "0.0"}
           </div>
           <div className="flex justify-center mb-2">
-            {Array.from({ length: 5 }).map((_, idx) => (
-              <Star
-                key={idx}
-                className={`w-6 h-6 ${idx < Math.round(ownerRatingStats.average) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
-              />
-            ))}
+            {renderStars(ownerRatingStats.average)}
           </div>
           <p className="text-gray-600 text-sm">
             {ownerRatingStats.total} lượt đánh giá
@@ -220,13 +241,7 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
                 </h4>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <div className="flex items-center">
-                    {Array.from({ length: 5 }).map((_, idx) => (
-                      <Star
-                        key={idx}
-                        size={16}
-                        className={idx < Number(rating.rating) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}
-                      />
-                    ))}
+                    {renderStars(Number(rating.rating), 16)}
                   </div>
                   <span>{rating.Item?.Title || (rating as unknown as { itemId: { Title: string } })?.itemId?.Title}</span>
                 </div>

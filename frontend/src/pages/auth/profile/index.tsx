@@ -19,6 +19,7 @@ import { UserDetails } from '@/components/ui/auth/profile/user-details';
 import { ownerRequestApi } from '@/services/auth/ownerRequest.api';
 import { Button } from '@/components/ui/common/button';
 import dynamic from 'next/dynamic';
+import RatingRenter from "@/components/ui/auth/ratingRenter";
 
 
 const DiscountsPage = dynamic(() => import('@/components/ui/auth/discounts'), { ssr: false });
@@ -121,12 +122,12 @@ export default function ProfilePage() {
       setOwnerSubmitting(false);
     }
   }, [ownerReason, ownerInfo]);
-  type MenuKey = 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details';
+  type MenuKey = 'discounts' | 'messages' | 'settings' | 'security' | 'addresses' | 'ownership' | 'disputes' | 'changePassword' | 'signature' | 'loyalty' | 'details'| 'rating';
   
   // Get initial menu from URL query or default to null (no default menu)
   const getInitialMenu = (): MenuKey | null => {
     const menuFromQuery = router.query.menu as MenuKey | undefined;
-    if (menuFromQuery && ['discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details'].includes(menuFromQuery)) {
+    if (menuFromQuery && ['discounts', 'messages', 'settings', 'security', 'addresses', 'ownership', 'disputes', 'changePassword', 'signature', 'loyalty', 'details','rating'].includes(menuFromQuery)) {
       return menuFromQuery;
     }
     return null;
@@ -296,10 +297,10 @@ export default function ProfilePage() {
               <ProfileSidebar
                 active={activeMenu}
                 onChange={handleMenuChange}
-                user={{ 
-                  fullName: normalizedUserProfile.fullName, 
-                  email: normalizedUserProfile.email, 
-                  avatarUrl: normalizedUserProfile.avatarUrl 
+                user={{
+                  fullName: normalizedUserProfile.fullName,
+                  email: normalizedUserProfile.email,
+                  avatarUrl: normalizedUserProfile.avatarUrl,
                 }}
               />
             </aside>
@@ -311,64 +312,100 @@ export default function ProfilePage() {
                   {/* Decorative background elements */}
                   <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-200/20 to-purple-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                   <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-pink-200/20 to-purple-200/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-                  
+
                   <div className="relative p-12 text-center">
                     {/* Icon */}
                     <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg mb-6 transform hover:scale-105 transition-transform duration-300">
-                      <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <svg
+                        className="w-10 h-10 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
                       </svg>
                     </div>
-                    
+
                     {/* Title */}
                     <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                       Chào mừng bạn trở lại!
                     </h2>
-                    
+
                     {/* Description */}
                     <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                      Quản lý tài khoản, đơn hàng và nhiều hơn thế nữa. Hãy chọn một mục từ menu bên trái để bắt đầu.
+                      Quản lý tài khoản, đơn hàng và nhiều hơn thế nữa. Hãy chọn
+                      một mục từ menu bên trái để bắt đầu.
                     </p>
-                    
+
                     {/* Quick stats or features */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 max-w-2xl mx-auto">
                       <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-                        <div className="text-2xl font-bold text-indigo-600 mb-1">📦</div>
-                        <div className="text-sm font-semibold text-gray-800">Đơn hàng</div>
-                        <div className="text-xs text-gray-600 mt-1">Theo dõi đơn hàng</div>
+                        <div className="text-2xl font-bold text-indigo-600 mb-1">
+                          📦
+                        </div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          Đơn hàng
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Theo dõi đơn hàng
+                        </div>
                       </div>
                       <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-                        <div className="text-2xl font-bold text-purple-600 mb-1">💳</div>
-                        <div className="text-sm font-semibold text-gray-800">Ví & Giao dịch</div>
-                        <div className="text-xs text-gray-600 mt-1">Quản lý tài chính</div>
+                        <div className="text-2xl font-bold text-purple-600 mb-1">
+                          💳
+                        </div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          Ví & Giao dịch
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Quản lý tài chính
+                        </div>
                       </div>
                       <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-                        <div className="text-2xl font-bold text-pink-600 mb-1">⚙️</div>
-                        <div className="text-sm font-semibold text-gray-800">Cài đặt</div>
-                        <div className="text-xs text-gray-600 mt-1">Tùy chỉnh tài khoản</div>
+                        <div className="text-2xl font-bold text-pink-600 mb-1">
+                          ⚙️
+                        </div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          Cài đặt
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Tùy chỉnh tài khoản
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-
-              {activeMenu === 'discounts' && (
+              {activeMenu === "discounts" && (
                 <div className="rounded-xl overflow-hidden">
                   <DiscountsPage />
                 </div>
               )}
 
-              {activeMenu === 'messages' && (
+              {activeMenu === "messages" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-3">Tin nhắn</h2>
-                  <p className="text-gray-600 mb-4">Trao đổi với người dùng khác.</p>
-                  <button onClick={() => router.push('/auth/messages')}
-                    className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm">Mở hộp thoại</button>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-3">
+                    Tin nhắn
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    Trao đổi với người dùng khác.
+                  </p>
+                  <button
+                    onClick={() => router.push("/auth/messages")}
+                    className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm"
+                  >
+                    Mở hộp thoại
+                  </button>
                 </div>
               )}
 
-              {activeMenu === 'settings' && (
+              {activeMenu === "settings" && (
                 <div className="rounded-xl overflow-hidden">
                   <UserProfileHeader
                     userProfile={normalizedUserProfile}
@@ -378,23 +415,35 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {activeMenu === 'details' && (
+              {activeMenu === "details" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                   <UserDetails userProfile={normalizedUserProfile} />
                 </div>
               )}
 
-              {activeMenu === 'security' && (
+              {activeMenu === "security" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 pt-6 scroll-mt-24">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">Xác minh tài khoản</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Xác minh tài khoản
+                    </h3>
                     <Button
                       variant="outline"
-                      onClick={() => router.push('/auth/verification-history')}
+                      onClick={() => router.push("/auth/verification-history")}
                       className="flex items-center gap-2"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
                       Xem lịch sử xác minh
                     </Button>
@@ -403,17 +452,29 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {activeMenu === 'changePassword' && (
+              {activeMenu === "changePassword" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Đổi mật khẩu</h2>
-                  
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Đổi mật khẩu
+                  </h2>
+
                   {!isPasswordVerified ? (
                     <div className="flex justify-center">
                       <div className="w-full max-w-md space-y-4">
                         <div className="flex items-center justify-center mb-4">
                           <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            <svg
+                              className="w-8 h-8 text-indigo-600"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                              />
                             </svg>
                           </div>
                         </div>
@@ -421,135 +482,241 @@ export default function ProfilePage() {
                           Xác thực mật khẩu
                         </h3>
                         <p className="text-sm text-gray-600 text-center mb-6">
-                          Để bảo vệ tài khoản, vui lòng nhập mật khẩu hiện tại của bạn để tiếp tục đổi mật khẩu
+                          Để bảo vệ tài khoản, vui lòng nhập mật khẩu hiện tại
+                          của bạn để tiếp tục đổi mật khẩu
                         </p>
-                        
+
                         <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Mật khẩu hiện tại <span className="text-red-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showVerificationPassword ? 'text' : 'password'}
-                              value={verificationPassword}
-                              onChange={(e) => {
-                                setVerificationPassword(e.target.value);
-                                setVerificationError('');
-                              }}
-                              placeholder="Nhập mật khẩu hiện tại"
-                              className={`w-full px-3 py-2 border rounded-md pr-10 ${verificationError ? 'border-red-500' : 'border-gray-300'}`}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleVerifyPasswordForChange();
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Mật khẩu hiện tại{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={
+                                  showVerificationPassword ? "text" : "password"
                                 }
-                              }}
-                            />
-                            <button 
-                              type="button" 
-                              onClick={() => setShowVerificationPassword(!showVerificationPassword)} 
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm hover:text-gray-700"
-                            >
-                              {showVerificationPassword ? 'Ẩn' : 'Hiện'}
-                            </button>
-                          </div>
-                          {verificationError && <p className="text-sm text-red-600 mt-1">{verificationError}</p>}
-                        </div>
-                        
-                        <button
-                          onClick={handleVerifyPasswordForChange}
-                          disabled={isVerifyingPassword || !verificationPassword.trim()}
-                          className="w-full px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-60"
-                        >
-                          {isVerifyingPassword ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              <span>Đang xác thực...</span>
+                                value={verificationPassword}
+                                onChange={(e) => {
+                                  setVerificationPassword(e.target.value);
+                                  setVerificationError("");
+                                }}
+                                placeholder="Nhập mật khẩu hiện tại"
+                                className={`w-full px-3 py-2 border rounded-md pr-10 ${
+                                  verificationError
+                                    ? "border-red-500"
+                                    : "border-gray-300"
+                                }`}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleVerifyPasswordForChange();
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowVerificationPassword(
+                                    !showVerificationPassword
+                                  )
+                                }
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm hover:text-gray-700"
+                              >
+                                {showVerificationPassword ? "Ẩn" : "Hiện"}
+                              </button>
                             </div>
-                          ) : (
-                            'Xác thực'
-                          )}
-                        </button>
+                            {verificationError && (
+                              <p className="text-sm text-red-600 mt-1">
+                                {verificationError}
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={handleVerifyPasswordForChange}
+                            disabled={
+                              isVerifyingPassword ||
+                              !verificationPassword.trim()
+                            }
+                            className="w-full px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-60"
+                          >
+                            {isVerifyingPassword ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>Đang xác thực...</span>
+                              </div>
+                            ) : (
+                              "Xác thực"
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <form onSubmit={submitInlineChangePassword} className="space-y-4 max-w-lg">
+                    <form
+                      onSubmit={submitInlineChangePassword}
+                      className="space-y-4 max-w-lg"
+                    >
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu mới <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Mật khẩu mới <span className="text-red-500">*</span>
+                        </label>
                         <div className="relative">
                           <input
-                            type={showPw.new ? 'text' : 'password'}
+                            type={showPw.new ? "text" : "password"}
                             value={pwForm.newPassword}
-                            onChange={(e) => { setPwForm({ ...pwForm, newPassword: e.target.value }); if (pwErrors.newPassword) setPwErrors({ ...pwErrors, newPassword: undefined }); }}
-                            className={`w-full px-3 py-2 border rounded-md ${pwErrors.newPassword ? 'border-red-500' : 'border-gray-300'}`}
+                            onChange={(e) => {
+                              setPwForm({
+                                ...pwForm,
+                                newPassword: e.target.value,
+                              });
+                              if (pwErrors.newPassword)
+                                setPwErrors({
+                                  ...pwErrors,
+                                  newPassword: undefined,
+                                });
+                            }}
+                            className={`w-full px-3 py-2 border rounded-md ${
+                              pwErrors.newPassword
+                                ? "border-red-500"
+                                : "border-gray-300"
+                            }`}
                             placeholder="Nhập mật khẩu mới"
                           />
-                          <button type="button" onClick={() => setShowPw({ ...showPw, new: !showPw.new })} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{showPw.new ? 'Ẩn' : 'Hiện'}</button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowPw({ ...showPw, new: !showPw.new })
+                            }
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm"
+                          >
+                            {showPw.new ? "Ẩn" : "Hiện"}
+                          </button>
                         </div>
-                        {pwErrors.newPassword && <p className="text-sm text-red-600 mt-1">{pwErrors.newPassword}</p>}
+                        {pwErrors.newPassword && (
+                          <p className="text-sm text-red-600 mt-1">
+                            {pwErrors.newPassword}
+                          </p>
+                        )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nhập lại mật khẩu mới <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nhập lại mật khẩu mới{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
                         <div className="relative">
                           <input
-                            type={showPw.confirm ? 'text' : 'password'}
+                            type={showPw.confirm ? "text" : "password"}
                             value={pwForm.confirmPassword}
-                            onChange={(e) => { setPwForm({ ...pwForm, confirmPassword: e.target.value }); if (pwErrors.confirmPassword) setPwErrors({ ...pwErrors, confirmPassword: undefined }); }}
-                            className={`w-full px-3 py-2 border rounded-md ${pwErrors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                            onChange={(e) => {
+                              setPwForm({
+                                ...pwForm,
+                                confirmPassword: e.target.value,
+                              });
+                              if (pwErrors.confirmPassword)
+                                setPwErrors({
+                                  ...pwErrors,
+                                  confirmPassword: undefined,
+                                });
+                            }}
+                            className={`w-full px-3 py-2 border rounded-md ${
+                              pwErrors.confirmPassword
+                                ? "border-red-500"
+                                : "border-gray-300"
+                            }`}
                             placeholder="Nhập lại mật khẩu mới"
                           />
-                          <button type="button" onClick={() => setShowPw({ ...showPw, confirm: !showPw.confirm })} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{showPw.confirm ? 'Ẩn' : 'Hiện'}</button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowPw({ ...showPw, confirm: !showPw.confirm })
+                            }
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm"
+                          >
+                            {showPw.confirm ? "Ẩn" : "Hiện"}
+                          </button>
                         </div>
-                        {pwErrors.confirmPassword && <p className="text-sm text-red-600 mt-1">{pwErrors.confirmPassword}</p>}
+                        {pwErrors.confirmPassword && (
+                          <p className="text-sm text-red-600 mt-1">
+                            {pwErrors.confirmPassword}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-2">
-                        <button type="submit" disabled={isChangingPassword} className="px-4 py-2 rounded-md bg-gray-900 hover:bg-black text-white text-sm disabled:opacity-60">{isChangingPassword ? 'Đang đổi...' : 'Đổi mật khẩu'}</button>
-                        <button type="button" onClick={() => {
-                          setPwForm({ newPassword: '', confirmPassword: '' });
-                          setIsPasswordVerified(false);
-                          setVerificationPassword('');
-                        }} className="px-4 py-2 rounded-md border text-sm">Làm mới</button>
+                        <button
+                          type="submit"
+                          disabled={isChangingPassword}
+                          className="px-4 py-2 rounded-md bg-gray-900 hover:bg-black text-white text-sm disabled:opacity-60"
+                        >
+                          {isChangingPassword ? "Đang đổi..." : "Đổi mật khẩu"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPwForm({ newPassword: "", confirmPassword: "" });
+                            setIsPasswordVerified(false);
+                            setVerificationPassword("");
+                          }}
+                          className="px-4 py-2 rounded-md border text-sm"
+                        >
+                          Làm mới
+                        </button>
                       </div>
                     </form>
                   )}
                 </div>
               )}
 
-              {activeMenu === 'addresses' && (
+              {activeMenu === "addresses" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-3">Địa chỉ nhận hàng/nhận đồ</h2>
-                  <p className="text-gray-600 mb-4">Quản lý địa chỉ nhận hàng/nhận đồ.</p>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-3">
+                    Địa chỉ nhận hàng/nhận đồ
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    Quản lý địa chỉ nhận hàng/nhận đồ.
+                  </p>
                   <AddressSelector />
                 </div>
               )}
 
-              {activeMenu === 'ownership' && (
+              {activeMenu === "ownership" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Yêu cầu đăng kí cho thuê </h2>
-                  {userProfile?.role === 'owner' ? (
-                    <p className="text-green-700">Bạn đã đăng kí cho thuê. Bạn có thể đăng đồ cho thuê.</p>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Yêu cầu đăng kí cho thuê{" "}
+                  </h2>
+                  {userProfile?.role === "owner" ? (
+                    <p className="text-green-700">
+                      Bạn đã đăng kí cho thuê. Bạn có thể đăng đồ cho thuê.
+                    </p>
                   ) : (
                     <>
                       {showOwnerForm && (
                         <div className="space-y-3 max-w-xl">
                           <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-gray-700">
-                            <p className="font-semibold text-gray-900">Phí dịch vụ 50.000&nbsp;VND</p>
+                            <p className="font-semibold text-gray-900">
+                              Phí dịch vụ 50.000&nbsp;VND
+                            </p>
                             <p>
                               Khi gửi yêu cầu, hệ thống sẽ tự động trừ{" "}
-                              <span className="font-semibold">50.000&nbsp;đ</span> từ ví RetroTrade của bạn.
-                              Vui lòng đảm bảo số dư đủ và nạp thêm nếu cần.
+                              <span className="font-semibold">
+                                50.000&nbsp;đ
+                              </span>{" "}
+                              từ ví RetroTrade của bạn. Vui lòng đảm bảo số dư
+                              đủ và nạp thêm nếu cần.
                             </p>
                             <button
                               type="button"
-                              onClick={() => router.push('/wallet')}
+                              onClick={() => router.push("/wallet")}
                               className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
                             >
                               Nạp tiền vào ví →
                             </button>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Lý do <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Lý do <span className="text-red-500">*</span>
+                            </label>
                             <input
                               value={ownerReason}
                               onChange={(e) => setOwnerReason(e.target.value)}
@@ -558,7 +725,9 @@ export default function ProfilePage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Thông tin bổ sung</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Thông tin bổ sung
+                            </label>
                             <textarea
                               value={ownerInfo}
                               onChange={(e) => setOwnerInfo(e.target.value)}
@@ -573,7 +742,9 @@ export default function ProfilePage() {
                               disabled={ownerSubmitting}
                               className="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-60"
                             >
-                              {ownerSubmitting ? 'Đang xử lý...' : 'Thanh toán 50.000đ & gửi yêu cầu'}
+                              {ownerSubmitting
+                                ? "Đang xử lý..."
+                                : "Thanh toán 50.000đ & gửi yêu cầu"}
                             </button>
                           </div>
                         </div>
@@ -583,25 +754,32 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {activeMenu === 'disputes' && (
+              {activeMenu === "disputes" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                   <UserDisputes />
                 </div>
               )}
 
-              {activeMenu === 'signature' && (
+              {activeMenu === "signature" && (
                 <SignatureManagement
                   isOpen={true}
-                  onClose={() => { }}
-                  onSuccess={() => toast.success('Cập nhật chữ ký thành công')}
+                  onClose={() => {}}
+                  onSuccess={() => toast.success("Cập nhật chữ ký thành công")}
                   inline
                 />
               )}
 
-              {activeMenu === 'loyalty' && (
+              {activeMenu === "loyalty" && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">RT Points - Hệ thống điểm thưởng</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    RT Points - Hệ thống điểm thưởng
+                  </h2>
                   <LoyaltyManagement />
+                </div>
+              )}
+              {activeMenu === "rating" && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+                  <RatingRenter userId={normalizedUserProfile._id} />
                 </div>
               )}
             </section>
@@ -610,7 +788,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Change Password Modal - kept for reuse elsewhere */}
-      <ChangePasswordModal open={false} onOpenChange={() => { }} />
+      <ChangePasswordModal open={false} onOpenChange={() => {}} />
 
       {/* Avatar Upload Modal */}
       {userProfile && (

@@ -32,6 +32,8 @@ export interface Order {
     fullName: string;
     email: string;
     avatarUrl?: string;
+    bio:string;
+    phone:string;
   };
   ownerId: {
     _id: string;
@@ -178,7 +180,8 @@ export const disputeOrder = async (
 
 
 export const listOrdersByOwner = async (params?: {
-  status?: string;
+  renterId?: string;
+  orderStatus: string;
   paymentStatus?: string;
   search?: string;
   page?: number;
@@ -186,7 +189,8 @@ export const listOrdersByOwner = async (params?: {
 }): Promise<ApiResponse<Order[]>> => {
   const query = new URLSearchParams(
     Object.entries(params || {}).reduce((acc, [key, value]) => {
-      if (value !== undefined && value !== null && value !== "") acc[key] = String(value);
+      if (value !== undefined && value !== null && value !== "")
+        acc[key] = String(value);
       return acc;
     }, {} as Record<string, string>)
   ).toString();
@@ -196,7 +200,8 @@ export const listOrdersByOwner = async (params?: {
 };
 
 export const listOrdersByRenter = async (params?: {
-  status?: string;
+  ownerId?: string;
+  orderStatus: string;
   paymentStatus?: string;
   search?: string;
   page?: number;
@@ -214,6 +219,33 @@ export const listOrdersByRenter = async (params?: {
   const response = await api.get(`/order/renter${query ? `?${query}` : ""}`);
   return await parseResponse<Order[]>(response);
 };
+export const getLatestOrderByRenter = async (): Promise<
+  ApiResponse<{
+    orderId: string | null;
+    itemId?: string;
+    ownerId?: string;
+  }>
+> => {
+  const response = await api.get(`/order/renter/latest`);
+  return await parseResponse(response);
+};
+export const getLatestOrderByOwner = async (
+  renterId: string,
+  token?: string
+): Promise<
+  ApiResponse<{
+    orderId: string | null;
+    itemId?: string;
+    ownerId?: string;
+  }>
+> => {
+  const query = new URLSearchParams({ renterId }).toString();
+  const response = await api.get(`/order/owner/last?${query}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return await parseResponse(response);
+};
+
 
 // Bắt đầu giao hàng (chuyển trạng thái order => delivery)
 export const startDelivery = async (

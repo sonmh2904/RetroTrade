@@ -73,7 +73,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { icon: LineChart, label: "Dashboard Admin", key: "analytics", href: "/admin/dashboard" },
     { icon: Users, label: "Người dùng", key: "users", href: "/admin/user-management" },
     { icon: FileText, label: "Điều khoản", key: "terms", href: "/admin/terms" },
-    { icon: PenTool, label: "Chính sách", key: "wallet", href: "/admin/privacy" },
+    { icon: PenTool, label: "Chính sách", key: "privacy", href: "/admin/privacy" },
     { icon: Wallet, label: "Quản lý ví", key: "wallet", href: "/admin/wallet" },
     { icon: Contact, label: "Quản lý hợp đồng", key: "contract", href: "/admin/contract" },
     { icon: Percent, label: "Quản lý Phí dịch vụ", key: "serviceFee", href: "/admin/serviceFee-management" },

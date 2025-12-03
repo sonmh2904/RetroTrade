@@ -14,6 +14,32 @@ import { RootState } from "@/store/redux_store";
 import { jwtDecode } from "jwt-decode";
 import { toast } from "sonner";
 
+// Helper function to render stars with precise fractional star support
+const renderStars = (rating: number, size: number = 24) => {
+  const fullStars = Math.floor(rating);
+  const decimalPart = rating % 1;
+  const emptyStars = 5 - fullStars - (decimalPart > 0 ? 1 : 0);
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(fullStars)].map((_, i) => (
+        <Star key={`full-${i}`} size={size} className="text-yellow-400 fill-yellow-400" />
+      ))}
+      {decimalPart > 0 && (
+        <div className="relative">
+          <Star size={size} className="text-gray-300" />
+          <div className="absolute inset-0 overflow-hidden" style={{ width: `${decimalPart * 100}%` }}>
+            <Star size={size} className="text-yellow-400 fill-yellow-400" />
+          </div>
+        </div>
+      )}
+      {[...Array(emptyStars)].map((_, i) => (
+        <Star key={`empty-${i}`} size={size} className="text-gray-300" />
+      ))}
+    </div>
+  );
+};
+
 interface Rating {
   _id: string;
   orderId: string;
@@ -46,6 +72,7 @@ interface JwtPayload {
 
 interface Props {
   itemId: string;
+  orders?: any;
 }
 
 const RatingSection: React.FC<Props> = ({ itemId }) => {
@@ -286,19 +313,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         <div className="text-center md:text-left">
           <p className="text-5xl font-bold text-orange-500">{averageRating}</p>
           <div className="flex justify-center md:justify-start mt-2">
-            {Array(5)
-              .fill(0)
-              .map((_, i) => (
-                <Star
-                  key={i}
-                  size={24}
-                  className={
-                    i < Math.round(+averageRating)
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "text-gray-300"
-                  }
-                />
-              ))}
+            {renderStars(parseFloat(averageRating))}
           </div>
           <p className="text-gray-600 mt-2">{ratings.length} đánh giá</p>
         </div>
@@ -349,19 +364,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                     <div>
                       <p className="font-semibold">{r.renterId?.fullName}</p>
                       <div className="flex items-center gap-1 mt-1">
-                        {Array(5)
-                          .fill(0)
-                          .map((_, i) => (
-                            <Star
-                              key={i}
-                              size={16}
-                              className={
-                                i < r.rating
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-gray-300"
-                              }
-                            />
-                          ))}
+                        {renderStars(r.rating, 16)}
                       </div>
                     </div>
                   </div>

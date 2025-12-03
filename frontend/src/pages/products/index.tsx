@@ -10,8 +10,9 @@ import {
   removeFromFavorites,
   getFavorites,
   getHighlightedProducts,
+  getSortedItems,
 } from "@/services/products/product.api";
-import { vietnamProvinces } from "@/lib/vietnam-locations";
+import { getProvinces, Province } from "@/services/address/address.api";
 import {
   Search,
   Filter,
@@ -262,6 +263,9 @@ export default function ProductPage() {
   const [tags, setTags] = useState<TagItem[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [selectedProvince, setSelectedProvince] = useState<string>("");
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [sortBy, setSortBy] = useState<string>("CreatedAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [showAllProvinces, setShowAllProvinces] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -476,6 +480,27 @@ export default function ProductPage() {
     return featuredProducts.slice(currentSlide, endIndex);
   };
 
+  // Fetch sorted data
+  const fetchSortedData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const sortedData = await getSortedItems({ sortBy, sortOrder });
+      const normalizedItems = normalizeItems(
+        sortedData?.data?.items || []
+      );
+      console.log('DEBUG - Sorted products loaded:', normalizedItems.length);
+      setAllItems(normalizedItems);
+      setItems(normalizedItems);
+    } catch (err) {
+      const errorMsg = "Không thể tải dữ liệu sản phẩm đã sắp xếp. Vui lòng thử lại.";
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [sortBy, sortOrder]);
+
   // Fetch data
   useEffect(() => {
     setMounted(true);
@@ -555,6 +580,7 @@ export default function ProductPage() {
     fetchData();
     fetchFeaturedProducts();
   }, [fetchFeaturedProducts]);
+
   useEffect(() => {
     const fetchInitialFavorites = async () => {
       if (!isAuthenticated || initialFavoritesLoaded || !accessToken || loading)
@@ -605,6 +631,33 @@ export default function ProductPage() {
     router,
   ]);
 
+  // Fetch provinces from API
+  useEffect(() => {
+    const fetchProvinces = async () => {
+      try {
+        const provincesData = await getProvinces();
+        setProvinces(provincesData);
+      } catch (error) {
+        console.error("Error fetching provinces:", error);
+        toast.error("Không thể tải danh sách tỉnh thành");
+      }
+    };
+    fetchProvinces();
+  }, []);
+
+  // Fetch sorted data when sort options change
+  useEffect(() => {
+    // Save current scroll position before fetching new data
+    const scrollY = window.scrollY;
+    
+    fetchSortedData().then(() => {
+      // Use requestAnimationFrame to ensure DOM is updated before restoring scroll
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+      });
+    });
+  }, [sortBy, sortOrder, fetchSortedData]);
+
   // Reset all filters
   const resetAllFilters = () => {
     setSelectedCategory(null);
@@ -637,6 +690,9 @@ export default function ProductPage() {
 
   // Filter items
   useEffect(() => {
+    // Save current scroll position before filtering
+    const scrollY = window.scrollY;
+    
     let filtered = [...allItems];
     console.log('DEBUG - Filter start - Total items:', filtered.length);
     console.log('DEBUG - Selected category:', selectedCategory);
@@ -694,6 +750,11 @@ export default function ProductPage() {
     console.log('DEBUG - Final filtered items:', filtered.length);
     setItems(filtered);
     setCurrentPage(1);
+    
+    // Restore scroll position after filtering is complete
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
   }, [
     selectedCategory,
     minPrice,
@@ -750,6 +811,7 @@ export default function ProductPage() {
   const handleCategorySelect = (categoryId: string) => {
     const newSelectedCategory = categoryId === '' ? null : (selectedCategory === categoryId ? null : categoryId);
     setSelectedCategory(newSelectedCategory);
+    // ... (rest of the code remains the same)
     
     // Update URL with full category path
     if (newSelectedCategory) {
@@ -1215,9 +1277,9 @@ export default function ProductPage() {
                   className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Tất cả tỉnh thành</option>
-                  {vietnamProvinces.map((province) => (
-                    <option key={province} value={province}>
-                      {province}
+                  {provinces.map((province) => (
+                    <option key={province.province_code} value={province.name}>
+                      {province.name}
                     </option>
                   ))}
                 </select>
@@ -1274,6 +1336,25 @@ export default function ProductPage() {
                     onChange={(e) => setSearch(e.target.value)}
                     className="flex-1 border rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">Lọc theo:</label>
+                  <select
+                    value={`${sortBy}-${sortOrder}`}
+                    onChange={(e) => {
+                      const [field, order] = e.target.value.split('-');
+                      setSortBy(field);
+                      setSortOrder(order as 'asc' | 'desc');
+                    }}
+                    className="border rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  >
+                    <option value="CreatedAt-desc">Mới nhất</option>
+                    <option value="CreatedAt-asc">Cũ nhất</option>
+                    <option value="BasePrice-asc">Giá thấp nhất</option>
+                    <option value="BasePrice-desc">Giá cao nhất</option>
+                    <option value="ViewCount-desc">Lượt xem nhiều nhất</option>
+                    <option value="RentCount-desc">Lượt thuê nhiều nhất</option>
+                  </select>
                 </div>
               </div>
             </div>

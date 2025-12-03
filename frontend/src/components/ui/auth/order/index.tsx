@@ -10,6 +10,10 @@ import {
   cancelOrder,
   receiveOrder,
 } from "@/services/auth/order.api";
+import {
+  getExtensionRequests,
+  type ExtensionRequest,
+} from "@/services/auth/extension.api";
 import type { Order } from "@/services/auth/order.api";
 import { RootState } from "@/store/redux_store";
 import { Button } from "@/components/ui/common/button";
@@ -43,15 +47,16 @@ import {
   ShoppingBag,
   Filter,
   Eye,
-  User,
   ChevronRight,
   ChevronLeft,
   AlertCircle,
   X,
   ClipboardList,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createDispute } from "@/services/moderator/disputeOrder.api";
+import ExtensionModal from "@/components/ui/auth/order/ExtensionModal";
 
 export default function OrderListPage({
   onOpenDetail,
@@ -75,6 +80,15 @@ export default function OrderListPage({
   const [disputeDescription, setDisputeDescription] = useState("");
   const [disputeEvidence, setDisputeEvidence] = useState<File[]>([]);
   const [evidencePreview, setEvidencePreview] = useState<string[]>([]);
+  const [openExtensionModal, setOpenExtensionModal] = useState(false);
+  const [selectedExtensionOrder, setSelectedExtensionOrder] =
+    useState<Order | null>(null);
+  const [pendingExtensions, setPendingExtensions] = useState<
+    Record<string, boolean>
+  >({});
+  const [extensionsLoading, setExtensionsLoading] = useState<
+    Record<string, boolean>
+  >({});
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
@@ -133,6 +147,29 @@ export default function OrderListPage({
     // SỬA LỖI: revoke đúng cách
     evidencePreview.forEach((url) => URL.revokeObjectURL(url));
     setEvidencePreview([]);
+  };
+
+  // Fetch pending extensions chỉ khi click nút (lazy load để tránh loop)
+  const checkPendingExtension = async (orderId: string) => {
+    if (extensionsLoading[orderId] || pendingExtensions[orderId] !== undefined)
+      return;
+
+    setExtensionsLoading((prev) => ({ ...prev, [orderId]: true }));
+
+    try {
+      const res = await getExtensionRequests(orderId);
+      if (res.code === 200 && Array.isArray(res.data)) {
+        const hasPending = res.data.some(
+          (ext: ExtensionRequest) => ext.status === "pending"
+        );
+        setPendingExtensions((prev) => ({ ...prev, [orderId]: hasPending }));
+      }
+    } catch (err) {
+      console.error(`Error fetching extensions for order ${orderId}:`, err);
+      toast.error("Không thể kiểm tra yêu cầu gia hạn");
+    } finally {
+      setExtensionsLoading((prev) => ({ ...prev, [orderId]: false }));
+    }
   };
 
   useEffect(() => {
@@ -237,6 +274,18 @@ export default function OrderListPage({
       setSelectedOrder(null);
       setOpenConfirm(false);
     }
+  };
+
+  const handleExtensionSuccess = () => {
+    if (selectedExtensionOrder?._id) {
+      setPendingExtensions((prev) => ({
+        ...prev,
+        [selectedExtensionOrder._id]: true,
+      }));
+      toast.success("Yêu cầu gia hạn đã được gửi thành công!");
+    }
+    setOpenExtensionModal(false);
+    setSelectedExtensionOrder(null);
   };
 
   const formatDateTime = (date: string) =>
@@ -491,10 +540,16 @@ export default function OrderListPage({
                 const isRenter =
                   userRole === "renter" ||
                   order.renterId?._id?.toString() === userId?.toString();
-                const canReturn =
-                  isRenter &&
-                  order.orderStatus === "progress" &&
-                  order.renterId?._id?.toString() === userId?.toString();
+
+                const isCurrentUserTheRenter =
+                  String(order.renterId) === String(userId);
+
+                const canShowReturnButton =
+                  order.orderStatus === "progress" && isCurrentUserTheRenter;
+                const hasPendingExtension =
+                  pendingExtensions[order._id || ""] ?? false;
+                const isExtensionsLoading =
+                  extensionsLoading[order._id || ""] ?? false;
 
                 return (
                   <div
@@ -600,28 +655,7 @@ export default function OrderListPage({
                         </div>
 
                         {/* User Info */}
-                        <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                          <div className="flex items-start gap-3">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                              <User className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">
-                                {isRenter ? "Người cho thuê" : "Người thuê"}
-                              </p>
-                              <p className="text-sm font-medium text-gray-800">
-                                {isRenter
-                                  ? order.ownerId?.fullName || "N/A"
-                                  : order.renterId?.fullName || "N/A"}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {isRenter
-                                  ? order.ownerId?.email
-                                  : order.renterId?.email}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+
                         {/* Actions */}
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
                           <div className="flex flex-wrap items-center gap-3">
@@ -667,7 +701,7 @@ export default function OrderListPage({
                             )}
 
                             {/* Nút Trả hàng (giữ nguyên) */}
-                            {canReturn && (
+                            {canShowReturnButton && (
                               <Button
                                 className="bg-teal-600 hover:bg-teal-700 text-white"
                                 onClick={(e) => {
@@ -683,13 +717,48 @@ export default function OrderListPage({
                                     Đang xử lý...
                                   </>
                                 ) : (
-                                  <>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Trả hàng
-                                  </>
+                                  <>Trả hàng</>
                                 )}
                               </Button>
                             )}
+
+                            {/* Nút Gia hạn - Check trạng thái order trước khi show */}
+                            {order.orderStatus === "progress" &&
+                              isCurrentUserTheRenter && (
+                                <>
+                                  {hasPendingExtension ? (
+                                    <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg text-sm font-medium border border-indigo-200">
+                                      <Clock className="w-4 h-4" />
+                                      Đã gửi yêu cầu gia hạn
+                                    </div>
+                                  ) : isExtensionsLoading ? (
+                                    <div className="flex items-center gap-2 bg-gray-50 text-gray-600 px-3 py-2 rounded-lg text-sm font-medium border border-gray-200">
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      Đang kiểm tra...
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        await checkPendingExtension(
+                                          order._id || ""
+                                        );
+                                        if (
+                                          !pendingExtensions[order._id || ""]
+                                        ) {
+                                          setSelectedExtensionOrder(order);
+                                          setOpenExtensionModal(true);
+                                        }
+                                      }}
+                                      disabled={processing === order._id}
+                                    >
+                                      <Clock className="w-4 h-4" />
+                                      Gia hạn
+                                    </Button>
+                                  )}
+                                </>
+                              )}
 
                             {/* NÚT THANH TOÁN NGAY - CHỈ HIỆN KHI: ĐÃ XÁC NHẬN + CHƯA THANH TOÁN */}
                             {order.orderStatus === "confirmed" &&
@@ -759,7 +828,7 @@ export default function OrderListPage({
                                 </Button>
                               )}
 
-                            {/* Nếu đã Khiếu nạirồi thì hiện thông báo */}
+                            {/* Nếu đã Khiếu nại rồi thì hiện thông báo */}
                             {order.orderStatus === "disputed" && (
                               <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
                                 <AlertCircle className="w-4 h-4" />
@@ -955,7 +1024,7 @@ export default function OrderListPage({
             <DialogHeader className="pb-4 border-b">
               <DialogTitle className="flex items-center gap-3 text-xl font-bold text-orange-700">
                 <AlertCircle className="w-7 h-7" />
-                Tạo Khiếu nạiđơn hàng
+                Tạo Khiếu nại đơn hàng
               </DialogTitle>
             </DialogHeader>
 
@@ -1105,7 +1174,7 @@ export default function OrderListPage({
 
                     if (res.code === 201 || res.code === 200) {
                       toast.success(
-                        "Đã gửi Khiếu nạithành công! Moderator sẽ xử lý trong vòng 24h."
+                        "Đã gửi Khiếu nại thành công! Moderator sẽ xử lý trong vòng 24h."
                       );
 
                       // Cập nhật trạng thái đơn hàng ngay lập tức trên UI
@@ -1155,6 +1224,17 @@ export default function OrderListPage({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Extension Modal */}
+        <ExtensionModal
+          isOpen={openExtensionModal}
+          onClose={() => {
+            setOpenExtensionModal(false);
+            setSelectedExtensionOrder(null);
+          }}
+          order={selectedExtensionOrder}
+          onSuccess={handleExtensionSuccess}
+        />
       </div>
     </div>
   );
