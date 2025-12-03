@@ -29,6 +29,7 @@ import type { Order } from "@/services/auth/order.api";
 import Image from "next/image";
 import Link from "next/link";
 import OwnerLayout from "../layout";
+import Button from "@/components/ui/common/button";
 
 interface TimelineStep {
   status: string;
@@ -99,7 +100,10 @@ function OwnerOrderDetailContent() {
     setLoading(true);
     try {
       const res = await getOrderDetails(id as string);
+      
       if (res.data) {
+        console.log("Order data:", res.data);
+        console.log("Renter data:", res.data.renterId);
         setOrder(res.data);
       }
     } catch (error) {
@@ -173,7 +177,11 @@ function OwnerOrderDetailContent() {
     { label: "Trang chủ", href: "/home", icon: Home },
     { label: "Quản lý", href: "/owner", icon: ShoppingBag },
     { label: "Đơn hàng", href: "/owner/renter-requests", icon: ShoppingBag },
-    { label: "Chi tiết đơn hàng", href: `/owner/renter-requests/${order._id}`, icon: Eye },
+    {
+      label: "Chi tiết đơn hàng",
+      href: `/owner/renter-requests/${order._id}`,
+      icon: Eye,
+    },
   ];
 
   return (
@@ -365,6 +373,14 @@ function OwnerOrderDetailContent() {
                           {order.renterId.email}
                         </p>
                       </div>
+                    </div>
+                    <div className="text-center">
+                      <Link href={`/auth/rating?userId=${order.renterId._id}`}>
+                        <Button className="text-blue-500 bg-white border border-transparent hover:border-blue-500">
+                          <Eye className="p-1" />
+                          Thông tin
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -697,7 +713,7 @@ function OwnerOrderDetailContent() {
                 {/* 5. Tổng thanh toán */}
                 <div className="border-t border-emerald-400 pt-3">
                   <div className="flex justify-between text-lg font-bold">
-                    <span>Tổng thanh toán</span>
+                    <span>Tổng tiền</span>
                     <span className="text-2xl">
                       {/* Tổng = finalAmount (tiền thuê sau discount) + deposit + serviceFee */}
                       {order.finalAmount !== undefined

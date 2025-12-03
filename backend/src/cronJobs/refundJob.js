@@ -1,7 +1,9 @@
 const cron = require("node-cron");
 const Order = require("../models/Order/Order.model");
 const { refundOrder } = require("../controller/wallet/userRefund.Controller");
-const {refundPendingOrder} = require("../controller/wallet/refundCancelledOrder.Controller");
+const {refundPendingOrder , refundExtensionRequest} = require("../controller/wallet/refundCancelledOrder.Controller");
+const ExtensionRequest = require("../models/Order/ExtensionRequest.model");
+
 
 cron.schedule("*/1 * * * *", async () => {
   const now = new Date();
@@ -70,6 +72,45 @@ cron.schedule("*/1 * * * *", async () => {
     }
   } catch (error) {
     console.error("Lỗi khi lấy danh sách đơn cancelled/pending:", error);
+  }
+});
+
+// 3. TỰ ĐỘNG HOÀN TIỀN KHI YÊU CẦU GIA HẠN BỊ TỪ CHỐI HOẶC QUÁ HẠN
+cron.schedule("*/2 * * * *", async () => {  // Chạy mỗi 2 phút (nhẹ server)
+  try {
+    const expiredTime = new Date(Date.now() - 48 * 60 * 60 * 1000); // 48 giờ không phản hồi
+
+    const pendingOrRejectedRequests = await ExtensionRequest.find({
+      isRefunded: false,
+      extensionFee: { $gt: 0 },
+      $or: [
+        { status: "rejected" },
+        { 
+          status: "pending", 
+          createdAt: { $lte: expiredTime }  // Quá 48h không duyệt → tự động coi như reject
+        }
+      ]
+    }).populate("orderId");
+
+    console.log(`[AUTO REFUND EXTENSION] Tìm thấy ${pendingOrRejectedRequests.length} yêu cầu gia hạn cần hoàn tiền`);
+
+    for (const request of pendingOrRejectedRequests) {
+      try {
+        // Nếu đang pending quá hạn → tự động chuyển thành rejected
+        if (request.status === "pending" && request.createdAt <= expiredTime) {
+          request.status = "rejected";
+          request.notes = (request.notes || "") + "\n[Tự động] Quá hạn 48h không phản hồi";
+          await request.save();
+        }
+
+        await refundExtensionRequest(request._id);
+        console.log(`Hoàn tiền gia hạn tự động thành công: ${request._id} - Đơn #${request.orderId?.orderGuid}`);
+      } catch (err) {
+        console.error(`Lỗi hoàn tiền gia hạn ${request._id}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error("Lỗi cron hoàn tiền gia hạn:", error);
   }
 });
 

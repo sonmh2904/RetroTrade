@@ -40,6 +40,7 @@ const {
 } = require("../../controller/products/favorites.controller");
 const ratingController = require("../../controller/order/rating.controller");
 const OwnerRatingController = require("../../controller/order/onwerRating.controller");
+const RenterRatingController = require("../../controller/order/renterRating.controller")
 const { upload } = require("../../middleware/upload.middleware");
 const { authenticateToken } = require("../../middleware/auth");
 const { uploadRating } = require("../../middleware/uploadRating.middleware");
@@ -94,10 +95,60 @@ router.get("/rating/item/:itemId", ratingController.getRatingsByItem);
 router.get("/rating/item/:itemId/stats", ratingController.getRatingStats);
 router.get("/rating/owner/:ownerId", getRatingByOwnerId);
 //Owner Rating
-router.post("/owner/rating/", authenticateToken, OwnerRatingController.createOwnerRating);
+router.post(
+  "/owner/rating/",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  OwnerRatingController.createOwnerRating
+);
 router.get("/owner/rating/:ownerId", OwnerRatingController.getOwnerRatings);
-router.put("/owner/rating/:id", authenticateToken, OwnerRatingController.updateOwnerRating);
+router.put(
+  "/owner/rating/:id",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  OwnerRatingController.updateOwnerRating
+);
 router.delete("/owner/rating/:id", authenticateToken, OwnerRatingController.deleteOwnerRating);
+
+// CREATE - owner đánh giá renter
+router.post(
+  "/renter/rating/",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  RenterRatingController.createRenterRating
+);
+
+// Lấy danh sách đánh giá của renter theo renterId
+router.get("/renter/rating/:renterId", RenterRatingController.getRenterRatings);
+
+// UPDATE đánh giá renter
+router.put(
+  "/renter/rating/:id",
+  authenticateToken,
+  uploadRating.fields([
+    { name: "images", maxCount: 5 },
+    { name: "videos", maxCount: 1 },
+  ]),
+  RenterRatingController.updateRenterRating
+);
+
+// DELETE đánh giá renter
+router.delete(
+  "/renter/rating/:id",
+  authenticateToken,
+  RenterRatingController.deleteRenterRating
+);
+
+
 //owner
 router.get("/user", authenticateToken, getUserProducts);
 router.get("/user/addresses",authenticateToken, getUserAddresses);

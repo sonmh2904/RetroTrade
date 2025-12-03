@@ -5,6 +5,8 @@ const { addBankAccount, getAllBankAccounts, deleteBankAccount, getBankList } = r
 const { getWithdrawalRequests, reviewWithdrawalRequest, completeWithdrawal, getAllWalletTransactions, getAdminWallet, getAllRefundsForAdmin } = require("../../controller/wallet/admin.Controller");
 const { payment } = require("../../controller/wallet/payment.Controller");
 const { paymentOtp } = require("../../controller/wallet/paymentOtp .Controller");
+const { payExtensionFee } = require("../../controller/wallet/extensionPayment.controller");
+
 const router = express.Router();
 
 // Các router cho người dùng đã xác thực
@@ -20,6 +22,9 @@ router.get('/banks', getBankList); // Lấy danh sách ngân hàng
 //  route thanh toán đơn hàng, chỉ người dùng đã xác thực mới được thanh toán
 router.post("/order/payment", authenticateToken, payment);
 router.post("/order/payment/otp", authenticateToken, paymentOtp);// Gửi OTP xác nhận thanh toán đơn hàng
+
+// thanh toán gia hạn
+router.post("/order/extension/pay", authenticateToken, payExtensionFee);
 router.get("/transactions/recent", authenticateToken, getRecentWalletTransactions); // Lấy 3 giao dịch gần nhất của ví người dùng
 router.get("/user/transactions", authenticateToken, getWalletTransactions); // Lấy tất cả giao dịch của ví người dùng
 

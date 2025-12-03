@@ -49,7 +49,7 @@ module.exports = {
         paymentMethod = "Wallet",
         shippingAddress,
         note = "",
-        discountCode, // legacy
+        discountCode,
         publicDiscountCode,
         privateDiscountCode,
       } = req.body;
@@ -57,7 +57,6 @@ module.exports = {
       const finalStartAt = startAt || rentalStartDate;
       const finalEndAt = endAt || rentalEndDate;
 
-      // === VALIDATE REQUIRED FIELDS ===
       if (!itemId || !finalStartAt || !finalEndAt || !shippingAddress) {
         await session.abortTransaction();
         return res.status(400).json({ message: "Thiếu các trường bắt buộc" });
@@ -976,7 +975,7 @@ module.exports = {
       const skip = limitNum ? (pageNum - 1) * limitNum : 0;
 
       const query = Order.find(filter)
-        .populate("renterId", "fullName email avatarUrl userGuid")
+        .populate("renterId", "fullName email avatarUrl userGuid phone bio")
         .sort({ createdAt: -1 });
 
       if (limitNum) {
@@ -1035,7 +1034,7 @@ module.exports = {
       const skip = limitNum ? (pageNum - 1) * limitNum : 0;
 
       const query = Order.find(filter)
-        .populate("ownerId", "fullName avatarUrl userGuid phone")
+        .populate("ownerId", "fullName avatarUrl userGuid phone bio")
         .populate("itemId", "Title Images")
         .sort({ createdAt: -1 });
 
@@ -1054,7 +1053,6 @@ module.exports = {
           null,
       }));
 
-  
       return res.json({
         message: "Lấy danh sách đơn hàng thành công",
         data: ordersWithImages, // ← mảng trực tiếp, không bọc trong { data: ... }
@@ -1073,4 +1071,91 @@ module.exports = {
       });
     }
   },
+  getLatestOrderByRenter: async (req, res) => {
+    try {
+      const renterId = req.user._id || req.user.id;
+
+      const order = await Order.findOne({
+        renterId,
+        orderStatus: "completed",
+      })
+        .sort({ createdAt: -1 }) // mới nhất
+        .lean();
+
+      if (!order) {
+        return res.status(200).json({
+          code: 200,
+          message: "No completed orders found",
+          data: null,
+        });
+      }
+
+      return res.status(200).json({
+        code: 200,
+        message: "Latest completed order fetched",
+        data: {
+          orderId: order._id,
+          itemId: order.itemId?._id ?? order.itemId,
+          ownerId: order.ownerId?._id ?? order.ownerId,
+        },
+      });
+    } catch (err) {
+      console.error("getLatestOrderByRenter error:", err);
+      return res.status(500).json({
+        code: 500,
+        message: "Server error",
+        data: null,
+      });
+    }
+  },
+  getLatestOrderByOwner: async (req, res) => {
+    try {
+      const ownerId = req.user._id; 
+      const { renterId, orderStatus = "completed" } = req.query;
+
+      if (!renterId) {
+        return res.status(400).json({
+          code: 400,
+          message: "Vui lòng cung cấp renterId",
+          data: null,
+        });
+      }
+
+      const order = await Order.findOne({
+        renterId,
+        ownerId, // ← Bắt buộc là owner hiện tại
+        orderStatus,
+      })
+        .sort({ createdAt: -1 }) // Lấy đơn mới nhất
+        .lean();
+
+      if (!order) {
+        return res.status(200).json({
+          code: 200,
+          message: "No completed orders found",
+          data: null,
+        });
+      }
+
+      return res.status(200).json({
+        code: 200,
+        message: "Latest completed order fetched",
+        data: {
+          orderId: order._id,
+          itemId: order.itemId?._id ?? order.itemId,
+          ownerId: order.ownerId?._id ?? order.ownerId,
+          renterId: order.renterId, // ← thêm để biết đơn này thuộc renter nào
+        },
+      });
+    } catch (err) {
+      console.error("getLatestOrderByOwner error:", err);
+      return res.status(500).json({
+        code: 500,
+        message: "Server error",
+        data: null,
+      });
+    }
+  },
 };
+
+

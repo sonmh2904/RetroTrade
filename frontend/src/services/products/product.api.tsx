@@ -416,4 +416,165 @@ export const getRatingsByOwner = async (
     };
   }
 };
-// Cập nhật đánh giá
+
+// renter đánh giá owner
+export const getRatingShop = async (
+  ownerId: string,
+  params?: { page?: number; limit?: number }
+): Promise<OwnerRatingsResult> => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/owner/rating/${ownerId}${qs ? `?${qs}` : ""}`
+    );
+
+    const data = await res.json();
+    const payload = data?.data || {};
+
+    return {
+      success: data?.success ?? true,
+      message: data?.message,
+      ratings: payload.ratings || [],
+      total: payload.total || 0,
+      page: payload.page || 1,
+      limit: payload.limit || 20,
+      average: payload.average || 0,
+    };
+  } catch (error: any) {
+    console.error("Error fetching owner ratings:", error);
+    return {
+      success: false,
+      message: error?.message || "Không thể tải đánh giá",
+      ratings: [],
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+      average: 0,
+    };
+  }
+};
+
+export const createOwnerRating = async (formData: FormData) => {
+  try {
+    
+    const res = await instance.post("/products/owner/rating", formData);
+    const data = await res.json();
+     console.log("Response:", data);
+    return data;
+  } catch (error) {
+    console.error("Error creating owner rating:", error);
+    throw error;
+  }
+};
+
+export const updateOwnerRating = async (id: string, formData: FormData) => {
+  try {
+    const res = await instance.put(`/products/owner/rating/${id}`, formData);
+    return await res.json();
+  } catch (error) {
+    console.error("Error updating owner rating:", error);
+    throw error;
+  }
+};
+
+export const deleteOwnerRating = async (id: string) => {
+  try {
+    const res = await instance.delete(`/products/owner/rating/${id}`);
+    return await res.json();
+  } catch (error) {
+    console.error("Error deleting owner rating:", error);
+    throw error;
+  }
+};
+
+// 
+export interface RenterRatingsResult {
+  success: boolean;
+  message?: string;
+  ratings: any[];
+  total: number;
+  page: number;
+  limit: number;
+  average: number;
+}
+
+// Lấy đánh giá của renter
+export const getRenterRatings = async (
+  renterId: string,
+  params?: { page?: number; limit?: number }
+): Promise<RenterRatingsResult> => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/renter/rating/${renterId}${qs ? `?${qs}` : ""}`
+    );
+
+    const data = await res.json();
+    const payload = data?.data || {};
+
+    return {
+      success: data?.success ?? true,
+      message: data?.message,
+      ratings: payload.ratings || [],
+      total: payload.total || 0,
+      page: payload.page || 1,
+      limit: payload.limit || 20,
+      average: payload.average || 0,
+    };
+  } catch (error: any) {
+    console.error("Error fetching renter ratings:", error);
+    return {
+      success: false,
+      message: error?.message || "Không thể tải đánh giá",
+      ratings: [],
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+      average: 0,
+    };
+  }
+};
+
+// Tạo đánh giá renter
+export const createRenterRating = async (formData: FormData) => {
+  try {
+    const res = await instance.post("/products/renter/rating", formData);
+    const data = await res.json();
+    console.log("Response:", data);
+    return data;
+  } catch (error) {
+    console.error("Error creating renter rating:", error);
+    throw error;
+  }
+};
+
+// Cập nhật đánh giá renter
+export const updateRenterRating = async (id: string, formData: FormData) => {
+  try {
+    const res = await instance.put(`/products/renter/rating/${id}`, formData);
+    return await res.json();
+  } catch (error) {
+    console.error("Error updating renter rating:", error);
+    throw error;
+  }
+};
+
+// Xoá đánh giá renter
+export const deleteRenterRating = async (id: string) => {
+  try {
+    const res = await instance.delete(`/products/renter/rating/${id}`);
+    return await res.json();
+  } catch (error) {
+    console.error("Error deleting renter rating:", error);
+    throw error;
+  }
+};
+
