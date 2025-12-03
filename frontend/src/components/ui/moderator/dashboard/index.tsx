@@ -214,7 +214,7 @@ const ModeratorDashboard = () => {
     },
     {
       id: "owner-requests",
-      label: "Yêu cầu cấp quyền Cho thuê sản phẩmphẩm",
+      label: "Yêu cầu cấp quyền Owner",
       icon: FileCheck,
       color: "text-violet-600",
     },

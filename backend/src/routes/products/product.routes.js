@@ -20,6 +20,7 @@ const {
 
 const {
   listAllItems,
+  getSortedItems,
   getProductByProductId,
   searchProduct,
   viewFeatureProduct,
@@ -57,6 +58,7 @@ router.put("/approve/:id/highlight", authenticateToken, toggleHighlight);
 
 //product public
 router.get("/public/items", listAllItems);
+router.get("/public/items/sorted", getSortedItems);
 router.get("/public/categories", getAllPublicCategories);
 router.get("/products/public/highlighted", getHighlightedProducts);
 router.get("/product/search", searchProduct);

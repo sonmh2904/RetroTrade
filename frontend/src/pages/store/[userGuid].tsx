@@ -20,16 +20,45 @@ import {
   ChevronDown,
   MessageCircle,
   Zap,
-  MessageSquare,
-  User,
 } from "lucide-react";
 import { getPublicStoreByUserGuid } from "@/services/products/product.api";
 import OwnerRatingsSection from "@/components/owner/OwnerRatingsSection";
 import type { OwnerRatingStats } from "@/components/owner/OwnerRatingsSection";
 import AddToCartButton from "@/components/ui/common/AddToCartButton";
 import { toast } from "sonner";
-import ShopRating from "./ShopRating";
-import { listOrdersByRenter } from "@/services/auth/order.api";
+
+// Helper function to render stars with precise fractional star support
+const renderStars = (rating: number) => {
+  const fullStars = Math.floor(rating);
+  const decimalPart = rating % 1;
+  const emptyStars = 5 - fullStars - (decimalPart > 0 ? 1 : 0);
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(fullStars)].map((_, i) => (
+        <Star
+          key={`full-${i}`}
+          className="w-4 h-4 text-yellow-500 fill-yellow-500"
+        />
+      ))}
+      {decimalPart > 0 && (
+        <div className="relative">
+          <Star className="w-4 h-4 text-gray-300" />
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={{ width: `${decimalPart * 100}%` }}
+          >
+            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+          </div>
+        </div>
+      )}
+      {[...Array(emptyStars)].map((_, i) => (
+        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
+      ))}
+    </div>
+  );
+};
+
 interface Product {
   DepositAmount: number;
   IsHighlighted: boolean;
@@ -70,11 +99,6 @@ interface Owner {
   createdAt?: string;
 }
 
-interface Order {
-  _id: string;
-  orderStatus?: string;
-}
-
 const formatPrice = (price: number, currency: string) => {
   if (currency === "VND") {
     return new Intl.NumberFormat("vi-VN").format(price) + "đ";
@@ -87,7 +111,7 @@ const LIMIT = 8;
 export default function OwnerStorePage() {
   const router = useRouter();
   const { userGuid } = router.query as { userGuid?: string };
-  const [activeTab, setActiveTab] = useState<"product" | "shop">("product");
+
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +135,6 @@ export default function OwnerStorePage() {
   const isAuthenticated = useAppSelector(
     (state: RootState) => !!state.auth.accessToken
   );
-const [hasPurchasedWithThisShop, setHasPurchasedWithThisShop] = useState(false);
-const [validOrderIdForRating, setValidOrderIdForRating] = useState<string | null>(null);
 
   const totalPages = useMemo(() => Math.ceil((total || 0) / LIMIT), [total]);
 
@@ -121,7 +143,6 @@ const [validOrderIdForRating, setValidOrderIdForRating] = useState<string | null
     [isLoadMoreMode, products, items]
   );
   const ownerInfo = useMemo(() => owner, [owner]);
-  
 
   // Fetch store data
   const fetchStoreData = useCallback(
@@ -225,24 +246,6 @@ const [validOrderIdForRating, setValidOrderIdForRating] = useState<string | null
 
     fetchFavorites();
   }, [isAuthenticated, router]);
-  // Trong useEffect khi router.isReady
-useEffect(() => {
-  if (router.isReady) {
-    const tab = router.query.tab;
-    if (tab === "shop") setActiveTab("shop");
-    else setActiveTab("shop");
-  }
-}, [router.isReady, router.query.tab]);
-
-// Khi đổi tab
-const handleTabChange = (tab: "product" | "shop") => {
-  setActiveTab(tab);
-  router.replace(
-    { query: { ...router.query, tab: tab === "shop" ? "shop" : undefined } },
-    undefined,
-    { shallow: true }
-  );
-};
 
   const toggleFavorite = useCallback(
     async (productId: string) => {
@@ -348,42 +351,47 @@ const handleTabChange = (tab: "product" | "shop") => {
     },
     [favorites, favoriteLoading, isAuthenticated, router, isLoadMoreMode]
   );
-  
+
+  const fetchStoreStats = useCallback(async (userGuid: string) => {
+    try {
+      const res = await getPublicStoreByUserGuid(String(userGuid), {
+        limit: 1000,
+        page: 1,
+      });
+      const responseData = res as { data?: { items: Product[] } };
+      const allItems = (responseData.data?.items ?? []) as Product[];
+
+      const inStockCount = allItems.filter(
+        (it) => (it.AvailableQuantity ?? 0) > 0
+      ).length;
+      const categories = Array.from(
+        new Set(
+          allItems
+            .map((it) => it.Category?.name)
+            .filter((name): name is string => Boolean(name))
+        )
+      );
+
+      setStoreStats({
+        inStockCount,
+        categoryCount: categories.length,
+        totalProducts: allItems.length,
+      });
+    } catch (e) {
+      console.error("Failed to fetch store stats", e);
+      setStoreStats({
+        inStockCount: 0,
+        categoryCount: 0,
+        totalProducts: 0,
+      });
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchLatestOrder = async () => {
-      if (!isAuthenticated || !ownerInfo?._id) {
-        setHasPurchasedWithThisShop(false);
-        setValidOrderIdForRating(null);
-        return;
-      }
-
-      try {
-        // Lấy đơn hàng mới nhất của renter
-        const res = await listOrdersByRenter({
-          status: "completed",
-          limit: 1,
-        });
-
-        const orders: Order[] = res?.data || [];
-
-        if (orders.length > 0) {
-          setHasPurchasedWithThisShop(true);
-          setValidOrderIdForRating(orders[0]._id);
-        } else {
-          setHasPurchasedWithThisShop(false);
-          setValidOrderIdForRating(null);
-        }
-      } catch (err) {
-        console.error("Check purchase history failed:", err);
-        setHasPurchasedWithThisShop(false);
-        setValidOrderIdForRating(null);
-      }
-    };
-
-    fetchLatestOrder();
-  }, [isAuthenticated, ownerInfo?._id]);
-
+    if (ownerInfo && userGuid) {
+      fetchStoreStats(userGuid);
+    }
+  }, [ownerInfo, userGuid, fetchStoreStats]);
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || products.length >= total) return;
@@ -408,10 +416,10 @@ const handleTabChange = (tab: "product" | "shop") => {
   const handlePageChange = useCallback(
     (newPage: number) => {
       if (isLoadMoreMode || newPage < 1 || newPage > totalPages) return;
-      
+
       // Clear items immediately to prevent showing old data
       setItems([]);
-      
+
       // Update URL first (this will trigger useEffect which will handle the fetch)
       router.push(
         {
@@ -421,7 +429,7 @@ const handleTabChange = (tab: "product" | "shop") => {
         undefined,
         { shallow: true }
       );
-      
+
       // Instant scroll to top
       window.scrollTo({ top: 0, behavior: "auto" });
     },
@@ -499,8 +507,14 @@ const handleTabChange = (tab: "product" | "shop") => {
                 </span>
               </div>
               <div className="flex items-center gap-4 mb-4 text-sm text-gray-600 flex-wrap">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                <div className="flex items-center gap-2">
+                  {renderStars(
+                    parseFloat(
+                      ownerRatingStats?.average?.toFixed(1) ||
+                        ownerInfo.reputationScore?.toFixed(1) ||
+                        "5.0"
+                    )
+                  )}
                   <span className="font-semibold text-gray-900">
                     {ownerRatingStats?.average?.toFixed(1) ||
                       ownerInfo.reputationScore?.toFixed(1) ||
@@ -824,66 +838,12 @@ const handleTabChange = (tab: "product" | "shop") => {
             </div>
           )}
         </div>
+
         {ownerInfo?._id && (
-          <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
-            <div className="border-b border-gray-200">
-              <div className="flex flex-col sm:flex-row">
-                {[
-                  {
-                    id: "product",
-                    label: "Đánh giá sản phẩm của cửa hàng",
-                    icon: MessageSquare,
-                  },
-                  {
-                    id: "shop",
-                    label: "Đánh giá chất lượng cửa hàng",
-                    icon: User,
-                  },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as "product" | "shop")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-5 text-sm font-medium transition-all relative
-                    ${
-                      activeTab === tab.id
-                        ? "text-blue-600"
-                        : "text-gray-500 hover:text-gray-700"
-                    }
-                  `}
-                  >
-                    <tab.icon className="w-5 h-5" />
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-lg" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tab Content */}
-            <div className="p-6 min-h-96">
-              {/* Tab Đánh giá cửa hàng */}
-              {activeTab === "shop" && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <ShopRating
-                    ownerId={ownerInfo._id}
-                    orderId={validOrderIdForRating ?? undefined}
-                    hasPurchased={hasPurchasedWithThisShop}
-                  />
-                </div>
-              )}
-
-              {activeTab === "product" && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <OwnerRatingsSection
-                    ownerId={ownerInfo._id}
-                    onStatsUpdate={setOwnerRatingStats}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+          <OwnerRatingsSection
+            ownerId={ownerInfo._id}
+            onStatsUpdate={setOwnerRatingStats}
+          />
         )}
       </div>
     </div>

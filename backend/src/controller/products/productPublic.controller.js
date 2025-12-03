@@ -1319,9 +1319,154 @@ const getAllPublicCategories = async (req, res) => {
   }
 };
 
+// Get sorted items
+const getSortedItems = async (req, res) => {
+  let success = false;
+  try {
+    const { sortBy = 'CreatedAt', sortOrder = 'desc' } = req.query;
+    
+    // Validate sortBy parameter
+    const allowedSortFields = ['BasePrice', 'CreatedAt', 'ViewCount', 'RentCount'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'CreatedAt';
+    
+    // Validate sortOrder parameter
+    const order = sortOrder === 'asc' ? 1 : -1;
+    
+    // Build sort object
+    const sortObject = {};
+    sortObject[sortField] = order;
+    
+    const items = await Item.find({ StatusId: 2, IsDeleted: false })
+      .sort(sortObject)
+      .lean();
+
+    if (!items || items.length === 0) {
+      success = true;
+      return res.status(200).json({
+        success: true,
+        message: "Không có sản phẩm công khai nào",
+        data: {
+          items: [],
+          total: 0,
+        },
+      });
+    }
+
+    const itemIds = items.map((item) => item._id);
+
+    const allImages = await ItemImages.find({
+      ItemId: { $in: itemIds },
+      IsDeleted: false,
+    })
+      .sort({ Ordinal: 1 })
+      .lean();
+
+    const allItemTags = await ItemTag.find({
+      ItemId: { $in: itemIds },
+      IsDeleted: false,
+    }).lean();
+    const tagIds = allItemTags.map((tag) => tag.TagId);
+    const allTags = await Tags.find({
+      _id: { $in: tagIds },
+      isDeleted: false,
+    }).lean();
+
+    const categoryIds = [...new Set(items.map((item) => item.CategoryId))];
+    const categories = await Categories.find({
+      _id: { $in: categoryIds },
+      isActive: true,
+    }).lean();
+
+    const allConditions = await ItemConditions.find({
+      IsDeleted: false,
+    }).lean();
+    const allPriceUnits = await PriceUnits.find({ IsDeleted: false }).lean();
+
+    const ownerIds = [...new Set(items.map((item) => item.OwnerId))];
+    const owners = await User.find({
+      _id: { $in: ownerIds },
+    })
+      .select("FullName DisplayName AvatarUrl")
+      .lean();
+
+    const ownerMap = {};
+    owners.forEach((owner) => {
+      ownerMap[owner._id.toString()] = owner;
+    });
+
+    const imagesMap = {};
+    allImages.forEach((img) => {
+      if (!imagesMap[img.ItemId.toString()]) {
+        imagesMap[img.ItemId.toString()] = [];
+      }
+      imagesMap[img.ItemId.toString()].push(img);
+    });
+
+    const tagsMap = {};
+    const tagMapById = {};
+    allTags.forEach((tag) => {
+      tagMapById[tag._id.toString()] = tag;
+    });
+    allItemTags.forEach((itemTag) => {
+      if (!tagsMap[itemTag.ItemId.toString()]) {
+        tagsMap[itemTag.ItemId.toString()] = [];
+      }
+      const fullTag = {
+        ...itemTag,
+        Tag: tagMapById[itemTag.TagId.toString()],
+      };
+      tagsMap[itemTag.ItemId.toString()].push(fullTag);
+    });
+
+    const categoryMap = {};
+    categories.forEach((cat) => {
+      categoryMap[cat._id.toString()] = cat;
+    });
+
+    const itemsWithDetails = items
+      .map((item) => ({
+        ...item,
+        Category: categoryMap[item.CategoryId.toString()],
+        Condition: allConditions.find(
+          (c) => c.ConditionId === item.ConditionId
+        ),
+        PriceUnit: allPriceUnits.find((p) => p.UnitId === item.PriceUnitId),
+        Owner: ownerMap[item.OwnerId.toString()],
+        Images: imagesMap[item._id.toString()] || [],
+        Tags: tagsMap[item._id.toString()] || [],
+      }))
+      .map((item) => {
+        // Remove sensitive information
+        const { Owner, ...itemWithoutOwner } = item;
+        return {
+          ...itemWithoutOwner,
+          OwnerName: Owner?.DisplayName || Owner?.FullName || "Unknown",
+        };
+      });
+
+    success = true;
+    return res.status(200).json({
+      success: true,
+      message: "Lấy danh sách sản phẩm đã sắp xếp thành công",
+      data: {
+        items: itemsWithDetails,
+        total: itemsWithDetails.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getSortedItems:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách sản phẩm",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getAllPublicCategories,
   listAllItems,
+  getSortedItems,
   getProductByProductId,
   searchProduct,
   viewFeatureProduct,
