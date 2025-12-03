@@ -9,6 +9,8 @@ const ExtensionController = require("../../controller/order/extension.controller
 router.get("/", authenticateToken, OrderController.listOrders);
 router.get("/owner/", authenticateToken, OrderController.listOrdersByOwner);
 router.get("/renter/", authenticateToken, OrderController.listOrdersByRenter);
+router.get("/renter/last", authenticateToken, OrderController.getLatestOrderByRenter);
+router.get("/owner/last", authenticateToken, OrderController.getLatestOrderByOwner);
 router.post("/", authenticateToken, OrderController.createOrder);
 router.get("/:id", authenticateToken, OrderController.getOrder);
 router.post("/:id/confirm", authenticateToken,OrderController.confirmOrder);

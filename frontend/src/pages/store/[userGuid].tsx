@@ -111,7 +111,6 @@ export default function OwnerStorePage() {
   const isAuthenticated = useAppSelector(
     (state: RootState) => !!state.auth.accessToken
   );
-  // Thêm 2 state mới này vào đầu component, cùng chỗ với các useState khác
 const [hasPurchasedWithThisShop, setHasPurchasedWithThisShop] = useState(false);
 const [validOrderIdForRating, setValidOrderIdForRating] = useState<string | null>(null);
 
@@ -349,53 +348,19 @@ const handleTabChange = (tab: "product" | "shop") => {
     },
     [favorites, favoriteLoading, isAuthenticated, router, isLoadMoreMode]
   );
+  
 
-  const fetchStoreStats = useCallback(async (userGuid: string) => {
-    try {
-      const res = await getPublicStoreByUserGuid(String(userGuid), {
-        limit: 1000,
-        page: 1,
-      });
-      const responseData = res as { data?: { items: Product[] } };
-      const allItems = (responseData.data?.items ?? []) as Product[];
-
-      const inStockCount = allItems.filter(
-        (it) => (it.AvailableQuantity ?? 0) > 0
-      ).length;
-      const categories = Array.from(
-        new Set(
-          allItems
-            .map((it) => it.Category?.name)
-            .filter((name): name is string => Boolean(name))
-        )
-      );
-
-      setStoreStats({
-        inStockCount,
-        categoryCount: categories.length,
-        totalProducts: allItems.length,
-      });
-    } catch (e) {
-      console.error("Failed to fetch store stats", e);
-      setStoreStats({
-        inStockCount: 0,
-        categoryCount: 0,
-        totalProducts: 0,
-      });
-    }
-  }, []);
   useEffect(() => {
-    if (!isAuthenticated || !ownerInfo?._id) {
-      setHasPurchasedWithThisShop(false);
-      setValidOrderIdForRating(null);
-      return;
-    }
+    const fetchLatestOrder = async () => {
+      if (!isAuthenticated || !ownerInfo?._id) {
+        setHasPurchasedWithThisShop(false);
+        setValidOrderIdForRating(null);
+        return;
+      }
 
-    const checkPurchaseHistory = async () => {
       try {
-        
+        // Lấy đơn hàng mới nhất của renter
         const res = await listOrdersByRenter({
-      
           status: "completed",
           limit: 1,
         });
@@ -416,13 +381,9 @@ const handleTabChange = (tab: "product" | "shop") => {
       }
     };
 
-    checkPurchaseHistory();
+    fetchLatestOrder();
   }, [isAuthenticated, ownerInfo?._id]);
-  useEffect(() => {
-    if (ownerInfo && userGuid) {
-      fetchStoreStats(userGuid);
-    }
-  }, [ownerInfo, userGuid, fetchStoreStats]);
+
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || products.length >= total) return;
