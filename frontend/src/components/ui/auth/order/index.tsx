@@ -10,6 +10,10 @@ import {
   cancelOrder,
   receiveOrder,
 } from "@/services/auth/order.api";
+import {
+  getExtensionRequests,
+  type ExtensionRequest,
+} from "@/services/auth/extension.api";
 import type { Order } from "@/services/auth/order.api";
 import { RootState } from "@/store/redux_store";
 import { Button } from "@/components/ui/common/button";
@@ -49,9 +53,11 @@ import {
   AlertCircle,
   X,
   ClipboardList,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createDispute } from "@/services/moderator/disputeOrder.api";
+import ExtensionModal from "@/components/ui/auth/order/ExtensionModal";
 
 export default function OrderListPage({
   onOpenDetail,
@@ -75,6 +81,15 @@ export default function OrderListPage({
   const [disputeDescription, setDisputeDescription] = useState("");
   const [disputeEvidence, setDisputeEvidence] = useState<File[]>([]);
   const [evidencePreview, setEvidencePreview] = useState<string[]>([]);
+  const [openExtensionModal, setOpenExtensionModal] = useState(false);
+  const [selectedExtensionOrder, setSelectedExtensionOrder] =
+    useState<Order | null>(null);
+  const [pendingExtensions, setPendingExtensions] = useState<
+    Record<string, boolean>
+  >({});
+  const [extensionsLoading, setExtensionsLoading] = useState<
+    Record<string, boolean>
+  >({});
 
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
 
@@ -133,6 +148,29 @@ export default function OrderListPage({
     // SỬA LỖI: revoke đúng cách
     evidencePreview.forEach((url) => URL.revokeObjectURL(url));
     setEvidencePreview([]);
+  };
+
+  // Fetch pending extensions chỉ khi click nút (lazy load để tránh loop)
+  const checkPendingExtension = async (orderId: string) => {
+    if (extensionsLoading[orderId] || pendingExtensions[orderId] !== undefined)
+      return;
+
+    setExtensionsLoading((prev) => ({ ...prev, [orderId]: true }));
+
+    try {
+      const res = await getExtensionRequests(orderId);
+      if (res.code === 200 && Array.isArray(res.data)) {
+        const hasPending = res.data.some(
+          (ext: ExtensionRequest) => ext.status === "pending"
+        );
+        setPendingExtensions((prev) => ({ ...prev, [orderId]: hasPending }));
+      }
+    } catch (err) {
+      console.error(`Error fetching extensions for order ${orderId}:`, err);
+      toast.error("Không thể kiểm tra yêu cầu gia hạn");
+    } finally {
+      setExtensionsLoading((prev) => ({ ...prev, [orderId]: false }));
+    }
   };
 
   useEffect(() => {
@@ -237,6 +275,18 @@ export default function OrderListPage({
       setSelectedOrder(null);
       setOpenConfirm(false);
     }
+  };
+
+  const handleExtensionSuccess = () => {
+    if (selectedExtensionOrder?._id) {
+      setPendingExtensions((prev) => ({
+        ...prev,
+        [selectedExtensionOrder._id]: true,
+      }));
+      toast.success("Yêu cầu gia hạn đã được gửi thành công!");
+    }
+    setOpenExtensionModal(false);
+    setSelectedExtensionOrder(null);
   };
 
   const formatDateTime = (date: string) =>
@@ -491,291 +541,333 @@ export default function OrderListPage({
                 const isRenter =
                   userRole === "renter" ||
                   order.renterId?._id?.toString() === userId?.toString();
-               
-                  const isCurrentUserTheRenter =
-                    String(order.renterId) === String(userId);
 
-                  const canShowReturnButton =
-                    order.orderStatus === "progress" && isCurrentUserTheRenter;
+                const isCurrentUserTheRenter =
+                  String(order.renterId) === String(userId);
 
-                  return (
-                    <div
-                      key={order._id}
-                      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <p className="flex items-center gap-2 text-sm font-semibold text-blue-700">
-                          <ClipboardList className="w-4 h-4" />
-                          Mã đơn:
-                          <span className="font-mono">
-                            #{order.orderGuid.slice(0, 8).toUpperCase()}
-                          </span>
-                        </p>
+                const canShowReturnButton =
+                  order.orderStatus === "progress" && isCurrentUserTheRenter;
+                const hasPendingExtension =
+                  pendingExtensions[order._id || ""] ?? false;
+                const isExtensionsLoading =
+                  extensionsLoading[order._id || ""] ?? false;
+
+                return (
+                  <div
+                    key={order._id}
+                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+                        <ClipboardList className="w-4 h-4" />
+                        Mã đơn:
+                        <span className="font-mono">
+                          #{order.orderGuid.slice(0, 8).toUpperCase()}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-6">
+                      {/* Product Image */}
+                      <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full md:w-32 h-32 flex-shrink-0 overflow-hidden">
+                        {order.itemSnapshot?.images?.[0] ||
+                        order.itemId?.Images?.[0] ? (
+                          <img
+                            src={
+                              order.itemSnapshot?.images?.[0] ||
+                              order.itemId?.Images?.[0]
+                            }
+                            alt={
+                              order.itemSnapshot?.title || order.itemId?.Title
+                            }
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            <Package className="w-14 h-14" />
+                          </div>
+                        )}
                       </div>
 
-                      <div className="flex flex-col md:flex-row gap-6">
-                        {/* Product Image */}
-                        <div className="bg-gray-200 border-2 border-dashed rounded-xl w-full md:w-32 h-32 flex-shrink-0 overflow-hidden">
-                          {order.itemSnapshot?.images?.[0] ||
-                          order.itemId?.Images?.[0] ? (
-                            <img
-                              src={
-                                order.itemSnapshot?.images?.[0] ||
-                                order.itemId?.Images?.[0]
-                              }
-                              alt={
-                                order.itemSnapshot?.title || order.itemId?.Title
-                              }
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <Package className="w-14 h-14" />
-                            </div>
-                          )}
+                      {/* Order Details */}
+                      <div className="flex-1 space-y-4">
+                        {/* Product Name */}
+                        <div>
+                          <Link href={`/products/details?id=${order.itemId}`}>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                              {order.itemSnapshot?.title ||
+                                order.itemId?.Title ||
+                                "Sản phẩm không xác định"}
+                            </h3>
+                          </Link>
                         </div>
 
-                        {/* Order Details */}
-                        <div className="flex-1 space-y-4">
-                          {/* Product Name */}
-                          <div>
-                            <Link href={`/products/details?id=${order.itemId}`}>
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                {order.itemSnapshot?.title ||
-                                  order.itemId?.Title ||
-                                  "Sản phẩm không xác định"}
-                              </h3>
-                            </Link>
+                        {/* Order Status & Payment Status */}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${statusInfo.bgColor} ${statusInfo.color}`}
+                          >
+                            {statusInfo.label}
+                          </div>
+                          <div
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${paymentInfo.color}`}
+                          >
+                            {paymentInfo.label}
+                          </div>
+                        </div>
+
+                        {/* Rental Period & Details */}
+                        <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Calendar className="w-5 h-5 text-emerald-600" />
+                              <span className="font-medium">
+                                Thời gian thuê:
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600 ml-7">
+                              {formatDateTime(order.startAt)} →{" "}
+                              {formatDateTime(order.endAt)}
+                            </div>
+                            {order.rentalDuration && (
+                              <div className="text-xs text-gray-500 ml-7">
+                                Thời lượng: {order.rentalDuration}{" "}
+                                {order.rentalUnit || "ngày"}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Order Status & Payment Status */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Package className="w-5 h-5 text-blue-600" />
+                              <span className="font-medium">Số lượng:</span>
+                            </div>
+                            <div className="text-sm text-gray-600 ml-7">
+                              {order.unitCount} cái
+                            </div>
+                            {order.depositAmount && (
+                              <div className="text-xs text-gray-500 ml-7">
+                                Cọc:{" "}
+                                {order.depositAmount.toLocaleString("vi-VN")}{" "}
+                                {order.currency}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* User Info */}
+                        <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <User className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">
+                                {isRenter ? "Người cho thuê" : "Người thuê"}
+                              </p>
+                              <p className="text-sm font-medium text-gray-800">
+                                {isRenter
+                                  ? order.ownerId?.fullName || "N/A"
+                                  : order.renterId?.fullName || "N/A"}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {isRenter
+                                  ? order.ownerId?.email
+                                  : order.renterId?.email}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
                           <div className="flex flex-wrap items-center gap-3">
-                            <div
-                              className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${statusInfo.bgColor} ${statusInfo.color}`}
-                            >
-                              {statusInfo.label}
-                            </div>
-                            <div
-                              className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${paymentInfo.color}`}
-                            >
-                              {paymentInfo.label}
-                            </div>
-                          </div>
-
-                          {/* Rental Period & Details */}
-                          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-gray-700">
-                                <Calendar className="w-5 h-5 text-emerald-600" />
-                                <span className="font-medium">
-                                  Thời gian thuê:
-                                </span>
-                              </div>
-                              <div className="text-sm text-gray-600 ml-7">
-                                {formatDateTime(order.startAt)} →{" "}
-                                {formatDateTime(order.endAt)}
-                              </div>
-                              {order.rentalDuration && (
-                                <div className="text-xs text-gray-500 ml-7">
-                                  Thời lượng: {order.rentalDuration}{" "}
-                                  {order.rentalUnit || "ngày"}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-gray-700">
-                                <Package className="w-5 h-5 text-blue-600" />
-                                <span className="font-medium">Số lượng:</span>
-                              </div>
-                              <div className="text-sm text-gray-600 ml-7">
-                                {order.unitCount} cái
-                              </div>
-                              {order.depositAmount && (
-                                <div className="text-xs text-gray-500 ml-7">
-                                  Cọc:{" "}
-                                  {order.depositAmount.toLocaleString("vi-VN")}{" "}
-                                  {order.currency}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* User Info */}
-                          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                            <div className="flex items-start gap-3">
-                              <div className="p-2 bg-blue-100 rounded-lg">
-                                <User className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500 mb-1">
-                                  {isRenter ? "Người cho thuê" : "Người thuê"}
-                                </p>
-                                <p className="text-sm font-medium text-gray-800">
-                                  {isRenter
-                                    ? order.ownerId?.fullName || "N/A"
-                                    : order.renterId?.fullName || "N/A"}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {isRenter
-                                    ? order.ownerId?.email
-                                    : order.renterId?.email}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          {/* Actions */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
-                            <div className="flex flex-wrap items-center gap-3">
-                              {/* Nút Xem chi tiết */}
-                              {onOpenDetail ? (
+                            {/* Nút Xem chi tiết */}
+                            {onOpenDetail ? (
+                              <Button
+                                variant="outline"
+                                className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onOpenDetail(order._id);
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                Xem chi tiết
+                              </Button>
+                            ) : (
+                              <Link href={`/auth/my-orders/${order._id}`}>
                                 <Button
                                   variant="outline"
                                   className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onOpenDetail(order._id);
-                                  }}
                                 >
                                   <Eye className="w-4 h-4 mr-2" />
                                   Xem chi tiết
                                 </Button>
-                              ) : (
-                                <Link href={`/auth/my-orders/${order._id}`}>
-                                  <Button
-                                    variant="outline"
-                                    className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                                  >
-                                    <Eye className="w-4 h-4 mr-2" />
-                                    Xem chi tiết
-                                  </Button>
-                                </Link>
+                              </Link>
+                            )}
+                            {/* Nút Huy hàng */}
+                            {order.orderStatus === "pending" && (
+                              <Button
+                                variant="destructive"
+                                className="bg-white text-red-600 border border-red-600 hover:bg-red-600 hover:text-white transition"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setCancelTarget(order);
+                                  setOpenCancelConfirm(true);
+                                }}
+                              >
+                                Hủy đơn
+                              </Button>
+                            )}
+
+                            {/* Nút Trả hàng (giữ nguyên) */}
+                            {canShowReturnButton && (
+                              <Button
+                                className="bg-teal-600 hover:bg-teal-700 text-white"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrder(order);
+                                  setOpenConfirm(true);
+                                }}
+                                disabled={processing === order._id}
+                              >
+                                {processing === order._id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Đang xử lý...
+                                  </>
+                                ) : (
+                                  <>Trả hàng</>
+                                )}
+                              </Button>
+                            )}
+
+                            {/* Nút Gia hạn - Check trạng thái order trước khi show */}
+                            {order.orderStatus === "progress" &&
+                              isCurrentUserTheRenter && (
+                                <>
+                                  {hasPendingExtension ? (
+                                    <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg text-sm font-medium border border-indigo-200">
+                                      <Clock className="w-4 h-4" />
+                                      Đã gửi yêu cầu gia hạn
+                                    </div>
+                                  ) : isExtensionsLoading ? (
+                                    <div className="flex items-center gap-2 bg-gray-50 text-gray-600 px-3 py-2 rounded-lg text-sm font-medium border border-gray-200">
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      Đang kiểm tra...
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        await checkPendingExtension(
+                                          order._id || ""
+                                        );
+                                        if (
+                                          !pendingExtensions[order._id || ""]
+                                        ) {
+                                          setSelectedExtensionOrder(order);
+                                          setOpenExtensionModal(true);
+                                        }
+                                      }}
+                                      disabled={processing === order._id}
+                                    >
+                                      <Clock className="w-4 h-4" />
+                                      Gia hạn
+                                    </Button>
+                                  )}
+                                </>
                               )}
-                              {/* Nút Huy hàng */}
-                              {order.orderStatus === "pending" && (
+
+                            {/* NÚT THANH TOÁN NGAY - CHỈ HIỆN KHI: ĐÃ XÁC NHẬN + CHƯA THANH TOÁN */}
+                            {order.orderStatus === "confirmed" &&
+                              ["pending", "not_paid"].includes(
+                                order.paymentStatus
+                              ) && (
+                                <Button
+                                  className="bg-red-600 hover:bg-red-700 text-white font-medium shadow-md"
+                                  onClick={() => {
+                                    // Điều hướng đến trang thanh toán của đơn hàng
+                                    window.location.href = `/auth/my-orders/${order._id}?tab=payment`;
+                                  }}
+                                >
+                                  <svg
+                                    className="w-4 h-4 mr-2"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M17 9V7a5 5 0 00-10 0v2m-1 4h14l1 8H5l1-8z"
+                                    />
+                                  </svg>
+                                  Thanh toán ngay
+                                </Button>
+                              )}
+                            {/* Nút Xác nhận đã giao */}
+                            {order.orderStatus === "delivery" && (
+                              <Button
+                                className="bg-blue-500 hover:bg-blue-600 text-white"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConfirmDelivery(order);
+                                }}
+                                disabled={processing === order._id}
+                              >
+                                {processing === order._id ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Đã nhận hàng
+                                  </>
+                                )}
+                              </Button>
+                            )}
+
+                            {isRenter &&
+                              ["delivery", "received", "returned"].includes(
+                                order.orderStatus
+                              ) &&
+                              order.orderStatus !== "disputed" && (
                                 <Button
                                   variant="destructive"
-                                  className="bg-white text-red-600 border border-red-600 hover:bg-red-600 hover:text-white transition"
+                                  className="bg-orange-600 hover:bg-orange-700 text-white"
                                   onClick={(e) => {
-                                    e.preventDefault();
                                     e.stopPropagation();
-                                    setCancelTarget(order);
-                                    setOpenCancelConfirm(true);
+                                    setDisputeTarget(order);
+                                    setOpenDisputeDialog(true);
                                   }}
                                 >
-                                  Hủy đơn
+                                  <AlertCircle className="w-4 h-4 mr-2" />
+                                  Khiếu nại
                                 </Button>
                               )}
 
-                              {/* Nút Trả hàng (giữ nguyên) */}
-                              {canShowReturnButton && (
-                                <Button
-                                  className="bg-teal-600 hover:bg-teal-700 text-white"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedOrder(order);
-                                    setOpenConfirm(true);
-                                  }}
-                                  disabled={processing === order._id}
-                                >
-                                  {processing === order._id ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                      Đang xử lý...
-                                    </>
-                                  ) : (
-                                    <>Trả hàng</>
-                                  )}
-                                </Button>
-                              )}
+                            {/* Nếu đã Khiếu nại rồi thì hiện thông báo */}
+                            {order.orderStatus === "disputed" && (
+                              <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
+                                <AlertCircle className="w-4 h-4" />
+                                Đơn hàng đang được xử lý Khiếu nại
+                              </div>
+                            )}
+                          </div>
 
-                              {/* NÚT THANH TOÁN NGAY - CHỈ HIỆN KHI: ĐÃ XÁC NHẬN + CHƯA THANH TOÁN */}
-                              {order.orderStatus === "confirmed" &&
-                                ["pending", "not_paid"].includes(
-                                  order.paymentStatus
-                                ) && (
-                                  <Button
-                                    className="bg-red-600 hover:bg-red-700 text-white font-medium shadow-md"
-                                    onClick={() => {
-                                      // Điều hướng đến trang thanh toán của đơn hàng
-                                      window.location.href = `/auth/my-orders/${order._id}?tab=payment`;
-                                    }}
-                                  >
-                                    <svg
-                                      className="w-4 h-4 mr-2"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M17 9V7a5 5 0 00-10 0v2m-1 4h14l1 8H5l1-8z"
-                                      />
-                                    </svg>
-                                    Thanh toán ngay
-                                  </Button>
-                                )}
-                              {/* Nút Xác nhận đã giao */}
-                              {order.orderStatus === "delivery" && (
-                                <Button
-                                  className="bg-blue-500 hover:bg-blue-600 text-white"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleConfirmDelivery(order);
-                                  }}
-                                  disabled={processing === order._id}
-                                >
-                                  {processing === order._id ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="w-4 h-4 mr-2" />
-                                      Đã nhận hàng
-                                    </>
-                                  )}
-                                </Button>
-                              )}
-
-                              {isRenter &&
-                                ["delivery", "received", "returned"].includes(
-                                  order.orderStatus
-                                ) &&
-                                order.orderStatus !== "disputed" && (
-                                  <Button
-                                    variant="destructive"
-                                    className="bg-orange-600 hover:bg-orange-700 text-white"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDisputeTarget(order);
-                                      setOpenDisputeDialog(true);
-                                    }}
-                                  >
-                                    <AlertCircle className="w-4 h-4 mr-2" />
-                                    Khiếu nại
-                                  </Button>
-                                )}
-
-                              {/* Nếu đã Khiếu nạirồi thì hiện thông báo */}
-                              {order.orderStatus === "disputed" && (
-                                <div className="flex items-center gap-2 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg text-sm font-medium">
-                                  <AlertCircle className="w-4 h-4" />
-                                  Đơn hàng đang được xử lý Khiếu nại
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Thời gian cập nhật */}
-                            <div className="text-xs text-gray-500">
-                              Cập nhật: {formatDateTime(order.updatedAt)}
-                            </div>
+                          {/* Thời gian cập nhật */}
+                          <div className="text-xs text-gray-500">
+                            Cập nhật: {formatDateTime(order.updatedAt)}
                           </div>
                         </div>
                       </div>
                     </div>
-                  );
+                  </div>
+                );
               })}
             </div>
 
@@ -868,7 +960,7 @@ export default function OrderListPage({
             <div className="space-y-4">
               <p className="text-gray-700">
                 Bạn có chắc chắn muốn xác nhận đã trả hàng cho đơn hàng này
-                không? 
+                không?
               </p>
               {selectedOrder && (
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
@@ -1104,7 +1196,7 @@ export default function OrderListPage({
 
                     if (res.code === 201 || res.code === 200) {
                       toast.success(
-                        "Đã gửi Khiếu nạithành công! Moderator sẽ xử lý trong vòng 24h."
+                        "Đã gửi Khiếu nại thành công! Moderator sẽ xử lý trong vòng 24h."
                       );
 
                       // Cập nhật trạng thái đơn hàng ngay lập tức trên UI
@@ -1154,6 +1246,17 @@ export default function OrderListPage({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Extension Modal */}
+        <ExtensionModal
+          isOpen={openExtensionModal}
+          onClose={() => {
+            setOpenExtensionModal(false);
+            setSelectedExtensionOrder(null);
+          }}
+          order={selectedExtensionOrder}
+          onSuccess={handleExtensionSuccess}
+        />
       </div>
     </div>
   );

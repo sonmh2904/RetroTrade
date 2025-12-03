@@ -8,6 +8,18 @@ export interface ExtensionRequest {
   extensionDuration: number;
   extensionUnit: string;
   extensionFee: number;
+  originalExtensionFee?: number;
+  discount?: {
+    code: string;
+    type: "percent" | "fixed";
+    value: number;
+    amountApplied: number;
+    secondaryCode?: string;
+    secondaryType?: "percent" | "fixed";
+    secondaryValue?: number;
+    secondaryAmountApplied?: number;
+    totalAmountApplied: number;
+  } | null;
   status: "pending" | "approved" | "rejected";
   requestedBy: {
     _id: string;
@@ -20,13 +32,16 @@ export interface ExtensionRequest {
     avatarUrl?: string;
   };
   notes?: string;
+  rejectedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateExtensionRequest {
-  extensionDuration: number; 
-  notes?: string; 
+  extensionDuration: number;
+  notes?: string;
+  publicDiscountCode?: string;
+  privateDiscountCode?: string;
 }
 
 export interface RejectExtensionRequest {
@@ -40,29 +55,41 @@ export interface ExtensionResponse {
   extensionFee: number;
   extensionDuration: number;
   extensionUnit: string;
+  discount?: {
+    code: string;
+    type: "percent" | "fixed";
+    value: number;
+    amountApplied: number;
+    secondaryCode?: string;
+    secondaryType?: "percent" | "fixed";
+    secondaryValue?: number;
+    secondaryAmountApplied?: number;
+    totalAmountApplied: number;
+  } | null;
 }
 
 export interface ExtensionListResponse {
+  code: number;
   message: string;
   data: ExtensionRequest[];
 }
 
-const parseResponse = async <T = unknown,>(
+const parseResponse = async <T,>(
   response: Response
 ): Promise<ApiResponse<T>> => {
   const contentType = response.headers.get("content-type");
-  const data = contentType?.includes("application/json")
+  const raw = contentType?.includes("application/json")
     ? await response.json()
     : await response.text();
 
   return {
     code: response.status,
-    message: data?.message || "Request completed",
-    data: (data?.data || data) as T,
+    message: typeof raw === "string" ? raw : raw?.message || "Success",
+    data: (raw?.data ?? raw) as T,
   };
 };
 
-// 1. Renter yêu cầu gia hạn (POST /order/:id/extend)
+// 1. Renter yêu cầu gia hạn
 export const requestExtension = async (
   orderId: string,
   payload: CreateExtensionRequest
@@ -71,15 +98,20 @@ export const requestExtension = async (
   return await parseResponse<ExtensionResponse>(response);
 };
 
-// 2. Lấy danh sách yêu cầu gia hạn cho order (GET /order/:id/extensions)
+// 2. Lấy danh sách yêu cầu gia hạn cho order
 export const getExtensionRequests = async (
   orderId: string
 ): Promise<ApiResponse<ExtensionRequest[]>> => {
-  const response = await api.get(`/order/${orderId}/extensions`);
-  return await parseResponse<ExtensionRequest[]>(response);
+  try {
+    const response = await api.get(`/order/${orderId}/extensions`);
+    return await parseResponse<ExtensionRequest[]>(response);
+  } catch (error) {
+    console.error(`[getExtensionRequests] Error for order ${orderId}:`, error);
+    return { code: 200, message: "No extensions", data: [] };
+  }
 };
 
-// 3. Owner approve gia hạn (POST /order/:orderId/extension/:requestId/approve)
+// 3. Owner approve gia hạn
 export const approveExtension = async (
   orderId: string,
   requestId: string
@@ -92,7 +124,7 @@ export const approveExtension = async (
   );
 };
 
-// 4. Owner reject gia hạn (POST /order/:orderId/extension/:requestId/reject)
+// 4. Owner reject gia hạn
 export const rejectExtension = async (
   orderId: string,
   requestId: string,
