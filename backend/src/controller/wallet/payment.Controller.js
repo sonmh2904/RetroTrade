@@ -6,13 +6,12 @@ const Order = require('../../models/Order/Order.model.js');
 const Notification = require('../../models/Notification.model');
 const AuditLog = require('../../models/AuditLog.model');
 const mongoose = require('mongoose');
-const Otp = require("../../models/otp.js");
 const payment = async (req, res) => {
     if (!req.user || !req.user._id) {
         return res.status(401).json({ error: 'Chưa đăng nhập hoặc token không hợp lệ' });
     }
     const userId = req.user._id;
-    const { orderId, otp } = req.body;
+    const { orderId } = req.body;
 
     if (!orderId) return res.status(400).json({ error: 'Thiếu orderId' });
     if (!mongoose.Types.ObjectId.isValid(orderId) || !mongoose.Types.ObjectId.isValid(userId)) {
@@ -30,21 +29,6 @@ const payment = async (req, res) => {
         if (user.role === 'admin') {
             return res.status(403).json({ error: 'Admin không được phép thanh toán đơn hàng' });
         }
-        // 1.5. Xác thực OTP
-        const otpRecord = await Otp.findOne({
-            email: user.email,
-            otp,
-            purpose: 'wallet-payment'
-        });
-        if (!otpRecord) {
-            return res.status(400).json({
-                success: false,
-                message: 'OTP không hợp lệ hoặc đã hết hạn'
-            });
-        }
-        // dùng xong thì xóa OTP (tránh reuse)
-        await Otp.deleteOne({ _id: otpRecord._id });
-
         // 2. Tìm order
         const order = await Order.findOne({ _id: orderObjectId, isDeleted: { $ne: true } });
         if (!order) return res.status(404).json({ error: 'Đơn hàng không tồn tại hoặc đã xóa' });
