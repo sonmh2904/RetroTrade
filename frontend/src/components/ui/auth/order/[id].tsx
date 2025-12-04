@@ -799,13 +799,15 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                 {(() => {
                   // Lấy tất cả giá trị từ backend (đã được tính sẵn)
                   // Tiền thuê (rentalTotal) - totalAmount trong order là tiền thuê
+                  
                   const rentalTotal = order.itemSnapshot.basePrice || 0;
-
                   // Tiền cọc (depositTotal)
                   const depositTotal = order.depositAmount || 0;
 
                   // Phí dịch vụ (serviceFeeAmount) - đã được tính sẵn trong backend
                   const serviceFeeAmount = order.serviceFee || 0;
+                   const retalamout =
+                     order.totalAmount - depositTotal - serviceFeeAmount || 0;
 
                   // Lấy discount info từ order
                   const discount = order.discount;
@@ -828,7 +830,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                       <div className="flex justify-between items-center py-2 border-b border-white/20">
                         <span className="text-emerald-50">Tiền thuê</span>
                         <span className="font-semibold text-white">
-                          {rentalTotal.toLocaleString("vi-VN")}₫
+                          {retalamout.toLocaleString("vi-VN")}₫
                         </span>
                       </div>
 
