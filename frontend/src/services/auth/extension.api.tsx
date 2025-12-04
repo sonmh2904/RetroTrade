@@ -35,6 +35,7 @@ export interface ExtensionRequest {
   rejectedReason?: string;
   createdAt: string;
   updatedAt: string;
+  paymentStatus: "unpaid" | "paid" | "refunded";
 }
 
 export interface CreateExtensionRequest {

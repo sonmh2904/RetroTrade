@@ -180,6 +180,7 @@ async function refundExtensionRequest(requestId, session = null) {
     await WalletTransaction.create([{
       walletId: adminWallet._id,
       orderId: order._id,
+      orderCode: `${order.orderGuid}_ext_refund_admin`,
       typeId: "refund_extension_rejected",
       amount: -refundAmount,
       note: `Hoàn phí gia hạn bị từ chối - Đơn #${order.orderGuid}`,
@@ -188,12 +189,13 @@ async function refundExtensionRequest(requestId, session = null) {
     }, {
       walletId: renterWallet._id,
       orderId: order._id,
+      orderCode: `${order.orderGuid}_ext_refund_renter`,
       typeId: "refund_extension_rejected",
       amount: refundAmount,
       note: `Nhận hoàn phí gia hạn bị từ chối - Đơn #${order.orderGuid}`,
       status: "completed",
       createdAt: new Date()
-    }], { session });
+    }], { session ,ordered: true });
 
     request.isRefunded = true;
     request.refundedAt = new Date();

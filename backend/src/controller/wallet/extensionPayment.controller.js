@@ -31,7 +31,7 @@ const payExtensionFee = async (req, res) => {
     const extensionReq = await ExtensionRequest.findById(requestId)
       .populate({
         path: "orderId",
-        model: "Order", // Explicit model name to avoid ref fail
+        model: "Order", 
         populate: { path: "itemId", select: "Title OwnerId" },
       })
       .session(session);
@@ -79,7 +79,7 @@ const payExtensionFee = async (req, res) => {
         .json({ error: "Số tiền thanh toán phải lớn hơn 0" });
     }
 
-    // 3. Find userWallet (guard null)
+    // 3. Find userWallet
     const userWallet = await Wallet.findOne({ userId: renterId }).session(
       session
     );
@@ -106,7 +106,7 @@ const payExtensionFee = async (req, res) => {
       });
     }
 
-    // 4. Find adminUser & wallet (guard null)
+    // 4. Find adminUser & wallet
     const adminUser = await User.findOne({ role: "admin" }).session(session);
 
     if (!adminUser || !adminUser._id) {
@@ -136,7 +136,7 @@ const payExtensionFee = async (req, res) => {
     await userWallet.save({ session });
     await adminManagedWallet.save({ session });
 
-    // 6. Create WalletTransactions with unique codes (no duplicate)
+    // 6. Create WalletTransactions with unique codes 
     const generateUniqueTxCode = (baseCode, suffix) => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substr(2, 8);
