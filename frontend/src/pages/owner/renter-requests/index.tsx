@@ -14,9 +14,9 @@ import {
   getExtensionRequests,
   approveExtension,
   rejectExtension,
+  type ExtensionRequest,
 } from "@/services/auth/extension.api";
 import type { Order } from "@/services/auth/order.api";
-import type { ExtensionRequest } from "@/services/auth/extension.api";
 
 import {
   Card,
@@ -33,6 +33,7 @@ import { useRouter } from "next/navigation";
 import { createDispute } from "@/services/moderator/disputeOrder.api";
 import DisputeModal from "@/components/ui/owner/add-dispute-form";
 import ExtensionRequestModal from "@/components/ui/owner/extension-request-modal";
+import ExtensionHistoryModal from "@/components/ui/owner/extension-history-modal";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,12 @@ import {
   DialogFooter,
 } from "@/components/ui/common/dialog";
 import Image from "next/image";
+
+// TYPE AN TOÀN – DÀNH RIÊNG CHO DANH SÁCH EXTENSION CÓ THÊM THÔNG TIN ORDER
+type ExtensionWithOrderInfo = ExtensionRequest & {
+  orderGuid: string;
+  orderIdString: string; // ID thật của đơn hàng (string)
+};
 
 export default function OwnerRenterRequests() {
   return (
@@ -53,14 +60,18 @@ export default function OwnerRenterRequests() {
 function RenterRequestsContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pendingExtensions, setPendingExtensions] = useState<
-    (ExtensionRequest & { orderGuid: string })[]
+    ExtensionWithOrderInfo[]
   >([]);
+  const [historyExtensionsByOrder, setHistoryExtensionsByOrder] = useState<
+    Record<string, ExtensionRequest[]>
+  >({});
+
   const [loading, setLoading] = useState(true);
   const [loadingExt, setLoadingExt] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Modal Từ chối
+  // Modal Từ chối đơn hàng
   const [openRejectModal, setOpenRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -71,16 +82,20 @@ function RenterRequestsContent() {
     string | null
   >(null);
 
+  // Modal Gia hạn đang chờ xử lý
+  const [selectedExtension, setSelectedExtension] =
+    useState<ExtensionWithOrderInfo | null>(null);
+
+  // Modal Lịch sử gia hạn
+  const [selectedOrderForHistory, setSelectedOrderForHistory] = useState<
+    string | null
+  >(null);
+
   const [selectedStatus, setSelectedStatus] = useState("all");
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const limit = 10;
 
-  const [selectedExtension, setSelectedExtension] = useState<
-    (ExtensionRequest & { orderGuid: string }) | null
-  >(null);
-
-  // XÓA TAB "extension_pending" - GIỮ LẠI HIỆU ỨNG NHÁY Ở TAB "Đang thuê"
   const tabs = [
     { key: "all", label: "Tất cả" },
     { key: "pending", label: "Yêu cầu đơn hàng" },
@@ -128,6 +143,7 @@ function RenterRequestsContent() {
     disputed: "bg-red-700",
   };
 
+  // Fetch đơn hàng
   useEffect(() => {
     const fetchOrders = async () => {
       if (refreshKey === 0) setLoading(true);
@@ -135,7 +151,9 @@ function RenterRequestsContent() {
 
       try {
         const res = await listOrdersByOwner();
-        if (res.code === 200 && Array.isArray(res.data)) setOrders(res.data);
+        if (res.code === 200 && Array.isArray(res.data)) {
+          setOrders(res.data);
+        }
       } catch {
         toast.error("Lỗi tải đơn hàng");
       } finally {
@@ -146,49 +164,81 @@ function RenterRequestsContent() {
     fetchOrders();
   }, [refreshKey]);
 
+  // Fetch tất cả gia hạn (pending + history)
   useEffect(() => {
-    const fetchExtensions = async () => {
+    const fetchAllExtensions = async () => {
       if (orders.length === 0) return;
       setLoadingExt(true);
 
       const activeOrders = orders.filter((o) =>
-        ["confirmed", "delivery", "received", "progress"].includes(
-          o.orderStatus
-        )
+        [
+          "confirmed",
+          "delivery",
+          "received",
+          "progress",
+          "returned",
+          "completed",
+        ].includes(o.orderStatus)
       );
 
       if (activeOrders.length === 0) {
         setPendingExtensions([]);
+        setHistoryExtensionsByOrder({});
         setLoadingExt(false);
         return;
       }
+
+      const pendingList: ExtensionWithOrderInfo[] = [];
+      const historyMap: Record<string, ExtensionRequest[]> = {};
 
       try {
         const results = await Promise.allSettled(
           activeOrders.map((o) => getExtensionRequests(o._id))
         );
 
-        const list: (ExtensionRequest & { orderGuid: string })[] = [];
+        results.forEach((result, index) => {
+          if (
+            result.status === "fulfilled" &&
+            Array.isArray(result.value?.data)
+          ) {
+            const exts = result.value.data;
+            const order = activeOrders[index];
 
-        results.forEach((r, i) => {
-          if (r.status === "fulfilled" && r.value?.data?.length) {
-            r.value.data.forEach((ext: ExtensionRequest) => {
-              if (ext.status === "pending") {
-                list.push({ ...ext, orderGuid: activeOrders[i].orderGuid });
-              }
+            // Tách pending và history
+            const pending = exts.filter(
+              (e: ExtensionRequest) => e.status === "pending"
+            );
+            const history = exts.filter(
+              (e: ExtensionRequest) =>
+                e.status === "approved" || e.status === "rejected"
+            );
+
+            // Pending → thêm orderGuid + orderId thật
+            pending.forEach((ext) => {
+              pendingList.push({
+                ...ext,
+                orderGuid: order.orderGuid,
+                orderIdString: order._id,
+              });
             });
+
+            // History → lưu theo orderId thật
+            if (history.length > 0) {
+              historyMap[order._id] = history;
+            }
           }
         });
 
-        setPendingExtensions(list);
+        setPendingExtensions(pendingList);
+        setHistoryExtensionsByOrder(historyMap);
       } catch (e) {
-        console.error(e);
+        console.error("Lỗi tải gia hạn:", e);
       } finally {
         setLoadingExt(false);
       }
     };
 
-    fetchExtensions();
+    fetchAllExtensions();
   }, [orders, refreshKey]);
 
   const displayData =
@@ -204,6 +254,7 @@ function RenterRequestsContent() {
 
   useEffect(() => setCurrentPage(1), [selectedStatus]);
 
+  // Các hàm xử lý
   const handleConfirm = async (orderId: string) => {
     const res = await confirmOrder(orderId);
     if (res.code === 200) {
@@ -269,7 +320,19 @@ function RenterRequestsContent() {
 
   // Lấy yêu cầu gia hạn đang chờ của đơn hàng
   const getPendingExtension = (orderId: string) => {
-    return pendingExtensions.find((ext) => ext.orderId === orderId) || null;
+    return (
+      pendingExtensions.find((ext) => ext.orderIdString === orderId) || null
+    );
+  };
+
+  const getHistoryCount = (orderId: string) => {
+    return historyExtensionsByOrder[orderId]?.length || 0;
+  };
+
+  const getOrderTitle = (orderId: string) => {
+    return (
+      orders.find((o) => o._id === orderId)?.itemSnapshot?.title || "Sản phẩm"
+    );
   };
 
   return (
@@ -285,7 +348,7 @@ function RenterRequestsContent() {
         </div>
       )}
 
-      {/* Tabs - Badge đỏ nháy ở "Đang thuê" nếu có gia hạn */}
+      {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
         {tabs.map((tab) => (
           <button
@@ -315,6 +378,7 @@ function RenterRequestsContent() {
         ))}
       </div>
 
+      {/* Danh sách đơn hàng */}
       {loading || loadingExt ? (
         <p className="text-center py-10 font-medium">Đang tải dữ liệu...</p>
       ) : displayData.length === 0 ? (
@@ -325,6 +389,7 @@ function RenterRequestsContent() {
         <div className="space-y-4">
           {paginatedData.map((order: Order) => {
             const extension = getPendingExtension(order._id);
+            const historyCount = getHistoryCount(order._id);
 
             return (
               <Card
@@ -334,13 +399,30 @@ function RenterRequestsContent() {
                   router.push(`/owner/renter-requests/${order._id}`)
                 }
               >
-                {/* Badge yêu cầu gia hạn nếu có */}
+                {/* Badge yêu cầu gia hạn đang chờ */}
                 {extension && (
                   <div className="absolute -top-3 -right-3 z-10">
                     <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white animate-pulse shadow-lg">
                       <Clock className="w-4 h-4 mr-1" />
                       Người thuê yêu cầu gia hạn
                     </Badge>
+                  </div>
+                )}
+
+                {/* Nút Lịch sử gia hạn – chỉ hiện khi có */}
+                {historyCount > 0 && (
+                  <div className="absolute top-4 right-4 z-20">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="text-xs font-medium shadow-md hover:shadow-lg"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedOrderForHistory(order._id);
+                      }}
+                    >
+                      Lịch sử gia hạn ({historyCount})
+                    </Button>
                   </div>
                 )}
 
@@ -430,7 +512,7 @@ function RenterRequestsContent() {
                       <div className="flex gap-4 items-center">
                         {order.paymentStatus !== "paid" && (
                           <div className="flex items-center gap-1 text-red-500">
-                            <AlertCircle className="w-4 h-4" />
+                            <AlertCircle className="w-4" />
                             <span className="text-xs">Chưa thanh toán</span>
                           </div>
                         )}
@@ -554,7 +636,7 @@ function RenterRequestsContent() {
         </div>
       )}
 
-      {/* Các modal giữ nguyên */}
+      {/* Modal Từ chối */}
       <Dialog open={openRejectModal} onOpenChange={setOpenRejectModal}>
         <DialogContent>
           <DialogHeader>
@@ -578,7 +660,7 @@ function RenterRequestsContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Khiếu nại*/}
+      {/* Modal Khiếu nại */}
       <DisputeModal
         open={openDisputeModal}
         onOpenChange={setOpenDisputeModal}
@@ -601,28 +683,46 @@ function RenterRequestsContent() {
         }}
       />
 
+      {/* Modal Gia hạn đang chờ */}
       <ExtensionRequestModal
         open={!!selectedExtension}
         onOpenChange={(open) => !open && setSelectedExtension(null)}
         extension={selectedExtension}
-        onApprove={async (orderId: string, extId: string) => {
-          const res = await approveExtension(orderId, extId);
+        onApprove={async () => {
+          if (!selectedExtension) return;
+          const res = await approveExtension(
+            selectedExtension.orderIdString,
+            selectedExtension._id
+          );
           if (res.code === 200) {
             toast.success("Phê duyệt gia hạn thành công!");
             setRefreshKey((k) => k + 1);
             setSelectedExtension(null);
           }
         }}
-        onReject={async (orderId: string, extId: string, reason: string) => {
-          const res = await rejectExtension(orderId, extId, {
-            rejectReason: reason,
-          });
+        onReject={async (reason: string) => {
+          if (!selectedExtension) return;
+          const res = await rejectExtension(
+            selectedExtension.orderIdString,
+            selectedExtension._id,
+            {
+              rejectReason: reason,
+            }
+          );
           if (res.code === 200) {
             toast.success("Từ chối gia hạn thành công");
             setRefreshKey((k) => k + 1);
             setSelectedExtension(null);
           }
         }}
+      />
+
+      {/* Modal Lịch sử gia hạn */}
+      <ExtensionHistoryModal
+        isOpen={!!selectedOrderForHistory}
+        onClose={() => setSelectedOrderForHistory(null)}
+        orderId={selectedOrderForHistory || ""}
+        orderTitle={getOrderTitle(selectedOrderForHistory || "")}
       />
     </div>
   );

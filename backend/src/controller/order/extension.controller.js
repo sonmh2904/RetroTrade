@@ -562,6 +562,14 @@ module.exports = {
           select: "fullName avatarUrl",
           model: "User",
         })
+        .populate({
+          path: "orderId",
+          select: "startAt endAt rentalDuration itemId",
+          populate: {
+            path: "itemId",
+            select: "Title PriceUnitId",
+          },
+        })
         .sort({ createdAt: -1 });
 
       return res.status(200).json({

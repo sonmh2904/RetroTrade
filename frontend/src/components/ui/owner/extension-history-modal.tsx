@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/common/dialog";
 import { Button } from "@/components/ui/common/button";
+import { Badge } from "@/components/ui/common/badge";
 import {
   Clock,
   CheckCircle,
@@ -25,53 +26,54 @@ import {
   type ExtensionRequest,
 } from "@/services/auth/extension.api";
 
-interface ExtensionRequestsModalProps {
+interface ExtensionHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   orderId: string;
-  orderTitle?: string;
+  orderTitle: string;
 }
 
-export default function ExtensionRequestsModal({
+export default function ExtensionHistoryModal({
   isOpen,
   onClose,
   orderId,
-  orderTitle = "Sản phẩm",
-}: ExtensionRequestsModalProps) {
+  orderTitle,
+}: ExtensionHistoryModalProps) {
   const [loading, setLoading] = useState(true);
   const [extensions, setExtensions] = useState<ExtensionRequest[]>([]);
 
-  const fetchExtensions = useCallback(async () => {
-    if (!orderId) return;
-    try {
-      setLoading(true);
-      const res = await getExtensionRequests(orderId);
-      if (res.code === 200 && Array.isArray(res.data)) {
-        setExtensions(res.data);
-      } else {
-        setExtensions([]);
-      }
-    } catch (err) {
-      console.error("Error fetching extensions:", err);
-      toast.error("Lỗi khi tải thông tin gia hạn");
-      setExtensions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [orderId]);
-
   useEffect(() => {
-    if (isOpen) fetchExtensions();
-    else setExtensions([]);
-  }, [isOpen, fetchExtensions]);
+    if (!isOpen || !orderId) return;
+
+    const fetchHistory = async () => {
+      try {
+        setLoading(true);
+        const res = await getExtensionRequests(orderId);
+        if (res.code === 200 && Array.isArray(res.data)) {
+          const processed = res.data.filter(
+            (ext) => ext.status === "approved" || ext.status === "rejected"
+          );
+          setExtensions(processed);
+        } else {
+          setExtensions([]);
+        }
+      } catch (err) {
+        console.error("Lỗi tải lịch sử gia hạn:", err);
+        toast.error("Không thể tải lịch sử gia hạn");
+        setExtensions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [isOpen, orderId]);
 
   const formatDateTime = (date: string) =>
     format(new Date(date), "dd/MM/yyyy HH:mm", { locale: vi });
 
-  const formatCurrency = (amount: number | null | undefined): string => {
-    if (amount == null) return "0 VNĐ";
-    return `${Number(amount).toLocaleString("vi-VN")} VNĐ`;
-  };
+  const formatCurrency = (amount: number | null | undefined): string =>
+    amount != null ? `${Number(amount).toLocaleString("vi-VN")} VNĐ` : "0 VNĐ";
 
   const getUnitLabel = (unit: string): string => {
     const map: Record<string, string> = {
@@ -80,43 +82,7 @@ export default function ExtensionRequestsModal({
       tuần: "tuần",
       tháng: "tháng",
     };
-    return map[unit] || unit;
-  };
-
-  const getStatusBadge = (
-    status: ExtensionRequest["status"],
-    paymentStatus: ExtensionRequest["paymentStatus"]
-  ) => {
-    if (status === "approved")
-      return (
-        <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-          <CheckCircle className="w-3 h-3" />
-          Đã phê duyệt
-        </div>
-      );
-
-    if (status === "rejected")
-      return (
-        <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">
-          <XCircle className="w-3 h-3" />
-          Bị từ chối
-        </div>
-      );
-
-    if (paymentStatus === "paid")
-      return (
-        <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-          <Clock className="w-3 h-3" />
-          Đã thanh toán
-        </div>
-      );
-
-    return (
-      <div className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
-        <Clock className="w-3 h-3" />
-        Chờ phê duyệt
-      </div>
-    );
+    return map[unit.toLowerCase()] || unit;
   };
 
   if (!isOpen) return null;
@@ -125,24 +91,22 @@ export default function ExtensionRequestsModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl w-[95vw] max-h-[75vh] my-8 translate-y-0 top-1/2 -translate-y-1/2 overflow-y-auto rounded-xl shadow-2xl">
         <DialogHeader className="pb-3 border-b border-gray-200">
-          <DialogTitle className="flex items-center gap-3 text-xl">
-            <Clock className="w-7 h-7 text-indigo-600" />
-            Chi tiết yêu cầu gia hạn - {orderTitle}
+          <DialogTitle className="flex items-center gap-3 text-xl font-bold">
+            <Clock className="w-7 h-7 text-purple-600" />
+            Lịch sử gia hạn - {orderTitle}
           </DialogTitle>
         </DialogHeader>
 
         <div className="py-5">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16">
-              <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-3" />
-              <span className="text-gray-600">Đang tải thông tin...</span>
+              <Loader2 className="w-10 h-10 animate-spin text-purple-600 mb-3" />
+              <span className="text-gray-600">Đang tải lịch sử...</span>
             </div>
           ) : extensions.length === 0 ? (
             <div className="text-center py-16 text-gray-500">
               <Clock className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg">
-                Chưa có yêu cầu gia hạn nào cho đơn hàng này
-              </p>
+              <p className="text-lg font-medium">Chưa có lịch sử gia hạn nào</p>
             </div>
           ) : (
             <div className="space-y-5">
@@ -157,8 +121,8 @@ export default function ExtensionRequestsModal({
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4">
                         <div className="text-center">
-                          <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                            <Calendar className="w-6 h-6 text-indigo-600" />
+                          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                            <Calendar className="w-6 h-6 text-purple-600" />
                           </div>
                           <span className="text-xs text-gray-500 mt-1 block">
                             {formatDateTime(ext.createdAt).split(" ")[0]}
@@ -166,16 +130,31 @@ export default function ExtensionRequestsModal({
                         </div>
                         <div>
                           <h4 className="font-bold text-gray-900">
-                            Yêu cầu gia hạn
+                            {isApproved
+                              ? "Gia hạn đã duyệt"
+                              : "Gia hạn bị từ chối"}
                           </h4>
                           <p className="text-sm text-gray-600">
                             Bởi: {ext.requestedBy?.fullName || "Người thuê"}
                           </p>
                         </div>
                       </div>
-                      {getStatusBadge(ext.status, ext.paymentStatus)}
+
+                      {/* THAY ĐỔI DUY NHẤT TẠI ĐÂY – LOẠI BỎ HÀM getStatusBadge */}
+                      {isApproved ? (
+                        <Badge className="bg-green-100 text-green-800 flex items-center gap-1 font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          Đã duyệt
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-800 flex items-center gap-1 font-medium">
+                          <XCircle className="w-4 h-4" />
+                          Đã từ chối
+                        </Badge>
+                      )}
                     </div>
 
+                    {/* Phần còn lại giữ nguyên 100% */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                       <div>
                         <div className="flex items-center gap-2 text-gray-700 font-medium mb-2">
@@ -201,7 +180,7 @@ export default function ExtensionRequestsModal({
                           <Clock className="w-4 h-4 text-blue-600" />
                           {isApproved
                             ? "Thời gian thuê mới"
-                            : "Yêu cầu gia hạn"}
+                            : "Thời gian yêu cầu"}
                         </div>
                         <div
                           className={`rounded-lg p-3 border-2 border-dashed ${
