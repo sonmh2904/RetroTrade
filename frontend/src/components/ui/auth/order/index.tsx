@@ -592,7 +592,7 @@ export default function OrderListPage({
                       <div className="flex-1 space-y-4">
                         {/* Product Name */}
                         <div>
-                          <Link href={`/products/details?id=${order.itemId}`}>
+                          <Link href={`/products/details?id=${order.itemId._id}`}>
                             <h3 className="text-lg font-semibold text-gray-900 mb-2">
                               {order.itemSnapshot?.title ||
                                 order.itemId?.Title ||
