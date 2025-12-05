@@ -118,59 +118,28 @@ export default function ExtensionModal({
     }
   }, [currentEndAt, extensionDuration, priceUnitId]);
 
-  const rentalAmount = basePrice * extensionDuration;
+  const rentalAmount = basePrice * extensionDuration; // FIX: Chỉ rental, không + service
   const serviceFee = Math.round(rentalAmount * 0.03);
-  const subtotal = rentalAmount + serviceFee;
+  const subtotal = rentalAmount + serviceFee; // Tổng trước discount
 
-  // Memoize discount calculations
+  // Memoize discount calculations - FIX: Base chỉ rentalAmount
   const effectivePublicDiscountAmount = useMemo(
-    () => (subtotal > 0 ? publicDiscountAmount : 0),
-    [subtotal, publicDiscountAmount]
+    () => (rentalAmount > 0 ? publicDiscountAmount : 0), // FIX: Base rental
+    [rentalAmount, publicDiscountAmount]
   );
   const effectivePrivateDiscountAmount = useMemo(
-    () => (subtotal > 0 ? privateDiscountAmount : 0),
-    [subtotal, privateDiscountAmount]
+    () => (rentalAmount > 0 ? privateDiscountAmount : 0), // FIX: Base rental
+    [rentalAmount, privateDiscountAmount]
   );
   const totalDiscountAmount = useMemo(
     () => effectivePublicDiscountAmount + effectivePrivateDiscountAmount,
     [effectivePublicDiscountAmount, effectivePrivateDiscountAmount]
   );
 
-  // Kiểm tra minOrderAmount cho public discount 
-  useEffect(() => {
-    if (
-      publicDiscount &&
-      publicDiscount.minOrderAmount &&
-      subtotal < publicDiscount.minOrderAmount
-    ) {
-      setPublicDiscount(null);
-      setPublicDiscountAmount(0);
-      toast.info(
-        "Phí gia hạn không còn đáp ứng điều kiện tối thiểu của mã giảm giá công khai đã chọn."
-      );
-    }
-  }, [publicDiscount, subtotal]);
 
-  // Kiểm tra minOrderAmount cho private discount (chỉ kiểm tra trên subtotal còn lại)
-  useEffect(() => {
-    if (privateDiscount && privateDiscount.minOrderAmount) {
-      const baseAmountAfterPublic = Math.max(
-        0,
-        subtotal - publicDiscountAmount
-      );
-      if (baseAmountAfterPublic < privateDiscount.minOrderAmount) {
-        setPrivateDiscount(null);
-        setPrivateDiscountAmount(0);
-        toast.info(
-          "Phí gia hạn không còn đáp ứng điều kiện tối thiểu của mã giảm giá riêng tư đã chọn."
-        );
-      }
-    }
-  }, [privateDiscount, subtotal, publicDiscountAmount]);
+  const finalAmount = Math.max(0, subtotal - totalDiscountAmount); // Discount chỉ trừ rental, service giữ nguyên
 
-  const finalAmount = subtotal - totalDiscountAmount;
-
-  // Helper function to calculate discount amount 
+  // Helper function to calculate discount amount - FIX: Giữ nguyên, nhưng dùng base=rentalAmount
   const calculateDiscountAmount = useCallback(
     (
       type: "percent" | "fixed",
@@ -188,7 +157,7 @@ export default function ExtensionModal({
     []
   );
 
-  // Load available discounts for user
+  // Load available discounts for user - Giữ nguyên
   const loadAvailableDiscounts = useCallback(async () => {
     setLoadingDiscounts(true);
     setDiscountListError(null);
@@ -216,14 +185,14 @@ export default function ExtensionModal({
     }
   }, []);
 
-  // Load available discounts on mount
+  // Load available discounts on mount - Giữ nguyên
   useEffect(() => {
     if (isOpen) {
       loadAvailableDiscounts();
     }
   }, [isOpen, loadAvailableDiscounts]);
 
-  // Close discount dropdown when clicking outside
+  // Close discount dropdown when clicking outside - Giữ nguyên
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -239,7 +208,7 @@ export default function ExtensionModal({
     };
   }, [showDiscountList]);
 
-  // Handle discount code 
+  // Handle discount code - FIX: baseAmountForDiscount = rentalAmount
   const handleApplyDiscount = async (code?: string) => {
     const codeToApply = code || discountCode.trim();
     if (!codeToApply) {
@@ -249,8 +218,8 @@ export default function ExtensionModal({
     setDiscountLoading(true);
     setDiscountError(null);
     try {
-      // Tính discount chỉ dựa trên subtotal 
-      let baseAmountForDiscount = subtotal;
+      // FIX: Base chỉ rentalAmount (không + serviceFee)
+      let baseAmountForDiscount = rentalAmount;
       let isPrivateDiscountWithPublic = false;
       // Validate lần đầu để kiểm tra mã có hợp lệ không
       const response = await validateDiscount({
@@ -260,10 +229,13 @@ export default function ExtensionModal({
       if (response.status === "success" && response.data) {
         const discount = response.data.discount;
         let amount = response.data.amount || 0;
-        // Nếu là mã riêng tư và đã có mã công khai, validate trực tiếp với subtotal còn lại
+        // Nếu là mã riêng tư và đã có mã công khai, validate trực tiếp với rentalAmount còn lại
         if (!discount.isPublic && publicDiscountAmount > 0) {
           isPrivateDiscountWithPublic = true;
-          baseAmountForDiscount = Math.max(0, subtotal - publicDiscountAmount);
+          baseAmountForDiscount = Math.max(
+            0,
+            rentalAmount - publicDiscountAmount
+          ); // FIX: rentalAmount
         }
         // Tính lại discount amount để đảm bảo chính xác
         const calculatedAmount = calculateDiscountAmount(
@@ -291,9 +263,9 @@ export default function ExtensionModal({
           }
           setPublicDiscount(discount);
           setPublicDiscountAmount(amount);
-          // Nếu đã có mã private, tính lại mã private với baseAmount mới (chỉ trên subtotal còn lại)
+          // Nếu đã có mã private, tính lại mã private với baseAmount mới (chỉ trên rentalAmount còn lại)
           if (privateDiscount) {
-            const baseAmountAfterPublic = Math.max(0, subtotal - amount);
+            const baseAmountAfterPublic = Math.max(0, rentalAmount - amount); // FIX: rentalAmount
             try {
               const revalidatePrivateResponse = await validateDiscount({
                 code: privateDiscount.code.toUpperCase(),
@@ -303,9 +275,7 @@ export default function ExtensionModal({
                 revalidatePrivateResponse.status === "success" &&
                 revalidatePrivateResponse.data
               ) {
-                setPrivateDiscountAmount(
-                  revalidatePrivateResponse.data.amount || 0
-                );
+                setPrivateDiscountAmount(revalidatePrivateResponse.data.amount);
               }
             } catch (e) {
               console.error("Error revalidating private discount:", e);
@@ -327,19 +297,19 @@ export default function ExtensionModal({
             setDiscountLoading(false);
             return;
           }
-          // Nếu đã có mã công khai, validate lại với subtotal còn lại
+          // Nếu đã có mã công khai, validate lại với rentalAmount còn lại
           if (isPrivateDiscountWithPublic) {
             try {
               const revalidateResponse = await validateDiscount({
                 code: discount.code.toUpperCase(),
-                baseAmount: baseAmountForDiscount, // Đã được tính = subtotal - publicDiscountAmount
+                baseAmount: baseAmountForDiscount, // Đã được tính = rentalAmount - publicDiscountAmount
               });
               if (
                 revalidateResponse.status === "success" &&
                 revalidateResponse.data
               ) {
-                // Sử dụng amount từ revalidate (tính trên subtotal còn lại)
-                amount = revalidateResponse.data.amount || 0;
+                // Sử dụng amount từ revalidate (tính trên rentalAmount còn lại)
+                amount = revalidateResponse.data.amount;
               } else {
                 // Nếu revalidate thất bại, hiển thị lý do cụ thể
                 const errorMsg =
@@ -396,7 +366,7 @@ export default function ExtensionModal({
         setDiscountCode("");
         setShowDiscountList(false);
       } else {
-        // Hiển thị lý do cụ thể từ backend nếu có
+        // Hiển thị lý do cụ thể từ backend nếu có - FIX: base=rentalAmount cho BELOW_MIN_ORDER
         const errorMessage = response.message || "Mã giảm giá không hợp lệ";
         const reason = (response as { reason?: string }).reason;
         let detailedMessage = errorMessage;
@@ -415,8 +385,8 @@ export default function ExtensionModal({
               detailedMessage = "Mã giảm giá đã hết lượt sử dụng";
               break;
             case "BELOW_MIN_ORDER":
-              // minOrderAmount được kiểm tra trên subtotal
-              const baseAmount = subtotal;
+              // FIX: minOrderAmount kiểm tra trên rentalAmount
+              const baseAmount = rentalAmount;
               // Try to get minOrderAmount from available discounts
               const discountInfo = availableDiscounts.find(
                 (d) => d.code === codeToApply.toUpperCase()
@@ -935,16 +905,16 @@ export default function ExtensionModal({
                                           )}
                                         {canUse &&
                                           (() => {
-                                            // Preview discount chỉ tính trên subtotal
-                                            // Nếu là mã riêng tư và đã có mã công khai, tính trên subtotal còn lại
-                                            let baseAmount = subtotal;
+                                            // FIX: Preview trên rentalAmount
+                                            let baseAmount = rentalAmount;
                                             if (
                                               !discount.isPublic &&
                                               publicDiscountAmount > 0
                                             ) {
                                               baseAmount = Math.max(
                                                 0,
-                                                subtotal - publicDiscountAmount
+                                                rentalAmount -
+                                                  publicDiscountAmount
                                               );
                                             }
                                             const previewAmount =

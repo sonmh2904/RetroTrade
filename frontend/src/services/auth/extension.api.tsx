@@ -3,8 +3,17 @@ import type { ApiResponse } from "@iService";
 
 export interface ExtensionRequest {
   _id: string;
-  orderId: string;
+  orderId: {
+    startAt: string;
+    endAt: string;
+    rentalDuration: number;
+    itemId: {
+      Title: string;
+      PriceUnitId: number;
+    };
+  };
   requestedEndAt: string;
+  originalEndAt: string;
   extensionDuration: number;
   extensionUnit: string;
   extensionFee: number;
@@ -35,6 +44,7 @@ export interface ExtensionRequest {
   rejectedReason?: string;
   createdAt: string;
   updatedAt: string;
+  paymentStatus: "unpaid" | "paid" | "refunded";
 }
 
 export interface CreateExtensionRequest {
