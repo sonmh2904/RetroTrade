@@ -296,7 +296,7 @@ module.exports = {
       });
 
       return res.status(200).json({
-        message: "Yêu cầu gia hạn đã gửi thành công (chờ thanh toán)",
+        message: "Yêu cầu gia hạn đã gửi thành công",
         data: {
           requestId: request._id,
           newEndAt: newEndAt.toISOString(),
@@ -561,6 +561,14 @@ module.exports = {
           path: "approvedBy",
           select: "fullName avatarUrl",
           model: "User",
+        })
+        .populate({
+          path: "orderId",
+          select: "startAt endAt rentalDuration itemId",
+          populate: {
+            path: "itemId",
+            select: "Title PriceUnitId",
+          },
         })
         .sort({ createdAt: -1 });
 

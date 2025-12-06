@@ -127,7 +127,7 @@ const RenterRatingSection: React.FC<Props> = ({
           getUserById(userId),
           getRenterRatings(userId, { limit: 100 }),
         ]);
-
+        
         if (userRes.code !== 200) throw new Error("Không tải được user");
         setUser(userRes.data);
         setRatings(ratingRes.ratings || []);

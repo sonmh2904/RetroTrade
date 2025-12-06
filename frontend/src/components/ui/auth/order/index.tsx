@@ -596,11 +596,7 @@ export default function OrderListPage({
                     <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-green-50 text-green-700 border-green-200">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />
-                        Đã gia hạn đến{" "}
-                        {format(
-                          new Date(latestExtension.requestedEndAt),
-                          "dd/MM/yyyy"
-                        )}
+                        Đã gia hạn
                       </div>
                       <Button
                         variant="ghost"
@@ -730,7 +726,7 @@ export default function OrderListPage({
                       <div className="flex-1 space-y-4">
                         {/* Product Name */}
                         <div>
-                          <Link href={`/products/details?id=${order.itemId}`}>
+                          <Link href={`/products/details?id=${order.itemId._id}`}>
                             <h3 className="text-lg font-semibold text-gray-900 mb-2">
                               {order.itemSnapshot?.title ||
                                 order.itemId?.Title ||

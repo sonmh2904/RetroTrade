@@ -56,6 +56,8 @@ const getOrderStatusLabel = (status: string): string => {
   const statusMap: Record<string, string> = {
     pending: "Chờ xác nhận",
     confirmed: "Đã xác nhận",
+    delivery: "Đang giao",
+    received: "Đã nhận hàng",
     progress: "Đang thuê",
     returned: "Đã trả hàng",
     completed: "Hoàn tất",
@@ -138,6 +140,26 @@ function OwnerOrderDetailContent() {
         order.orderStatus
       ),
       current: order.orderStatus === "confirmed",
+    },
+    {
+      status: "delivery",
+      label: "Đang giao",
+      active: [
+        "delivery",
+        "received",
+        "progress",
+        "returned",
+        "completed",
+      ].includes(order.orderStatus),
+      current: order.orderStatus === "delivery",
+    },
+    {
+      status: "received",
+      label: "Đã nhận hàng",
+      active: ["received", "progress", "returned", "completed"].includes(
+        order.orderStatus
+      ),
+      current: order.orderStatus === "received",
     },
     {
       status: "progress",
@@ -668,8 +690,10 @@ function OwnerOrderDetailContent() {
                 <div className="flex justify-between items-center py-2 border-b border-white/20">
                   <span className="text-emerald-50">Tiền thuê</span>
                   <span className="font-semibold text-white">
-                    {(order.totalAmount || 0).toLocaleString("vi-VN")}{" "}
-                    {order.currency || "₫"}
+                    {(
+                      (order?.totalAmount ?? 0) - (order?.depositAmount ?? 0) - (order?.serviceFee ?? 0)
+                    ).toLocaleString("vi-VN")}{" "}
+                    {order?.currency || "₫"}
                   </span>
                 </div>
 
@@ -717,11 +741,7 @@ function OwnerOrderDetailContent() {
                     <span className="text-2xl">
                       {/* Tổng = finalAmount (tiền thuê sau discount) + deposit + serviceFee */}
                       {order.finalAmount !== undefined
-                        ? (
-                            order.finalAmount +
-                            (order.depositAmount || 0) +
-                            (order.serviceFee || 0)
-                          ).toLocaleString("vi-VN")
+                        ? order.finalAmount.toLocaleString("vi-VN")
                         : (order.totalAmount || 0).toLocaleString("vi-VN")}{" "}
                       {order.currency || "₫"}
                     </span>

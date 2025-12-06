@@ -60,6 +60,7 @@ exports.createOwnerRating = async (req, res) => {
     });
 
     return res.status(201).json({
+      success: true,
       message: "Đánh giá thành công!",
       data: newRating,
     });
@@ -156,7 +157,11 @@ exports.updateOwnerRating = async (req, res) => {
 
     await review.save();
 
-    res.json({ message: "Cập nhật đánh giá thành công", data: review });
+    res.json({
+      success: true,
+      message: "Cập nhật đánh giá thành công",
+      data: review,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

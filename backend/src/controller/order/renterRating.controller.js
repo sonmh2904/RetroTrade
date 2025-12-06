@@ -44,7 +44,11 @@ exports.createRenterRating = async (req, res) => {
       videos,
     });
 
-    res.json({ message: "Đánh giá người thuê thành công", data: renterRating });
+    res.json({
+      success: true,
+      message: "Đánh giá người thuê thành công",
+      data: renterRating,
+    });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({ message: "Đơn này đã được đánh giá" });
@@ -139,7 +143,11 @@ exports.updateRenterRating = async (req, res) => {
 
     await review.save();
 
-    res.json({ message: "Cập nhật đánh giá thành công", data: review });
+    res.json({
+      success: true,
+      message: "Cập nhật đánh giá thành công",
+      data: review,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
