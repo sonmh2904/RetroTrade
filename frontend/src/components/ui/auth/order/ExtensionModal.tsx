@@ -42,6 +42,7 @@ import {
   validateDiscount,
   listAvailableDiscounts,
 } from "@/services/products/discount/discount.api";
+
 interface ApiErrorResponse {
   message?: string;
   reason?: string;
@@ -74,9 +75,7 @@ export default function ExtensionModal({
   const [availableDiscounts, setAvailableDiscounts] = useState<Discount[]>([]);
   const [loadingDiscounts, setLoadingDiscounts] = useState(false);
   const [showDiscountList, setShowDiscountList] = useState(false);
-  const [discountListError, setDiscountListError] = useState<string | null>(
-    null
-  );
+  const [discountListError, setDiscountListError] = useState<string | null>(null);
 
   const currentEndAt = useMemo(
     () => (order?.endAt ? new Date(order.endAt) : null),
@@ -88,27 +87,32 @@ export default function ExtensionModal({
     [order?.itemSnapshot?.basePrice]
   );
 
-  const rentalUnit = order?.rentalUnit ?? "ngày";
-  const priceUnit = (order?.itemSnapshot?.priceUnit ?? "ngày").toLowerCase();
-
+  // Backend lưu priceUnit = String(item.PriceUnitId) → "1", "2", "3", "4"
   const priceUnitId = useMemo((): 1 | 2 | 3 | 4 => {
-    switch (priceUnit) {
-      case "giờ":
-        return 1;
-      case "tuần":
-        return 3;
-      case "tháng":
-        return 4;
-      default:
-        return 2;
-    }
-  }, [priceUnit]);
+    const unitStr = order?.itemSnapshot?.priceUnit;
+    const id = Number(unitStr);
+    return id >= 1 && id <= 4 ? (id as 1 | 2 | 3 | 4) : 2; // fallback = ngày
+  }, [order?.itemSnapshot?.priceUnit]);
 
+  // Tên đơn vị hiển thị cho người dùng
+  const rentalUnit = useMemo(() => {
+    switch (priceUnitId) {
+      case 1: return "giờ";
+      case 2: return "ngày";
+      case 3: return "tuần";
+      case 4: return "tháng";
+      default: return "ngày";
+    }
+  }, [priceUnitId]);
+
+  // Tính newEndAt đúng theo priceUnitId
   const newEndAt = useMemo(() => {
     if (!currentEndAt) return null;
     switch (priceUnitId) {
       case 1:
         return addHours(currentEndAt, extensionDuration);
+      case 2:
+        return addDays(currentEndAt, extensionDuration);
       case 3:
         return addWeeks(currentEndAt, extensionDuration);
       case 4:
@@ -118,17 +122,16 @@ export default function ExtensionModal({
     }
   }, [currentEndAt, extensionDuration, priceUnitId]);
 
-  const rentalAmount = basePrice * extensionDuration; // FIX: Chỉ rental, không + service
+  const rentalAmount = basePrice * extensionDuration;
   const serviceFee = Math.round(rentalAmount * 0.03);
-  const subtotal = rentalAmount + serviceFee; // Tổng trước discount
+  const subtotal = rentalAmount + serviceFee;
 
-  // Memoize discount calculations - FIX: Base chỉ rentalAmount
   const effectivePublicDiscountAmount = useMemo(
-    () => (rentalAmount > 0 ? publicDiscountAmount : 0), // FIX: Base rental
+    () => (rentalAmount > 0 ? publicDiscountAmount : 0),
     [rentalAmount, publicDiscountAmount]
   );
   const effectivePrivateDiscountAmount = useMemo(
-    () => (rentalAmount > 0 ? privateDiscountAmount : 0), // FIX: Base rental
+    () => (rentalAmount > 0 ? privateDiscountAmount : 0),
     [rentalAmount, privateDiscountAmount]
   );
   const totalDiscountAmount = useMemo(
@@ -136,10 +139,8 @@ export default function ExtensionModal({
     [effectivePublicDiscountAmount, effectivePrivateDiscountAmount]
   );
 
+  const finalAmount = Math.max(0, subtotal - totalDiscountAmount);
 
-  const finalAmount = Math.max(0, subtotal - totalDiscountAmount); // Discount chỉ trừ rental, service giữ nguyên
-
-  // Helper function to calculate discount amount - FIX: Giữ nguyên, nhưng dùng base=rentalAmount
   const calculateDiscountAmount = useCallback(
     (
       type: "percent" | "fixed",
@@ -157,14 +158,12 @@ export default function ExtensionModal({
     []
   );
 
-  // Load available discounts for user - Giữ nguyên
   const loadAvailableDiscounts = useCallback(async () => {
     setLoadingDiscounts(true);
     setDiscountListError(null);
     try {
       const response = await listAvailableDiscounts(1, 50);
       if (response.status === "success" && response.data) {
-        // Gộp cả public và special discounts vào một mảng
         const allDiscounts = [
           ...(response.data.public || []),
           ...(response.data.special || []),
@@ -185,14 +184,12 @@ export default function ExtensionModal({
     }
   }, []);
 
-  // Load available discounts on mount - Giữ nguyên
   useEffect(() => {
     if (isOpen) {
       loadAvailableDiscounts();
     }
   }, [isOpen, loadAvailableDiscounts]);
 
-  // Close discount dropdown when clicking outside - Giữ nguyên
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -208,7 +205,6 @@ export default function ExtensionModal({
     };
   }, [showDiscountList]);
 
-  // Handle discount code - FIX: baseAmountForDiscount = rentalAmount
   const handleApplyDiscount = async (code?: string) => {
     const codeToApply = code || discountCode.trim();
     if (!codeToApply) {
@@ -218,10 +214,9 @@ export default function ExtensionModal({
     setDiscountLoading(true);
     setDiscountError(null);
     try {
-      // FIX: Base chỉ rentalAmount (không + serviceFee)
       let baseAmountForDiscount = rentalAmount;
       let isPrivateDiscountWithPublic = false;
-      // Validate lần đầu để kiểm tra mã có hợp lệ không
+
       const response = await validateDiscount({
         code: codeToApply.toUpperCase(),
         baseAmount: baseAmountForDiscount,
@@ -229,15 +224,15 @@ export default function ExtensionModal({
       if (response.status === "success" && response.data) {
         const discount = response.data.discount;
         let amount = response.data.amount || 0;
-        // Nếu là mã riêng tư và đã có mã công khai, validate trực tiếp với rentalAmount còn lại
+
         if (!discount.isPublic && publicDiscountAmount > 0) {
           isPrivateDiscountWithPublic = true;
           baseAmountForDiscount = Math.max(
             0,
             rentalAmount - publicDiscountAmount
-          ); // FIX: rentalAmount
+          );
         }
-        // Tính lại discount amount để đảm bảo chính xác
+
         const calculatedAmount = calculateDiscountAmount(
           discount.type,
           discount.value,
@@ -245,7 +240,7 @@ export default function ExtensionModal({
           discount.maxDiscountAmount
         );
         amount = calculatedAmount;
-        // Kiểm tra loại discount (public hay private)
+
         if (discount.isPublic) {
           // Mã công khai - chỉ cho phép 1 mã công khai
           if (publicDiscount) {
@@ -263,9 +258,9 @@ export default function ExtensionModal({
           }
           setPublicDiscount(discount);
           setPublicDiscountAmount(amount);
-          // Nếu đã có mã private, tính lại mã private với baseAmount mới (chỉ trên rentalAmount còn lại)
+
           if (privateDiscount) {
-            const baseAmountAfterPublic = Math.max(0, rentalAmount - amount); // FIX: rentalAmount
+            const baseAmountAfterPublic = Math.max(0, rentalAmount - amount);
             try {
               const revalidatePrivateResponse = await validateDiscount({
                 code: privateDiscount.code.toUpperCase(),
@@ -297,12 +292,12 @@ export default function ExtensionModal({
             setDiscountLoading(false);
             return;
           }
-          // Nếu đã có mã công khai, validate lại với rentalAmount còn lại
+
           if (isPrivateDiscountWithPublic) {
             try {
               const revalidateResponse = await validateDiscount({
                 code: discount.code.toUpperCase(),
-                baseAmount: baseAmountForDiscount, // Đã được tính = rentalAmount - publicDiscountAmount
+                baseAmount: baseAmountForDiscount,
               });
               if (
                 revalidateResponse.status === "success" &&
@@ -366,7 +361,6 @@ export default function ExtensionModal({
         setDiscountCode("");
         setShowDiscountList(false);
       } else {
-        // Hiển thị lý do cụ thể từ backend nếu có - FIX: base=rentalAmount cho BELOW_MIN_ORDER
         const errorMessage = response.message || "Mã giảm giá không hợp lệ";
         const reason = (response as { reason?: string }).reason;
         let detailedMessage = errorMessage;
@@ -385,9 +379,7 @@ export default function ExtensionModal({
               detailedMessage = "Mã giảm giá đã hết lượt sử dụng";
               break;
             case "BELOW_MIN_ORDER":
-              // FIX: minOrderAmount kiểm tra trên rentalAmount
               const baseAmount = rentalAmount;
-              // Try to get minOrderAmount from available discounts
               const discountInfo = availableDiscounts.find(
                 (d) => d.code === codeToApply.toUpperCase()
               );
@@ -429,14 +421,6 @@ export default function ExtensionModal({
               detailedMessage = errorMessage;
           }
         }
-        // Log chi tiết để debug
-        console.error("Discount validation failed:", {
-          code: codeToApply,
-          reason,
-          message: detailedMessage,
-          baseAmount: baseAmountForDiscount,
-          response,
-        });
         setDiscountError(detailedMessage);
       }
     } catch (error: unknown) {
@@ -480,7 +464,7 @@ export default function ExtensionModal({
     setShowConfirm(false);
 
     try {
-      // 1. Gửi yêu cầu gia hạn với discount codes (không toast ở đây để tránh half-success)
+      // 1. Gửi yêu cầu gia hạn với discount codes
       const payload: CreateExtensionRequest = {
         extensionDuration,
         notes: notes.trim() || undefined,
@@ -488,11 +472,10 @@ export default function ExtensionModal({
         privateDiscountCode: privateDiscount?.code || undefined,
       };
 
-      console.log("[ExtensionModal] Sending payload:", payload); // Log for debug
+      console.log("[ExtensionModal] Sending payload:", payload);
 
       const requestResult = await requestExtension(order._id, payload);
 
-      // Type guard chính xác: Extract data from ApiResponse
       if (
         !requestResult ||
         requestResult.code !== 200 ||
@@ -510,12 +493,10 @@ export default function ExtensionModal({
       // 2. Thanh toán ngay
       const payResult = await payExtensionFee(requestId);
 
-      // Assume payExtensionFee returns direct {success, message, data} or ApiResponse – adjust if needed
       if (!payResult || !("success" in payResult) || !payResult.success) {
         throw new Error(payResult?.message || "Lỗi thanh toán phí gia hạn");
       }
 
-      // Chỉ toast khi cả hai thành công
       toast.success(
         "Gia hạn và thanh toán thành công! Đơn hàng đã được cập nhật."
       );
@@ -583,7 +564,7 @@ export default function ExtensionModal({
                 </p>
                 <p className="text-gray-600 mt-1 flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  Đến: {format(currentEndAt, "dd/MM/yyyy")}
+                  Đến: {format(currentEndAt, "dd/MM/yyyy HH:mm")}
                 </p>
               </div>
 
@@ -613,7 +594,7 @@ export default function ExtensionModal({
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm">
                   <p className="font-medium text-emerald-700">Kết thúc mới</p>
                   <p className="font-bold text-emerald-600">
-                    {format(newEndAt, "dd/MM/yyyy", { locale: vi })}
+                    {format(newEndAt, "dd/MM/yyyy HH:mm", { locale: vi })}
                   </p>
                 </div>
 
@@ -640,7 +621,7 @@ export default function ExtensionModal({
                 Thanh toán ngay
               </h3>
 
-              {/* Input mã giảm giá (di chuyển sang bên phải) */}
+              {/* Input mã giảm giá */}
               <div className="bg-white/10 rounded-xl p-3">
                 <label className="text-xs font-medium flex items-center gap-1.5 mb-1.5 block">
                   <Percent className="w-3 h-3 text-green-200" />
@@ -905,7 +886,6 @@ export default function ExtensionModal({
                                           )}
                                         {canUse &&
                                           (() => {
-                                            // FIX: Preview trên rentalAmount
                                             let baseAmount = rentalAmount;
                                             if (
                                               !discount.isPublic &&
@@ -1077,7 +1057,8 @@ export default function ExtensionModal({
                 `{order.itemSnapshot?.title}`
               </p>
               <p className="text-sm">
-                Kết thúc mới: {format(newEndAt, "dd/MM/yyyy", { locale: vi })}
+                Kết thúc mới:{" "}
+                {format(newEndAt, "dd/MM/yyyy HH:mm", { locale: vi })}
               </p>
               <div className="bg-gray-50 rounded-lg p-3 mt-3">
                 <div className="flex justify-between text-sm font-medium">

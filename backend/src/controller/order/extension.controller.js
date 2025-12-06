@@ -296,7 +296,7 @@ module.exports = {
       });
 
       return res.status(200).json({
-        message: "Yêu cầu gia hạn đã gửi thành công (chờ thanh toán)",
+        message: "Yêu cầu gia hạn đã gửi thành công",
         data: {
           requestId: request._id,
           newEndAt: newEndAt.toISOString(),
