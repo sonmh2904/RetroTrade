@@ -6,17 +6,11 @@ const Item = require("../../models/Product/Item.model");
 const { calculateTotals } = require("../order/calculateRental");
 const { createNotification } = require("../../middleware/createNotification");
 const { logOrderAudit } = require("../../middleware/auditLog.service");
-const Discount = require("../../models/Discount/Discount.model");
-const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
-const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
 const { validateAndCompute } = require("./discount.controller");
 const {
   refundExtensionRequest,
 } = require("../wallet/refundCancelledOrder.Controller");
 
-const Wallet = require("../../models/Wallet.model");
-const WalletTransaction = require("../../models/WalletTransaction.model");
-const User = require("../../models/User.model");
 
 // Helper: Tính phí gia hạn dựa trên khoảng thời gian mới
 async function calculateExtensionFee(

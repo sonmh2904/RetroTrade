@@ -192,7 +192,7 @@ async function refundExtensionRequest(requestId, session = null) {
       orderCode: `${order.orderGuid}_ext_refund_renter`,
       typeId: "refund_extension_rejected",
       amount: refundAmount,
-      note: `Nhận hoàn phí gia hạn bị từ chối - Đơn #${order.orderGuid}`,
+      note: `Nhận hoàn phí gia hạn bị từ chối - ${order.itemSnapshot.title}`,
       status: "completed",
       createdAt: new Date()
     }], { session ,ordered: true });

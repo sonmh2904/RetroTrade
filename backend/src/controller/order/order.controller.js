@@ -20,6 +20,9 @@ const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
 const { logOrderAudit } = require("../../middleware/auditLog.service");
+const { createNotification } = require("../../middleware/createNotification");
+const { refundExtensionRequest } = require("../wallet/refundCancelledOrder.Controller");
+const ExtensionRequest = require("../../models/Order/ExtensionRequest.model");
 
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
@@ -569,47 +572,127 @@ module.exports = {
   },
 
   renterReturn: async (req, res) => {
+    const session = await mongoose.startSession();
     try {
+      session.startTransaction();
+
       const renterId = req.user._id;
       const orderId = req.params.id;
       const { notes } = req.body;
 
-      if (!Types.ObjectId.isValid(orderId))
-        return res.status(400).json({ message: "Invalid order id" });
+      if (!Types.ObjectId.isValid(orderId)) {
+        await session.abortTransaction();
+        return res.status(400).json({ message: "ID đơn hàng không hợp lệ" });
+      }
 
-      const order = await Order.findById(orderId);
-      if (!order || order.isDeleted)
-        return res.status(404).json({ message: "Order not found" });
+      const order = await Order.findOne({
+        _id: orderId,
+        renterId,
+        orderStatus: "progress",
+        isDeleted: false,
+      }).session(session);
 
-      if (order.renterId.toString() !== renterId.toString())
-        return res.status(403).json({ message: "Forbidden: not renter" });
-
-      if (order.orderStatus !== "progress")
+      if (!order) {
+        await session.abortTransaction();
         return res.status(400).json({
-          message: "Order must be in progress to mark as returned",
+          message: "Không tìm thấy đơn hàng hoặc không thể trả hàng lúc này",
         });
+      }
+
+      // tự động từ chối và hoàn tiền yêu cầu gia hạn đang PENDING 
+      const pendingExtension = await ExtensionRequest.findOne({
+        orderId: order._id,
+        status: "pending",
+      }).session(session);
+
+      if (pendingExtension) {
+        pendingExtension.status = "rejected";
+        pendingExtension.rejectedReason =
+          "Người thuê đã trả hàng trước khi chủ duyệt gia hạn";
+        pendingExtension.notes += `\n[Từ chối tự động] Người thuê xác nhận trả hàng sớm.`;
+        pendingExtension.updatedAt = new Date();
+        await pendingExtension.save({ session });
+
+        if (
+          pendingExtension.paymentStatus === "paid" &&
+          pendingExtension.extensionFee > 0
+        ) {
+          await refundExtensionRequest(
+            pendingExtension._id.toString(),
+            session
+          );
+
+          await createNotification(
+            renterId,
+            "ExtensionRejected",
+            "Gia hạn bị từ chối – Đã hoàn tiền",
+            `Yêu cầu gia hạn đơn #${
+              order.orderGuid
+            } đã bị từ chối tự động vì bạn xác nhận trả hàng. ${pendingExtension.extensionFee.toLocaleString()}đ đã được hoàn vào ví ngay lập tức.`,
+            {
+              orderId: order._id,
+              extensionRequestId: pendingExtension._id,
+              action: "extension_rejected_refunded_immediately",
+            }
+          );
+        } else {
+          await createNotification(
+            renterId,
+            "ExtensionRejected",
+            "Gia hạn bị từ chối",
+            `Yêu cầu gia hạn đơn #${order.orderGuid} đã bị từ chối tự động vì bạn xác nhận trả hàng trước khi chủ duyệt.`,
+            {
+              orderId: order._id,
+              extensionRequestId: pendingExtension._id,
+              action: "extension_rejected_no_refund",
+            }
+          );
+        }
+
+        await pendingExtension.save({ session });
+
+        await logOrderAudit({
+          orderId: order._id,
+          operation: "UPDATE",
+          userId: renterId,
+          changeSummary: `Tự động từ chối & hoàn tiền yêu cầu gia hạn #${pendingExtension._id} do trả hàng sớm`,
+        });
+      }
 
       order.orderStatus = "returned";
-      order.returnInfo.returnedAt = new Date();
-      order.returnInfo.notes = notes || "";
-      await order.save();
-      await notifyOrderReturned(order); // Gửi notification khi trả sản phẩm
+      order.returnInfo = {
+        ...order.returnInfo,
+        returnedAt: new Date(),
+        notes: notes || "Người thuê xác nhận đã trả hàng",
+      };
+      await order.save({ session });
+
+      await notifyOrderReturned(order);
+
       await logOrderAudit({
         orderId: order._id,
         operation: "UPDATE",
         userId: renterId,
-        changeSummary: `Order status changed: progress → returned`,
+        changeSummary: "Order status changed: progress → returned",
       });
 
+      await session.commitTransaction();
+      session.endSession();
+
       return res.status(200).json({
-        message: "Order marked as returned",
+        message: "Xác nhận trả hàng thành công",
         orderGuid: order.orderGuid,
+        extensionRejected: !!pendingExtension,
+        refundImmediate: pendingExtension?.paymentStatus === "paid",
       });
     } catch (err) {
-      console.error("renterReturn err:", err);
-      return res
-        .status(500)
-        .json({ message: "Failed to mark as returned", error: err.message });
+      await session.abortTransaction().catch(() => {});
+      session.endSession();
+      console.error("renterReturn error:", err);
+      return res.status(500).json({
+        message: "Lỗi khi xác nhận trả hàng",
+        error: err.message,
+      });
     }
   },
 
@@ -1110,7 +1193,7 @@ module.exports = {
   },
   getLatestOrderByOwner: async (req, res) => {
     try {
-      const ownerId = req.user._id; 
+      const ownerId = req.user._id;
       const { renterId, orderStatus = "completed" } = req.query;
 
       if (!renterId) {
