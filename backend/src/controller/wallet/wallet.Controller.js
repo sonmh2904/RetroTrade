@@ -56,13 +56,12 @@ const depositToWallet = async (req, res) => {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Chưa đăng nhập hoặc token không hợp lệ" });
 
-    const { amount, note, returnUrlBase  } = req.body;
-    const MAX_AMOUNT = 10000000; // ví dụ 10 triệu
-    if (!amount || isNaN(amount) || amount <= 0 || !Number.isInteger(Number(amount)) || Number(amount) > MAX_AMOUNT) {
-      return res.status(400).json({ message: "Số tiền không hợp lệ!" });
+    const { amount, note, returnUrlBase } = req.body;
+
+    if (Number(amount) < 2000 || Number(amount) >= 10000000 ||
+      !Number.isInteger(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ message: "Số tiền không hợp lệ! Phải từ 2.000đ đến dưới 10.000.000đ" });
     }
-
-
     // Lấy hoặc tạo ví người dùng
     let wallet = await Wallet.findOne({ userId });
     if (!wallet) {

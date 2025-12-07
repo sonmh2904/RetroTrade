@@ -52,7 +52,7 @@ const createDispute = async (req, res) => {
     if (userId !== renterId && userId !== ownerId) {
       return res.status(403).json({
         success: false,
-        message: "Bạn không có quyền tạo Khiếu nạicho đơn hàng này.",
+        message: "Bạn không có quyền tạo Khiếu nại cho đơn hàng này.",
       });
     }
 
@@ -117,7 +117,7 @@ const createDispute = async (req, res) => {
     await createNotification(
       reportedUserId,
       "Dispute Created",
-      "Có Khiếu nạimới về đơn hàng của bạn",
+      "Có Khiếu nại mới về đơn hàng của bạn",
       `${reporterName} đã tạo Khiếu nạicho đơn hàng #${order.orderGuid}. Lý do: ${reason}`,
       {
         type: "dispute",
@@ -205,7 +205,7 @@ const getAllDisputes = async (req, res) => {
   }
 };
 
-// User lấy danh sách Khiếu nạicủa mình
+// User lấy danh sách Khiếu nại của mình
 const getMyDisputes = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -299,7 +299,7 @@ const assignDispute = async (req, res) => {
       const assignedName =
         assignedModerator?.fullName || assignedModerator?.email || "Moderator";
       return res.status(400).json({
-        message: `Khiếu nạinày đã được ${assignedName} nhận xử lý.`,
+        message: `Khiếu nại này đã được ${assignedName} nhận xử lý.`,
       });
     }
 
@@ -410,8 +410,7 @@ const unassignDispute = async (req, res) => {
         mod._id,
         "Dispute Unassigned",
         "Khiếu nạiđã được trả lại",
-        `${previousModeratorName} đã trả lại Khiếu nạivề đơn hàng #${orderGuid}${
-          reason ? `. Lý do: ${reason}` : ""
+        `${previousModeratorName} đã trả lại Khiếu nạivề đơn hàng #${orderGuid}${reason ? `. Lý do: ${reason}` : ""
         }. Khiếu nạihiện có thể được nhận xử lý.`,
         {
           disputeId: dispute._id,
@@ -438,9 +437,10 @@ const unassignDispute = async (req, res) => {
 
 const resolveDispute = async (req, res) => {
   try {
-    const { decision, notes, refundTarget, refundPercentage } = req.body;
+    const { decision, notes, refundTarget, refundPercentage, updateOrderStatus, orderStatus, } = req.body;
+
     const dispute = await Report.findById(req.params.id)
-      .populate("orderId", "orderGuid totalAmount")
+      .populate("orderId", "orderGuid")
       .populate("reporterId", "fullName email")
       .populate("reportedUserId", "fullName email");
 
@@ -451,7 +451,7 @@ const resolveDispute = async (req, res) => {
     if (!dispute.assignedBy) {
       return res.status(400).json({
         message:
-          "Khiếu nạinày chưa được moderator nào nhận. Vui lòng nhận Khiếu nạitrước khi xử lý.",
+          "Khiếu nại này chưa được moderator nào nhận. Vui lòng nhận Khiếu nại trước khi xử lý.",
       });
     }
 
@@ -463,16 +463,17 @@ const resolveDispute = async (req, res) => {
       const assignedName =
         assignedModerator?.fullName || assignedModerator?.email || "Moderator";
       return res.status(403).json({
-        message: `Bạn không có quyền xử lý Khiếu nạinày. Khiếu nạiđã được ${assignedName} nhận xử lý.`,
+        message: `Bạn không có quyền xử lý Khiếu nại này. Khiếu nại đã được ${assignedName} nhận xử lý.`,
       });
     }
 
     if (dispute.status !== "In Progress") {
       return res.status(400).json({
-        message: `Không thể xử lý Khiếu nạinày. Trạng thái hiện tại: ${dispute.status}`,
+        message: `Không thể xử lý Khiếu nại này. Trạng thái hiện tại: ${dispute.status}`,
       });
     }
 
+    // ===== parse % hoàn =====
     const parsedPercentageRaw =
       typeof refundPercentage === "number"
         ? refundPercentage
@@ -495,39 +496,79 @@ const resolveDispute = async (req, res) => {
       });
     }
 
+    // ===== LẤY ORDER ĐẦY ĐỦ ĐỂ TÍNH TIỀN =====
     const orderIdValue = dispute.orderId._id || dispute.orderId;
-    let orderGuid = dispute.orderId?.orderGuid;
-    let orderTotal =
-      typeof dispute.orderId?.totalAmount === "number"
-        ? dispute.orderId.totalAmount
-        : undefined;
+    let orderGuid = dispute.orderId?.orderGuid; // để dùng cho notify
 
-    if (!orderGuid || typeof orderTotal !== "number") {
-      const orderInfo = await Order.findById(orderIdValue).select(
-        "orderGuid totalAmount"
+    const order = await Order.findById(orderIdValue)
+      .populate("itemId", "DepositAmount")
+      .select(
+        "renterId ownerId totalAmount finalAmount depositAmount serviceFee discount orderStatus"
       );
-      if (orderInfo) {
-        orderGuid = orderGuid || orderInfo.orderGuid;
-        orderTotal =
-          typeof orderTotal === "number" ? orderTotal : orderInfo.totalAmount;
-      }
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy đơn hàng liên quan." });
     }
 
-    orderGuid = orderGuid || "N/A";
-    orderTotal = orderTotal || 0;
+    const renterId = order.renterId.toString();
+    const ownerId = order.ownerId.toString();
+    const reporterId =
+      dispute.reporterId._id?.toString() || dispute.reporterId.toString();
 
+    // totalAmount = T + D + F (tiền thuê + cọc + phí)
+    const totalAmount = order.totalAmount ?? 0;
+    const serviceFee = order.serviceFee ?? 0;
+    const depositAmount =
+      order.depositAmount ?? order.itemId?.DepositAmount ?? 0;
+
+    // Tiền thuê gốc T = total - (cọc + phí)
+    const rentAmount = totalAmount - (depositAmount + serviceFee);
+
+    // Giữ lại finalTotal nếu sau này còn dùng chỗ khác
+    const discountTotal = order.discount?.totalAmountApplied ?? 0;
+    const finalTotal = order.finalAmount ?? (totalAmount - discountTotal);
+    // Tiền thuê THỰC TRẢ sau giảm, không gồm cọc, không gồm phí
+    const rentPaid = finalTotal - (depositAmount + serviceFee); // >= 0
+
+    // ===== XÁC ĐỊNH BASE HOÀN TIỀN =====
+    // Renter khiếu nại → base = tiền thuê gốc (T)
+    // Owner khiếu nại  → base = tiền cọc (D)
+    let refundBase = 0;
+    if (reporterId === renterId) {
+      refundBase = Math.max(rentPaid, 0);
+    } else if (reporterId === ownerId) {
+      refundBase = depositAmount;
+    }
+
+    // ===== ÁP PHẦN TRĂM LÊN BASE =====
     let computedRefundAmount = 0;
-    if (requireRefund) {
-      computedRefundAmount = Math.round((orderTotal * parsedPercentage) / 100);
+    if (requireRefund && refundBase > 0) {
+      computedRefundAmount = Math.round(
+        (refundBase * parsedPercentage) / 100
+      );
       if (computedRefundAmount < 0) computedRefundAmount = 0;
-      if (orderTotal > 0 && computedRefundAmount > orderTotal) {
-        computedRefundAmount = orderTotal;
-      }
+      if (computedRefundAmount > refundBase) computedRefundAmount = refundBase;
     }
 
     const appliedRefundPercentage = requireRefund ? parsedPercentage : 0;
     const appliedRefundTarget = requireRefund ? refundTarget : undefined;
 
+    // ===== VALIDATE ORDER STATUS (NẾU CÓ YÊU CẦU UPDATE) =====
+    let appliedOrderStatus = null;
+    if (updateOrderStatus) {
+      const allowedOrderStatuses = ["cancelled", "progress"];
+      if (!allowedOrderStatuses.includes(orderStatus)) {
+        return res.status(400).json({
+          message:
+            "Trạng thái đơn hàng không hợp lệ. Chỉ hỗ trợ 'cancelled' hoặc 'progress'.",
+        });
+      }
+      appliedOrderStatus = orderStatus;
+    }
+
+    // ===== LƯU KẾT QUẢ KHIẾU NẠI =====
     dispute.status = "Resolved";
     dispute.resolution = {
       decision,
@@ -540,10 +581,12 @@ const resolveDispute = async (req, res) => {
     dispute.handledAt = new Date();
     await dispute.save();
 
-    await Order.findByIdAndUpdate(orderIdValue, {
-      orderStatus: "completed",
-      paymentStatus: computedRefundAmount > 0 ? "refunded" : "paid",
-    });
+    // ===== CẬP NHẬT ORDER.STATUS NẾU CÓ CHỌN =====
+    if (updateOrderStatus && appliedOrderStatus) {
+      await Order.findByIdAndUpdate(orderIdValue, {
+        orderStatus: appliedOrderStatus,
+      });
+    }
 
     const moderator = await User.findById(req.user._id).select(
       "fullName email"
@@ -551,18 +594,20 @@ const resolveDispute = async (req, res) => {
     const moderatorName =
       moderator?.fullName || moderator?.email || "Moderator";
 
+    orderGuid = orderGuid || "N/A";
+
     const refundRecipientLabel =
       appliedRefundTarget === "reporter"
         ? "người tố cáo"
         : appliedRefundTarget === "reported"
-        ? "người bị tố"
-        : "";
+          ? "người bị tố"
+          : "";
 
     const refundText =
       computedRefundAmount > 0 && refundRecipientLabel
         ? ` và ${refundRecipientLabel} nhận ${appliedRefundPercentage}% (${computedRefundAmount.toLocaleString(
-            "vi-VN"
-          )} VNĐ)`
+          "vi-VN"
+        )} VNĐ)`
         : "";
 
     const reporterIdValue = dispute.reporterId._id || dispute.reporterId;
@@ -572,8 +617,8 @@ const resolveDispute = async (req, res) => {
     await createNotification(
       reporterIdValue,
       "Dispute Resolved",
-      "Khiếu nạiđã được xử lý",
-      `Khiếu nạivề đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${refundText}.`,
+      "Khiếu nại đã được xử lý",
+      `Khiếu nại về đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${refundText}.`,
       {
         disputeId: dispute._id,
         orderId: orderIdValue,
@@ -589,8 +634,8 @@ const resolveDispute = async (req, res) => {
     await createNotification(
       reportedUserIdValue,
       "Dispute Resolved",
-      "Khiếu nạiđã được xử lý",
-      `Khiếu nạivề đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${refundText}.`,
+      "Khiếu nại đã được xử lý",
+      `Khiếu nại về đơn hàng #${orderGuid} đã được ${moderatorName} xử lý. Quyết định: ${decision}${refundText}.`,
       {
         disputeId: dispute._id,
         orderId: orderIdValue,
@@ -604,8 +649,27 @@ const resolveDispute = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "Đã xử lý Khiếu nạithành công.",
-      data: dispute,
+      message:
+        "Đã xử lý Khiếu nại thành công. Vui lòng chọn trạng thái đơn hàng:",
+      data: {
+        dispute,
+        nextActions: {
+          currentOrderStatus: order.orderStatus,
+          statusOptions: [
+            { value: "cancelled", label: "1. Đã hủy" },
+            { value: "progress", label: "2. Đang thuê" },
+          ],
+          requiresManualStatusUpdate: !updateOrderStatus,
+        },
+        refundDetails: {
+          amount: computedRefundAmount,
+          percentage: appliedRefundPercentage,
+          target: appliedRefundTarget,
+        },
+        appliedOrderUpdate: updateOrderStatus
+          ? { orderStatus: appliedOrderStatus }
+          : null,
+      },
     });
   } catch (error) {
     console.error("Error resolving dispute:", error);
@@ -615,6 +679,7 @@ const resolveDispute = async (req, res) => {
     });
   }
 };
+
 
 module.exports = {
   createDispute,

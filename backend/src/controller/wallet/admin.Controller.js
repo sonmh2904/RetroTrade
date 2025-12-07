@@ -4,6 +4,7 @@ const User = require("../../models/User.model");
 const Order = require("../../models/Order/Order.model");
 const Notification = require("../../models/Notification.model");
 const AuditLog = require("../../models/AuditLog.model");
+const OrderReport = require("../../models/Order/Reports.model");
 
 
 // view danh sách yêu cầu rút tiền
@@ -296,24 +297,139 @@ const getAdminWallet = async (req, res) => {
   }
 };
 // view hoàn tiền cho 
+// const getAllRefundsForAdmin = async (req, res) => {
+//   try {
+//     // Lấy tất cả đơn hàng trạng thái completed, sắp xếp mới nhất
+//     const orders = await Order.find({ orderStatus: "completed" })
+//       .populate("renterId", "fullName username role email phone")  // Lấy thông tin người thuê
+//       .populate("ownerId", "fullName username role email phone")   // Lấy thông tin chủ đồ
+//       .populate("itemId", "DepositAmount Title")                   // Lấy thông tin tiền cọc và tên sản phẩm từ bảng Item
+//       .sort({ completedAt: -1 });
+
+//     const data = orders.map(order => {
+//       const totalAmount = order.totalAmount ?? 0;                // Tổng tiền đã thanh toán (cọc + phí + thuê)
+//       const serviceFee = order.serviceFee ?? 0;                  // Phí dịch vụ
+//       const depositAmount = order.itemId?.DepositAmount ?? 0;    // Tiền cọc lấy từ Item trả cho người thuê 
+
+//       // tiền thuê gốc
+//       const rentalOriginal = totalAmount - depositAmount - serviceFee;
+
+//       const discountTotal = order.discount?.totalAmountApplied ?? 0;
+//       const finalAmount = order.finalAmount ?? (totalAmount - discountTotal);
+
+//       const ownerReceive = rentalOriginal;                  // chủ nhận đủ tiền thuê gốc
+
+//       return {
+//         _id: order._id,
+//         orderGuid: order.orderGuid,
+//         renterName: order.renterId?.fullName || "Không rõ",
+//         renterUsername: order.renterId?.username || "Không rõ",
+//         renterRole: order.renterId?.role || "Người thuê",
+//         ownerName: order.ownerId?.fullName || "Không rõ",
+//         ownerUsername: order.ownerId?.username || "Không rõ",
+//         ownerRole: order.ownerId?.role || "Chủ đơn",
+//         itemTitle: order.itemId?.Title || "Không rõ",              // Tên sản phẩm lấy từ Item
+//         totalAmount : finalAmount,                                                // Tổng tiền thanh toán
+//         refundedAmount: depositAmount,                             // Tiền hoàn trả cho người thuê (tiền cọc)
+//         ownerReceive,                                               // Tiền chủ nhận được sau khi trừ cọc và phí
+//         isRefunded: order.isRefunded,
+//         refundedAt: order.refundedAt,
+//         completedAt: order.completedAt,
+//         createdAt: order.createdAt,
+//       };
+//     });
+
+//     res.json({ success: true, data });
+//   } catch (error) {
+//     console.error("Lỗi lấy danh sách hoàn tiền:", error);
+//     res.status(500).json({ success: false, message: "Lỗi hệ thống" });
+//   }
+// };
+// view hoàn tiền cho
 const getAllRefundsForAdmin = async (req, res) => {
   try {
-    // Lấy tất cả đơn hàng trạng thái completed, sắp xếp mới nhất
-    const orders = await Order.find({ orderStatus: "completed" })
-      .populate("renterId", "fullName username role email phone")  // Lấy thông tin người thuê
-      .populate("ownerId", "fullName username role email phone")   // Lấy thông tin chủ đồ
-      .populate("itemId", "DepositAmount Title")                   // Lấy thông tin tiền cọc và tên sản phẩm từ bảng Item
-      .sort({ completedAt: -1 });
+    // Lấy tất cả đơn đã hoàn tiền (completed hoặc cancelled)
+    const orders = await Order.find({
+      isRefunded: true,
+      orderStatus: { $in: ["completed", "cancelled"] },
+    })
+      .populate("renterId", "fullName username role email phone")
+      .populate("ownerId", "fullName username role email phone")
+      .populate("itemId", "DepositAmount Title")
+      .sort({ refundedAt: -1 });
 
-    const data = orders.map(order => {
-      const totalAmount = order.totalAmount ?? 0;                // Tổng tiền đã thanh toán (cọc + phí + thuê)
-      const serviceFee = order.serviceFee ?? 0;                  // Phí dịch vụ
-      const depositAmount = order.itemId?.DepositAmount ?? 0;    // Tiền cọc lấy từ Item trả cho người thuê 
+    const data = [];
 
-      // Tiền thực nhận của chủ đồ (trừ phí dịch vụ và tiền cọc)
-      const ownerReceive = totalAmount - serviceFee - depositAmount;
+    for (const order of orders) {
+      const totalAmount = order.totalAmount ?? 0;
+      const serviceFee = order.serviceFee ?? 0;
+      const depositAmount = order.itemId?.DepositAmount ?? 0; // D
+      const rentalOriginal = totalAmount - depositAmount - serviceFee; // T
 
-      return {
+      const discountTotal = order.discount?.totalAmountApplied ?? 0;
+      const finalAmount = order.finalAmount ?? (totalAmount - discountTotal);
+
+      // ===== XÁC ĐỊNH CÓ KHIẾU NẠI KHÔNG =====
+      let hasDispute = false;
+      if (order.disputeId) {
+        const dispute = await OrderReport.findById(order.disputeId).select(
+          "status"
+        );
+        if (dispute && dispute.status === "Resolved") {
+          hasDispute = true;
+        }
+      }
+
+      // ===== LẤY TRANSACTION THỰC TẾ =====
+      const txs = await WalletTransaction.find({ orderId: order._id });
+
+      // Tiền người thuê thực nhận (bao gồm cọc + bồi thường, nếu có)
+      let renterRefund = txs
+        .filter((tx) =>
+          ["renter_refund", "renter_refund_dispute"].includes(tx.typeId)
+        )
+        .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+      // Tiền chủ đồ thực nhận (sau khiếu nại nếu có)
+      let ownerPayment = txs
+        .filter((tx) =>
+          ["owner_payment", "owner_payment_dispute"].includes(tx.typeId)
+        )
+        .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+      // Nếu đơn đã bị huỷ thì chủ KHÔNG được nhận gì
+      if (order.orderStatus === "cancelled") {
+        ownerPayment = 0;
+      }
+
+      // Nếu KHÔNG có transaction refund nào (dữ liệu cũ / lỗi)
+      // => fallback về logic mặc định: renter nhận D, owner nhận T
+      const hasRefundTx = renterRefund !== 0 || ownerPayment !== 0;
+      if (!hasRefundTx) {
+        if (order.orderStatus === "completed") {
+          renterRefund = depositAmount;
+          ownerPayment = rentalOriginal;
+        } else if (order.orderStatus === "cancelled") {
+          renterRefund = finalAmount;
+          ownerPayment = 0;
+        }
+      }
+
+      // ===== LABEL TRẠNG THÁI ĐƠN (4 LOẠI) =====
+      let refundStatusLabel = "";
+      if (order.orderStatus === "completed" && !hasDispute) {
+        refundStatusLabel = "Hoàn thành";
+      } else if (order.orderStatus === "cancelled" && !hasDispute) {
+        refundStatusLabel = "Hủy";
+      } else if (order.orderStatus === "completed" && hasDispute) {
+        refundStatusLabel = "Hoàn thành (khiếu nại)";
+      } else if (order.orderStatus === "cancelled" && hasDispute) {
+        refundStatusLabel = "Hủy (khiếu nại)";
+      } else {
+        refundStatusLabel = "Không rõ";
+      }
+
+      data.push({
         _id: order._id,
         orderGuid: order.orderGuid,
         renterName: order.renterId?.fullName || "Không rõ",
@@ -322,21 +438,27 @@ const getAllRefundsForAdmin = async (req, res) => {
         ownerName: order.ownerId?.fullName || "Không rõ",
         ownerUsername: order.ownerId?.username || "Không rõ",
         ownerRole: order.ownerId?.role || "Chủ đơn",
-        itemTitle: order.itemId?.Title || "Không rõ",              // Tên sản phẩm lấy từ Item
-        totalAmount,                                                // Tổng tiền thanh toán
-        refundedAmount: depositAmount,                             // Tiền hoàn trả cho người thuê (tiền cọc)
-        ownerReceive,                                               // Tiền chủ nhận được sau khi trừ cọc và phí
+        itemTitle: order.itemId?.Title || "Không rõ",
+        totalAmount: finalAmount,        // Tổng khách đã trả
+        refundedAmount: renterRefund,    // Tiền renter thực nhận
+        ownerReceive: ownerPayment,      // Tiền owner thực nhận
+        baseRentAmount: rentalOriginal,  // T để admin tham chiếu
+        baseDepositAmount: depositAmount,// D
+        orderStatus: order.orderStatus,
+        hasDispute,
+        refundStatusLabel,               // text hiển thị 4 trạng thái
         isRefunded: order.isRefunded,
         refundedAt: order.refundedAt,
-        completedAt: order.completedAt,
         createdAt: order.createdAt,
-      };
-    });
+      });
+    }
 
-    res.json({ success: true, data });
+    return res.json({ success: true, data });
   } catch (error) {
     console.error("Lỗi lấy danh sách hoàn tiền:", error);
-    res.status(500).json({ success: false, message: "Lỗi hệ thống" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Lỗi hệ thống" });
   }
 };
 
