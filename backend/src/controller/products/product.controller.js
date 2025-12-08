@@ -192,7 +192,7 @@ const addProduct = async (req, res) => {
       parsedMinDuration > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối thiểu phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
+        `Thời gian thuê tối thiểu là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
       );
     }
 
@@ -202,7 +202,7 @@ const addProduct = async (req, res) => {
       parsedMaxDuration > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối đa phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
+        `Thời gian thuê tối đa là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
       );
     }
 
@@ -612,7 +612,7 @@ const updateProduct = async (req, res) => {
       minValue > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối thiểu phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
+        `Thời gian thuê tối thiểu là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
       );
     }
 
@@ -623,7 +623,7 @@ const updateProduct = async (req, res) => {
       maxValue > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối đa phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
+        `Thời gian thuê tối đa là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
       );
     }
 
