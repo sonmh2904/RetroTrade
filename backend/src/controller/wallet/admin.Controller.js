@@ -348,7 +348,6 @@ const getAdminWallet = async (req, res) => {
 // view hoàn tiền cho
 const getAllRefundsForAdmin = async (req, res) => {
   try {
-    // Lấy tất cả đơn đã hoàn tiền (completed hoặc cancelled)
     const orders = await Order.find({
       isRefunded: true,
       orderStatus: { $in: ["completed", "cancelled"] },
@@ -369,12 +368,10 @@ const getAllRefundsForAdmin = async (req, res) => {
       const discountTotal = order.discount?.totalAmountApplied ?? 0;
       const finalAmount = order.finalAmount ?? (totalAmount - discountTotal);
 
-      // ===== XÁC ĐỊNH CÓ KHIẾU NẠI KHÔNG =====
+      // ===== CÓ KHIẾU NẠI KHÔNG =====
       let hasDispute = false;
       if (order.disputeId) {
-        const dispute = await OrderReport.findById(order.disputeId).select(
-          "status"
-        );
+        const dispute = await OrderReport.findById(order.disputeId).select("status");
         if (dispute && dispute.status === "Resolved") {
           hasDispute = true;
         }
@@ -383,39 +380,42 @@ const getAllRefundsForAdmin = async (req, res) => {
       // ===== LẤY TRANSACTION THỰC TẾ =====
       const txs = await WalletTransaction.find({ orderId: order._id });
 
-      // Tiền người thuê thực nhận (bao gồm cọc + bồi thường, nếu có)
-      let renterRefund = txs
+      const renterRefundFromTx = txs
         .filter((tx) =>
-          ["renter_refund", "renter_refund_dispute"].includes(tx.typeId)
+          ["renter_refund", "renter_refund_dispute","refund_deposit"].includes(tx.typeId)
         )
         .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
-      // Tiền chủ đồ thực nhận (sau khiếu nại nếu có)
-      let ownerPayment = txs
+      let ownerPaymentFromTx = txs
         .filter((tx) =>
           ["owner_payment", "owner_payment_dispute"].includes(tx.typeId)
         )
         .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
-      // Nếu đơn đã bị huỷ thì chủ KHÔNG được nhận gì
       if (order.orderStatus === "cancelled") {
-        ownerPayment = 0;
+        ownerPaymentFromTx = 0;
       }
 
-      // Nếu KHÔNG có transaction refund nào (dữ liệu cũ / lỗi)
-      // => fallback về logic mặc định: renter nhận D, owner nhận T
-      const hasRefundTx = renterRefund !== 0 || ownerPayment !== 0;
+      // ===== Fallback nếu KHÔNG có transaction (data cũ) =====
+      let finalRenterRefund = renterRefundFromTx;
+      let finalOwnerPayment = ownerPaymentFromTx;
+
+      const hasRefundTx =
+        renterRefundFromTx !== 0 || ownerPaymentFromTx !== 0;
+
       if (!hasRefundTx) {
         if (order.orderStatus === "completed") {
-          renterRefund = depositAmount;
-          ownerPayment = rentalOriginal;
+          // completed không khiếu nại: renter nhận lại D, owner nhận T
+          finalRenterRefund = depositAmount;
+          finalOwnerPayment = rentalOriginal;
         } else if (order.orderStatus === "cancelled") {
-          renterRefund = finalAmount;
-          ownerPayment = 0;
+          // cancelled: renter nhận lại toàn bộ finalAmount, owner 0
+          finalRenterRefund = finalAmount;
+          finalOwnerPayment = 0;
         }
       }
 
-      // ===== LABEL TRẠNG THÁI ĐƠN (4 LOẠI) =====
+      // ===== LABEL TRẠNG THÁI ĐƠN =====
       let refundStatusLabel = "";
       if (order.orderStatus === "completed" && !hasDispute) {
         refundStatusLabel = "Hoàn thành";
@@ -439,14 +439,14 @@ const getAllRefundsForAdmin = async (req, res) => {
         ownerUsername: order.ownerId?.username || "Không rõ",
         ownerRole: order.ownerId?.role || "Chủ đơn",
         itemTitle: order.itemId?.Title || "Không rõ",
-        totalAmount: finalAmount,        // Tổng khách đã trả
-        refundedAmount: renterRefund,    // Tiền renter thực nhận
-        ownerReceive: ownerPayment,      // Tiền owner thực nhận
-        baseRentAmount: rentalOriginal,  // T để admin tham chiếu
-        baseDepositAmount: depositAmount,// D
+        totalAmount: finalAmount,
+        refundedAmount: finalRenterRefund,   // tổng tiền renter đã nhận
+        ownerReceive: finalOwnerPayment,     // tổng tiền chủ nhận
+        baseRentAmount: rentalOriginal,
+        baseDepositAmount: depositAmount,
         orderStatus: order.orderStatus,
         hasDispute,
-        refundStatusLabel,               // text hiển thị 4 trạng thái
+        refundStatusLabel,
         isRefunded: order.isRefunded,
         refundedAt: order.refundedAt,
         createdAt: order.createdAt,
@@ -461,6 +461,7 @@ const getAllRefundsForAdmin = async (req, res) => {
       .json({ success: false, message: "Lỗi hệ thống" });
   }
 };
+
 
 module.exports = {
   getWithdrawalRequests,

@@ -58,9 +58,12 @@ const depositToWallet = async (req, res) => {
 
     const { amount, note, returnUrlBase } = req.body;
 
-    if (Number(amount) < 2000 || Number(amount) >= 10000000 ||
-      !Number.isInteger(Number(amount)) || Number(amount) <= 0) {
-      return res.status(400).json({ message: "Số tiền không hợp lệ! Phải từ 2.000đ đến dưới 10.000.000đ" });
+    const money = Number(amount);
+
+    if (isNaN(money) || money < 2000 || money >= 10000000) {
+      return res.status(400).json({
+        message: "Số tiền không hợp lệ! Phải từ 2.000đ đến dưới 10.000.000đ"
+      });
     }
     // Lấy hoặc tạo ví người dùng
     let wallet = await Wallet.findOne({ userId });
