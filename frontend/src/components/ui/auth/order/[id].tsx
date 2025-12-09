@@ -475,7 +475,7 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                       </h3>
                       <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full w-fit">
                         <User className="w-3 h-3" />
-                        <span>Người mua</span>
+                        <span>Người thuê</span>
                       </div>
                     </div>
                   </div>

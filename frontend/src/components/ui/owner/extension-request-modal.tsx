@@ -99,7 +99,7 @@ export default function ExtensionRequestModal({
             <DialogHeader>
               <DialogTitle className="text-2xl font-semibold flex items-center gap-3">
                 <Clock className="w-6 h-6 text-blue-600" />
-                Yêu cầu gia hạn hợp đồng
+                Yêu cầu gia hạn
               </DialogTitle>
             </DialogHeader>
             <div className="mt-2 flex items-center gap-2">
