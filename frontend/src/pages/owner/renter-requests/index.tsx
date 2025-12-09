@@ -700,15 +700,10 @@ function RenterRequestsContent() {
             setSelectedExtension(null);
           }
         }}
-        onReject={async (reason: string) => {
-          if (!selectedExtension) return;
-          const res = await rejectExtension(
-            selectedExtension.orderIdString,
-            selectedExtension._id,
-            {
-              rejectReason: reason,
-            }
-          );
+        onReject={async (orderId: string, extId: string, reason: string) => {
+          const res = await rejectExtension(orderId, extId, {
+            rejectReason: reason,
+          });
           if (res.code === 200) {
             toast.success("Từ chối gia hạn thành công");
             setRefreshKey((k) => k + 1);

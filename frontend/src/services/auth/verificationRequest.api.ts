@@ -62,8 +62,7 @@ const parseResponse = async <T>(response: Response): Promise<ApiResponse<T>> => 
         data: undefined
       };
     }
-  } catch (error) {
-    console.error('Error parsing response:', error);
+  } catch {
     return {
       code: response.status || 500,
       message: 'Failed to parse response',
@@ -73,13 +72,11 @@ const parseResponse = async <T>(response: Response): Promise<ApiResponse<T>> => 
 };
 
 export const verificationRequestAPI = {
-  // User: Tạo yêu cầu xác minh
   createVerificationRequest: async (formData: FormData): Promise<ApiResponse<VerificationRequest>> => {
     const response = await api.post('/auth/verification-request', formData);
     return await parseResponse<VerificationRequest>(response);
   },
 
-  // User: Lấy danh sách yêu cầu của mình
   getMyVerificationRequests: async (params?: { status?: string }): Promise<ApiResponse<VerificationRequest[]>> => {
     const query = new URLSearchParams(
       Object.entries(params || {}).reduce((acc, [k, v]) => {
@@ -92,13 +89,11 @@ export const verificationRequestAPI = {
     return await parseResponse<VerificationRequest[]>(response);
   },
 
-  // User: Lấy chi tiết yêu cầu của mình
   getMyVerificationRequestById: async (id: string): Promise<ApiResponse<VerificationRequest>> => {
     const response = await api.get(`/auth/verification-request/${id}`);
     return await parseResponse<VerificationRequest>(response);
   },
 
-  // Moderator: Lấy tất cả yêu cầu
   getAllVerificationRequests: async (params?: { status?: string; assignedTo?: string }): Promise<ApiResponse<VerificationRequest[]>> => {
     const query = new URLSearchParams(
       Object.entries(params || {}).reduce((acc, [k, v]) => {
@@ -111,19 +106,16 @@ export const verificationRequestAPI = {
     return await parseResponse<VerificationRequest[]>(response);
   },
 
-  // Moderator: Lấy chi tiết yêu cầu
   getVerificationRequestById: async (id: string): Promise<ApiResponse<VerificationRequest>> => {
     const response = await api.get(`/verification-request-moderator/${id}`);
     return await parseResponse<VerificationRequest>(response);
   },
 
-  // Moderator: Nhận yêu cầu (assign)
   assignVerificationRequest: async (id: string): Promise<ApiResponse<VerificationRequest>> => {
     const response = await api.post(`/verification-request-moderator/${id}/assign`);
     return await parseResponse<VerificationRequest>(response);
   },
 
-  // Moderator: Xử lý yêu cầu (approve/reject)
   handleVerificationRequest: async (
     id: string,
     action: 'approved' | 'rejected',
@@ -150,3 +142,22 @@ export const verificationRequestAPI = {
 export const createVerificationRequest = verificationRequestAPI.createVerificationRequest;
 export const getMyVerificationRequests = verificationRequestAPI.getMyVerificationRequests;
 
+export const sendOtp = async (phone: string): Promise<Response> => {
+    return await api.post("/auth/phone/send-otp", { phone });
+};
+
+export const verifyOtp = async (phone: string, code: string): Promise<Response> => {
+    return await api.post("/auth/phone/verify-otp", { phone, code });
+};
+
+export const sendOtpFirebase = async (phone: string, recaptchaToken?: string): Promise<Response> => {
+    return await api.post("/auth/phone/send-otp-firebase", { phone, recaptchaToken });
+};
+
+export const verifyOtpFirebase = async (sessionInfo: string, code: string): Promise<Response> => {
+    return await api.post("/auth/phone/verify-otp-firebase", { sessionInfo, code });
+};
+
+export const confirmPhoneFirebase = async (idToken: string): Promise<Response> => {
+    return await api.post("/auth/phone/confirm-firebase", { idToken });
+};

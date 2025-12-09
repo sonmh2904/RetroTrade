@@ -632,7 +632,7 @@ export default function OrderListPage({
                     </div>
                   );
                 }
-                // 3. Bị từ chối → hiển thị đỏ + cho phép gia hạn lại
+                // 3. Bị từ chối
                 else if (latestExtension?.status === "rejected") {
                   extensionDisplay = (
                     <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-700 border-red-200">
@@ -651,7 +651,7 @@ export default function OrderListPage({
                         >
                           <EyeIcon className="w-3 h-3" />
                         </Button>
-                        <Button
+                        {/* <Button
                           size="sm"
                           className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3"
                           onClick={(e) => {
@@ -661,7 +661,7 @@ export default function OrderListPage({
                           }}
                         >
                           Gia hạn lại
-                        </Button>
+                        </Button> */}
                       </div>
                     </div>
                   );

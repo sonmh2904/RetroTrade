@@ -59,28 +59,6 @@ export const loginWithFacebook = async (
     return await instance.post("/auth/login-with-facebook", payload);
 };
 
-// Twilio Phone Auth OTP endpoints (recommended)
-export const sendOtp = async (phone: string): Promise<Response> => {
-    return await instance.post("/auth/phone/send-otp", { phone });
-};
-
-export const verifyOtp = async (phone: string, code: string): Promise<Response> => {
-    return await instance.post("/auth/phone/verify-otp", { phone, code });
-};
-
-// Firebase Phone Auth OTP endpoints (deprecated - use Twilio instead)
-export const sendOtpFirebase = async (phone: string, recaptchaToken?: string): Promise<Response> => {
-    return await instance.post("/auth/phone/send-otp-firebase", { phone, recaptchaToken });
-};
-
-export const verifyOtpFirebase = async (sessionInfo: string, code: string): Promise<Response> => {
-    return await instance.post("/auth/phone/verify-otp-firebase", { sessionInfo, code });
-};
-
-export const confirmPhoneFirebase = async (idToken: string): Promise<Response> => {
-    return await instance.post("/auth/phone/confirm-firebase", { idToken });
-};
-
 // Signature CRUD API functions
 export const saveSignature = async (signatureData: string): Promise<Response> => {
     return await instance.post("/signature", { signatureData });

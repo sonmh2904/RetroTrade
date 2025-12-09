@@ -38,6 +38,7 @@ import {
   type Dispute,
 } from "@/services/moderator/disputeOrder.api";
 import { getOrderDetails, type Order } from "@/services/auth/order.api";
+type RefundTargetOption = "reporter" | "reported";
 
 const REFUND_TARGET_OPTIONS = [
   { value: "reporter", label: "Người khiếu nại (người thuê)" },
@@ -104,9 +105,7 @@ export function DisputeManagement() {
   // Resolve form state
   const [decision, setDecision] = useState("");
   const [notes, setNotes] = useState("");
-  const [refundTarget, setRefundTarget] = useState<
-    "reporter" | "reported" | ""
-  >("");
+  const [refundTarget, setRefundTarget] = useState<RefundTargetOption>("reporter");
   const [refundPercentage, setRefundPercentage] = useState<string>("");
   const [unassignReason, setUnassignReason] = useState("");
 
@@ -124,20 +123,72 @@ export function DisputeManagement() {
   // Image modal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  // Refund computation state
+  const [updateOrderStatus, setUpdateOrderStatus] = useState(false);
+  const [orderStatusAfterResolve, setOrderStatusAfterResolve] =
+    useState<"cancelled" | "progress">("cancelled");
 
-  // Tính tiền hoàn chỉ dựa trên tiền cọc (depositAmount), không động vào tổng tiền
+
+  // reporter có phải người thuê không
+  const reporterId =
+    typeof disputeDetails?.reporterId === "object"
+      ? disputeDetails.reporterId._id
+      : disputeDetails?.reporterId;
+
+  const renterId =
+    typeof orderDetails?.renterId === "object"
+      ? orderDetails.renterId._id
+      : orderDetails?.renterId;
+
+  const isReporterRenter =
+    reporterId && renterId ? String(reporterId) === String(renterId) : false;
+
+  console.log({ reporterId, renterId, isReporterRenter });
+
+  // ===== TÍNH BASE GIỐNG BACKEND =====
+
+  // Tổng = T + D + F  (tiền thuê gốc + cọc + phí)
+  const totalAmount =
+    orderDetails?.totalAmount ??
+    (orderDetails?.finalAmount ?? 0); // fallback nếu thiếu
+
+  const serviceFee = orderDetails?.serviceFee ?? 0;
+
+  // Cọc D
   const depositAmountForRefund =
     orderDetails?.depositAmount ??
-    (typeof disputeDetails?.orderId === "object" &&
-    disputeDetails?.orderId !== null &&
-    "depositAmount" in disputeDetails.orderId
+    ((typeof disputeDetails?.orderId === "object" &&
+      disputeDetails?.orderId !== null &&
+      "depositAmount" in disputeDetails.orderId
       ? (disputeDetails.orderId as Order).depositAmount
-      : 0) ??
-    0;
+      : 0) ?? 0);
+
+  // Giảm giá toàn đơn
+  const discountTotal = orderDetails?.discount?.totalAmountApplied ?? 0;
+
+  // Tổng sau giảm
+  const finalTotal =
+    orderDetails?.finalAmount ?? (totalAmount - discountTotal);
+
+  // Tiền thuê gốc T
+  const rentAmount = totalAmount - (depositAmountForRefund + serviceFee);
+
+  // Tiền thuê THỰC TRẢ sau giảm (T_paid)
+  const rentPaid = finalTotal - (depositAmountForRefund + serviceFee);
+  const safeRentPaid = Math.max(rentPaid, 0);
+  // reporter là renter  → base = T_paid
+  // reporter là owner   → base = D
+  const refundBase = isReporterRenter
+    ? safeRentPaid
+    : depositAmountForRefund;
+
+  const percent = Number(refundPercentage) || 0;
+
   const computedRefundPreview =
-    refundPercentage && depositAmountForRefund
-      ? Math.round((depositAmountForRefund * Number(refundPercentage)) / 100)
+    percent > 0 && refundBase > 0
+      ? Math.round((refundBase * percent) / 100)
       : 0;
+
 
   useEffect(() => {
     const decoded = decodeToken(accessToken);
@@ -166,8 +217,8 @@ export function DisputeManagement() {
           Array.isArray(disputeData)
             ? disputeData
             : Array.isArray(disputeData?.data)
-            ? disputeData.data
-            : []
+              ? disputeData.data
+              : []
         );
       } else {
         setError(response.message || "Không thể tải danh sách Khiếu nại");
@@ -262,7 +313,7 @@ export function DisputeManagement() {
     setDisputeDetails(null);
     setDecision("");
     setNotes("");
-    setRefundTarget("");
+    setRefundTarget("reporter");   // luôn mặc định người khiếu nại
     setRefundPercentage("");
     await fetchOrderAndDisputeDetails(dispute);
   };
@@ -272,33 +323,39 @@ export function DisputeManagement() {
       toast.error("Vui lòng nhập quyết định");
       return;
     }
-    if (refundTarget && !refundPercentage) {
-      toast.error("Vui lòng chọn phần trăm hoàn tiền tương ứng");
+    // BẮT BUỘC PHẢI CHỌN CẬP NHẬT TRẠNG THÁI
+    if (!updateOrderStatus) {
+      toast.error("Vui lòng tick 'Cập nhật trạng thái đơn hàng' và chọn trạng thái mới.");
       return;
     }
+
+    if (!orderStatusAfterResolve) {
+      toast.error("Vui lòng chọn trạng thái đơn hàng mới.");
+      return;
+    }
+    // CHỈ chặn nếu % KHÁC "" VÀ KHÁC "0" mà lại không nằm trong list
     if (
       refundPercentage &&
-      !REFUND_PERCENTAGE_OPTIONS.map((value) => value.toString()).includes(
+      refundPercentage !== "0" &&
+      !REFUND_PERCENTAGE_OPTIONS.map((v) => v.toString()).includes(
         refundPercentage
       )
     ) {
       toast.error("Chỉ hỗ trợ hoàn 10%, 25%, 50% hoặc 100%");
       return;
     }
-    if (refundPercentage && !refundTarget) {
-      toast.error("Vui lòng chọn người nhận hoàn tiền");
-      return;
-    }
     try {
       const payload = {
         decision: decision.trim(),
         notes: notes.trim() || undefined,
-        refundTarget: refundPercentage
-          ? (refundTarget as "reporter" | "reported")
-          : undefined,
-        refundPercentage: refundPercentage
-          ? Number(refundPercentage)
-          : undefined,
+        refundTarget:
+          refundPercentage && refundPercentage !== "0" ? refundTarget : undefined,
+        refundPercentage:
+          refundPercentage && refundPercentage !== "0"
+            ? Number(refundPercentage)
+            : 0, // 0 = không hoàn
+        updateOrderStatus: updateOrderStatus,
+        orderStatus: updateOrderStatus ? orderStatusAfterResolve : undefined,
       };
       const response = await resolveDispute(selectedDispute._id, payload);
       if (response.code === 200) {
@@ -306,7 +363,7 @@ export function DisputeManagement() {
         setResolveDialog(false);
         setDecision("");
         setNotes("");
-        setRefundTarget("");
+        setRefundTarget("reporter");
         setRefundPercentage("");
         setSelectedDispute(null);
         setOrderDetails(null);
@@ -370,11 +427,11 @@ export function DisputeManagement() {
     const matchesSearch =
       dispute.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (typeof dispute.orderId === "object" &&
-      dispute.orderId !== null &&
-      "orderGuid" in dispute.orderId
+        dispute.orderId !== null &&
+        "orderGuid" in dispute.orderId
         ? (dispute.orderId as { orderGuid?: string }).orderGuid
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase())
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase())
         : false) ||
       (typeof dispute.reporterId === "object" &&
         dispute.reporterId?.fullName
@@ -555,10 +612,10 @@ export function DisputeManagement() {
               paginatedDisputes.map((dispute) => {
                 const orderGuid =
                   typeof dispute.orderId === "object" &&
-                  dispute.orderId !== null &&
-                  "orderGuid" in dispute.orderId
+                    dispute.orderId !== null &&
+                    "orderGuid" in dispute.orderId
                     ? (dispute.orderId as { orderGuid?: string }).orderGuid ||
-                      "N/A"
+                    "N/A"
                     : "N/A";
                 const assignedToMe = isAssignedToMe(dispute);
                 const canAssign =
@@ -604,8 +661,8 @@ export function DisputeManagement() {
                               Người báo cáo:{" "}
                               {typeof dispute.reporterId === "object"
                                 ? dispute.reporterId.fullName ||
-                                  dispute.reporterId.email ||
-                                  "N/A"
+                                dispute.reporterId.email ||
+                                "N/A"
                                 : "N/A"}
                             </span>
                           </div>
@@ -615,8 +672,8 @@ export function DisputeManagement() {
                               Người bị báo cáo:{" "}
                               {typeof dispute.reportedUserId === "object"
                                 ? dispute.reportedUserId.fullName ||
-                                  dispute.reportedUserId.email ||
-                                  "N/A"
+                                dispute.reportedUserId.email ||
+                                "N/A"
                                 : "N/A"}
                             </span>
                           </div>
@@ -720,7 +777,7 @@ export function DisputeManagement() {
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={
                 pagination.currentPage ===
-                  Math.ceil(total / pagination.itemsPerPage) || total === 0
+                Math.ceil(total / pagination.itemsPerPage) || total === 0
               }
               className="relative ml-3 inline-flex items-center px-4 py-2 border border-gray-200 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
             >
@@ -796,11 +853,10 @@ export function DisputeManagement() {
                   <button
                     key={page}
                     onClick={() => handlePageChange(page)}
-                    className={`relative inline-flex items-center px-4 py-2 border border-gray-200 text-sm font-medium ${
-                      pagination.currentPage === page
-                        ? "z-10 bg-indigo-50 border-indigo-500 text-indigo-600"
-                        : "bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
+                    className={`relative inline-flex items-center px-4 py-2 border border-gray-200 text-sm font-medium ${pagination.currentPage === page
+                      ? "z-10 bg-indigo-50 border-indigo-500 text-indigo-600"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
                   >
                     {page}
                   </button>
@@ -809,7 +865,7 @@ export function DisputeManagement() {
                   onClick={() => handlePageChange(pagination.currentPage + 1)}
                   disabled={
                     pagination.currentPage ===
-                      Math.ceil(total / pagination.itemsPerPage) || total === 0
+                    Math.ceil(total / pagination.itemsPerPage) || total === 0
                   }
                   className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
@@ -848,10 +904,10 @@ export function DisputeManagement() {
                       <p className="text-gray-900">
                         #
                         {typeof dispute.orderId === "object" &&
-                        dispute.orderId !== null &&
-                        "orderGuid" in dispute.orderId
+                          dispute.orderId !== null &&
+                          "orderGuid" in dispute.orderId
                           ? (dispute.orderId as { orderGuid?: string })
-                              .orderGuid || "N/A"
+                            .orderGuid || "N/A"
                           : "N/A"}
                       </p>
                     </div>
@@ -919,7 +975,7 @@ export function DisputeManagement() {
                         <p className="text-gray-900">
                           {typeof dispute.assignedBy === "object"
                             ? dispute.assignedBy.fullName ||
-                              dispute.assignedBy.email
+                            dispute.assignedBy.email
                             : "Đã được nhận"}
                         </p>
                       </div>
@@ -1066,7 +1122,7 @@ export function DisputeManagement() {
                           <div className="flex gap-4">
                             {/* Hình ảnh sản phẩm */}
                             {orderDetails.itemSnapshot.images &&
-                            orderDetails.itemSnapshot.images.length > 0 ? (
+                              orderDetails.itemSnapshot.images.length > 0 ? (
                               <div className="flex-shrink-0">
                                 <div className="relative">
                                   <button
@@ -1093,53 +1149,53 @@ export function DisputeManagement() {
                                     />
                                     {orderDetails.itemSnapshot.images.length >
                                       1 && (
-                                      <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                                        +
-                                        {orderDetails.itemSnapshot.images
-                                          .length - 1}
-                                      </div>
-                                    )}
+                                        <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                                          +
+                                          {orderDetails.itemSnapshot.images
+                                            .length - 1}
+                                        </div>
+                                      )}
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                                       <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
                                   </button>
                                   {orderDetails.itemSnapshot.images.length >
                                     1 && (
-                                    <div className="mt-2 flex gap-1 overflow-x-auto max-w-[128px]">
-                                      {orderDetails.itemSnapshot.images
-                                        .slice(1, 4)
-                                        .map((img, idx) => (
-                                          <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => {
-                                              setSelectedImage(img);
-                                              setImageModalOpen(true);
-                                            }}
-                                            className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 hover:border-indigo-500 overflow-hidden"
-                                          >
-                                            <img
-                                              src={img}
-                                              alt={`Ảnh ${idx + 2}`}
-                                              className="w-full h-full object-cover"
-                                              onError={(e) => {
-                                                (
-                                                  e.target as HTMLImageElement
-                                                ).src = "/file.svg";
+                                      <div className="mt-2 flex gap-1 overflow-x-auto max-w-[128px]">
+                                        {orderDetails.itemSnapshot.images
+                                          .slice(1, 4)
+                                          .map((img, idx) => (
+                                            <button
+                                              key={idx}
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedImage(img);
+                                                setImageModalOpen(true);
                                               }}
-                                            />
-                                          </button>
-                                        ))}
-                                      {orderDetails.itemSnapshot.images.length >
-                                        4 && (
-                                        <div className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 bg-gray-100 flex items-center justify-center text-xs text-gray-600">
-                                          +
-                                          {orderDetails.itemSnapshot.images
-                                            .length - 4}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
+                                              className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 hover:border-indigo-500 overflow-hidden"
+                                            >
+                                              <img
+                                                src={img}
+                                                alt={`Ảnh ${idx + 2}`}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                  (
+                                                    e.target as HTMLImageElement
+                                                  ).src = "/file.svg";
+                                                }}
+                                              />
+                                            </button>
+                                          ))}
+                                        {orderDetails.itemSnapshot.images.length >
+                                          4 && (
+                                            <div className="flex-shrink-0 w-8 h-8 rounded border border-gray-200 bg-gray-100 flex items-center justify-center text-xs text-gray-600">
+                                              +
+                                              {orderDetails.itemSnapshot.images
+                                                .length - 4}
+                                            </div>
+                                          )}
+                                      </div>
+                                    )}
                                 </div>
                               </div>
                             ) : (
@@ -1214,40 +1270,40 @@ export function DisputeManagement() {
                                 </div>
                                 {(orderDetails.startAt ||
                                   orderDetails.endAt) && (
-                                  <div className="flex flex-wrap items-start gap-2">
-                                    <span className="text-sm text-gray-600 whitespace-nowrap">
-                                      Thời gian thuê:
-                                    </span>
-                                    <div className="text-sm text-gray-900">
-                                      {orderDetails.startAt && (
-                                        <div>
-                                          Bắt đầu:{" "}
-                                          {new Date(
-                                            orderDetails.startAt
-                                          ).toLocaleString("vi-VN")}
-                                        </div>
-                                      )}
-                                      {orderDetails.startAt &&
-                                        orderDetails.endAt && (
-                                          <div className="mt-1">
-                                            Kết thúc:{" "}
-                                            {new Date(
-                                              orderDetails.endAt
-                                            ).toLocaleString("vi-VN")}
-                                          </div>
-                                        )}
-                                      {!orderDetails.startAt &&
-                                        orderDetails.endAt && (
+                                    <div className="flex flex-wrap items-start gap-2">
+                                      <span className="text-sm text-gray-600 whitespace-nowrap">
+                                        Thời gian thuê:
+                                      </span>
+                                      <div className="text-sm text-gray-900">
+                                        {orderDetails.startAt && (
                                           <div>
-                                            Kết thúc:{" "}
+                                            Bắt đầu:{" "}
                                             {new Date(
-                                              orderDetails.endAt
+                                              orderDetails.startAt
                                             ).toLocaleString("vi-VN")}
                                           </div>
                                         )}
+                                        {orderDetails.startAt &&
+                                          orderDetails.endAt && (
+                                            <div className="mt-1">
+                                              Kết thúc:{" "}
+                                              {new Date(
+                                                orderDetails.endAt
+                                              ).toLocaleString("vi-VN")}
+                                            </div>
+                                          )}
+                                        {!orderDetails.startAt &&
+                                          orderDetails.endAt && (
+                                            <div>
+                                              Kết thúc:{" "}
+                                              {new Date(
+                                                orderDetails.endAt
+                                              ).toLocaleString("vi-VN")}
+                                            </div>
+                                          )}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
                               </div>
                             </div>
                           </div>
@@ -1306,8 +1362,8 @@ export function DisputeManagement() {
                         <p className="text-gray-900">
                           {typeof disputeDetails.reporterId === "object"
                             ? disputeDetails.reporterId.fullName ||
-                              disputeDetails.reporterId.email ||
-                              "N/A"
+                            disputeDetails.reporterId.email ||
+                            "N/A"
                             : "N/A"}
                         </p>
                       </div>
@@ -1318,8 +1374,8 @@ export function DisputeManagement() {
                         <p className="text-gray-900">
                           {typeof disputeDetails.reportedUserId === "object"
                             ? disputeDetails.reportedUserId.fullName ||
-                              disputeDetails.reportedUserId.email ||
-                              "N/A"
+                            disputeDetails.reportedUserId.email ||
+                            "N/A"
                             : "N/A"}
                         </p>
                       </div>
@@ -1409,48 +1465,26 @@ export function DisputeManagement() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-700 mb-1 block">
-                        Hoàn tiền cho
-                      </label>
-                      <select
-                        className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
-                        value={refundTarget}
-                        onChange={(e) =>
-                          setRefundTarget(
-                            e.target.value as "reporter" | "reported" | ""
-                          )
-                        }
-                      >
-                        <option value="">Không hoàn / Không áp dụng</option>
-                        {REFUND_TARGET_OPTIONS.map((option) => {
-                          // Lấy tên người dùng từ disputeDetails hoặc orderDetails
-                          let userName = "";
-                          if (disputeDetails) {
-                            if (option.value === "reporter") {
-                              userName =
-                                typeof disputeDetails.reporterId === "object"
-                                  ? disputeDetails.reporterId.fullName ||
-                                    disputeDetails.reporterId.email ||
-                                    ""
-                                  : "";
-                            } else if (option.value === "reported") {
-                              userName =
-                                typeof disputeDetails.reportedUserId ===
-                                "object"
-                                  ? disputeDetails.reportedUserId.fullName ||
-                                    disputeDetails.reportedUserId.email ||
-                                    ""
-                                  : "";
-                            }
-                          }
-                          return (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                              {userName ? ` - ${userName}` : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <p className="font-medium mb-1">Hoàn tiền cho</p>
+                      <div className="px-3 py-2 rounded border border-gray-200 bg-gray-50 text-sm text-gray-900">
+                        {disputeDetails && typeof disputeDetails.reporterId === "object" ? (
+                          <>
+                            <span className="font-semibold">
+                              Người khiếu nại ({isReporterRenter ? "người thuê" : "người cho thuê"})
+                            </span>
+                            {" - "}
+                            <span>
+                              {disputeDetails.reporterId.fullName ||
+                                disputeDetails.reporterId.email ||
+                                "Không xác định"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="italic text-gray-500">
+                            Không lấy được thông tin người khiếu nại
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -1461,7 +1495,7 @@ export function DisputeManagement() {
                         value={refundPercentage}
                         onChange={(e) => setRefundPercentage(e.target.value)}
                       >
-                        <option value="">Không hoàn</option>
+                        <option value="0">Không hoàn</option>
                         {REFUND_PERCENTAGE_OPTIONS.map((percent) => (
                           <option key={percent} value={percent.toString()}>
                             {percent}%
@@ -1470,7 +1504,42 @@ export function DisputeManagement() {
                       </select>
                     </div>
                   </div>
-                  {refundPercentage && refundTarget && (
+                  <div className="mt-4 space-y-2">
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={updateOrderStatus}
+                        onChange={(e) => setUpdateOrderStatus(e.target.checked)}
+                      />
+                      <span>Cập nhật trạng thái đơn hàng sau khi xử lý</span>
+                    </label>
+
+                    {updateOrderStatus && orderDetails && (
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-gray-700">Trạng thái mới:</span>
+                        <select
+                          className="px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                          value={orderStatusAfterResolve}
+                          onChange={(e) =>
+                            setOrderStatusAfterResolve(
+                              e.target.value as "cancelled" | "progress"
+                            )
+                          }
+                        >
+                          <option value="cancelled">Hủy</option>
+                          <option value="progress">Đang thuê</option>
+                        </select>
+
+                        <span className="text-xs text-gray-500">
+                          Trạng thái hiện tại:{" "}
+                          <strong>{getOrderStatusLabel(orderDetails.orderStatus)}</strong>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* {refundPercentage && refundTarget && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
                       <p className="text-sm text-emerald-700 mb-1">
                         Số tiền dự kiến hoàn trả (từ tiền cọc)
@@ -1478,8 +1547,8 @@ export function DisputeManagement() {
                       <p className="text-2xl font-bold text-emerald-900 mb-2">
                         {computedRefundPreview
                           ? `${computedRefundPreview.toLocaleString(
-                              "vi-VN"
-                            )} VNĐ`
+                            "vi-VN"
+                          )} VNĐ`
                           : "0 VNĐ"}
                       </p>
                       {disputeDetails && (
@@ -1489,15 +1558,15 @@ export function DisputeManagement() {
                             {refundTarget === "reporter"
                               ? typeof disputeDetails.reporterId === "object"
                                 ? disputeDetails.reporterId.fullName ||
-                                  disputeDetails.reporterId.email ||
-                                  "Người khiếu nại"
+                                disputeDetails.reporterId.email ||
+                                "Người khiếu nại"
                                 : "Người khiếu nại"
                               : typeof disputeDetails.reportedUserId ===
                                 "object"
-                              ? disputeDetails.reportedUserId.fullName ||
+                                ? disputeDetails.reportedUserId.fullName ||
                                 disputeDetails.reportedUserId.email ||
                                 "Người bị khiếu nại"
-                              : "Người bị khiếu nại"}
+                                : "Người bị khiếu nại"}
                           </span>
                         </p>
                       )}
@@ -1506,7 +1575,57 @@ export function DisputeManagement() {
                         {depositAmountForRefund.toLocaleString("vi-VN")} VNĐ
                       </p>
                     </div>
+                  )} */}
+                  {refundPercentage && refundTarget && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                      <p className="text-sm text-emerald-700 mb-1">
+                        Số tiền dự kiến hoàn trả trên{" "}
+                        {isReporterRenter
+                          ? "tổng số tiền người thuê đã thanh toán"
+                          : "tiền cọc của người thuê"}
+                      </p>
+
+                      <p className="text-2xl font-bold text-emerald-900 mb-2">
+                        {computedRefundPreview
+                          ? `${computedRefundPreview.toLocaleString("vi-VN")} VNĐ`
+                          : "0 VNĐ"}
+                      </p>
+
+                      {disputeDetails && (
+                        <p className="text-sm text-emerald-600">
+                          Sẽ hoàn cho:{" "}
+                          <span className="font-semibold">
+                            {refundTarget === "reporter"
+                              ? typeof disputeDetails.reporterId === "object"
+                                ? disputeDetails.reporterId.fullName ||
+                                disputeDetails.reporterId.email ||
+                                "Người khiếu nại"
+                                : "Người khiếu nại"
+                              : typeof disputeDetails.reportedUserId === "object"
+                                ? disputeDetails.reportedUserId.fullName ||
+                                disputeDetails.reportedUserId.email ||
+                                "Người bị khiếu nại"
+                                : "Người bị khiếu nại"}
+                          </span>
+                        </p>
+                      )}
+
+                      <p className="text-xs text-emerald-600 mt-1">
+                        Cơ sở tính:{" "}
+                        {isReporterRenter ? (
+                          <>
+                            Tiền thuê (số tiền người thuê thanh toán): {safeRentPaid.toLocaleString("vi-VN")} VNĐ
+                          </>
+                        ) : (
+                          <>
+                            Tiền cọc: {depositAmountForRefund.toLocaleString("vi-VN")} VNĐ
+                          </>
+                        )}
+                      </p>
+
+                    </div>
                   )}
+
                 </div>
               </div>
             </div>
@@ -1526,11 +1645,7 @@ export function DisputeManagement() {
             <Button
               onClick={handleResolve}
               className="bg-indigo-600 hover:bg-indigo-700"
-              disabled={
-                loadingDetails ||
-                !decision.trim() ||
-                (refundPercentage !== "" && refundTarget === "")
-              }
+              disabled={loadingDetails || !decision.trim()}
             >
               Xác nhận
             </Button>
@@ -1546,7 +1661,7 @@ export function DisputeManagement() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-gray-600">
-              Bạn có chắc chắn muốn trả lại Khiếu nạinày để moderator khác xử
+              Bạn có chắc chắn muốn trả lại Khiếu nại này để moderator khác xử
               lý?
             </p>
             <div>

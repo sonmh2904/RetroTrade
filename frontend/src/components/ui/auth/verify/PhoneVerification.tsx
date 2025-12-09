@@ -4,7 +4,7 @@ import { useState } from 'react';
 import PhoneInput from "./PhoneInput";
 import OTPInput from "./OTPInput";
 import ResultDisplay from "./ResultDisplay";
-import { sendOtp, verifyOtp } from '@/services/auth/auth.api';
+import { sendOtp, verifyOtp } from '@/services/auth/verificationRequest.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../common/card';
 import { Phone } from 'lucide-react';
 
@@ -38,7 +38,6 @@ export function PhoneVerification({
 
     const digits = phone.replace(/\D/g, '');
     
-    // Validate minimum length (Vietnamese phone: 9-10 digits)
     if (digits.length < 9) {
       throw new Error('Số điện thoại phải có ít nhất 9 chữ số');
     }
@@ -82,8 +81,6 @@ export function PhoneVerification({
       }
 
       const formatted = formatPhoneNumber(phoneNumber);
-      console.log('Formatted phone:', formatted); // Debug log
-
       const resp = await sendOtp(formatted);
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.message || 'Send OTP failed');
@@ -106,7 +103,6 @@ export function PhoneVerification({
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.message || 'Verify OTP failed');
       
-      // Backend automatically updates phone and isPhoneConfirmed after OTP verification
       const verifiedPhone = data?.data?.phone || formatPhoneNumber(phoneNumber);
       
       setResult({
@@ -116,7 +112,6 @@ export function PhoneVerification({
       });
       setStep(3);
       
-      // Call onSuccess callback
       if (onSuccess) {
         onSuccess(verifiedPhone);
       }
