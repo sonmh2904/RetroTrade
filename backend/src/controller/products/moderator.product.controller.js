@@ -239,21 +239,66 @@ const approveProduct = async (req, res) => {
       req.user._id,
       "Product approved by moderator"
     );
+
     try {
       const ownerEmail = productToUpdate.OwnerId?.email;
       const ownerName = productToUpdate.OwnerId?.fullName || "User";
       if (ownerEmail) {
         const htmlBody = `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #007bff;">Chào mừng bạn đến với RetroTrade!</h2>
-            <p>Kính gửi <strong>${ownerName}</strong>,</p>
-            <br>
-            <p>Chúng tôi rất vui mừng thông báo rằng sản phẩm <strong>"${updatedProduct.Title}"</strong> của bạn đã được sẵn sàng công khai trên nền tảng.</p>
-            <p>Bạn có thể theo dõi lượt xem, yêu thích và đơn thuê mới từ phần <strong>Sản phẩm của tôi</strong> trong tài khoản của mình.</p>
-            <p>Trân trọng,<br>
-            <strong>Đội ngũ RetroTrade</strong><br>
-            <em>Hệ thống cho thuê thông minh & an toàn</em></p>
-          </div>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin:0; padding:0; background:#f5f7fa; font-family:'Inter',sans-serif; }
+        .container { max-width:600px; margin:20px auto; background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.08); }
+        .header { background:linear-gradient(135deg,#00c853,#00a045); padding:32px 24px; text-align:center; color:#fff; }
+        .header img { height:48px; margin-bottom:12px; }
+        .header h1 { margin:0; font-size:28px; font-weight:700; }
+        .body { padding:40px 32px; text-align:center; }
+        .success-icon { font-size:48px; margin-bottom:20px; }
+        .btn { display:inline-block; background:#00c853; color:#fff; font-weight:600; padding:14px 32px; border-radius:12px; text-decoration:none; margin:20px 0; box-shadow:0 4px 12px rgba(0,200,83,0.3); }
+        .footer { background:#f9f9f9; padding:24px; text-align:center; color:#666; font-size:13px; }
+        @media (max-width:480px) { .body { padding:32px 20px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sản phẩm đã được duyệt!</h1>
+        </div>
+        <div class="body">
+            <p style="font-size:32px;">🎉</p>
+            <p>Xin chào <strong>${ownerName}</strong>,</p>
+            <p>Chúng tôi rất vui thông báo sản phẩm của bạn:</p>
+            <h2 style="color:#00a045; margin:20px 0;">"${updatedProduct.Title}"</h2>
+            <p>đã chính thức được <strong>DUYỆT</strong> và hiển thị công khai trên RetroTrade.</p>
+            <a href="https://retrotrade.vn/my-products"
+   style="display:inline-block;
+          background:#00c853;
+          color:#000000 !important;
+          font-weight:700;
+          font-size:17px;
+          padding:16px 44px;
+          border-radius:50px;
+          text-decoration:none;
+          box-shadow:0 8px 20px rgba(0,200,83,0.5);
+          border:3px solid #009624;"
+   target="_blank">
+  Xem sản phẩm của tôi
+</a>
+            <p>Bạn sẽ sớm nhận được lượt xem và đơn thuê mới. Chúc bạn kinh doanh thành công!</p>
+            <p>Team RetroTrade ❤️</p>
+        </div>
+        <div class="footer">
+            © 2025 RetroTrade - Nền tảng chia sẻ, cho thuê và tái sử dụng đồ dùng<br>
+            Email này được gửi tự động, vui lòng không trả lời.
+        </div>
+    </div>
+</body>
+</html>
         `;
         sendEmail(ownerEmail, "Sản phẩm của bạn đã được duyệt trên RetroTrade", htmlBody);
       }
@@ -338,18 +383,73 @@ const rejectProduct = async (req, res) => {
       const ownerName = productToUpdate.OwnerId?.fullName || "User";
       if (ownerEmail) {
         const htmlBody = `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #dc3545;">Thông báo từ RetroTrade</h2>
-            <p>Kính gửi <strong>${ownerName}</strong>,</p>
-            <br>
-            <p>Chúng tôi rất tiếc phải thông báo rằng sản phẩm <strong>"${updatedProduct.Title}"</strong> của bạn chưa được duyệt và bị từ chối.</p>
-            <p><strong>Lý do từ chối:</strong><br>${reason || "Vui lòng kiểm tra lại chính sách đăng sản phẩm của hệ thống (ví dụ: hình ảnh không rõ nét, mô tả thiếu thông tin, hoặc vi phạm quy định nội dung)."}</p>
-            <p>Bạn có thể chỉnh sửa sản phẩm theo gợi ý và gửi duyệt lại từ phần <strong>Quản lý sản phẩm</strong>. Đội ngũ hỗ trợ luôn sẵn sàng giúp đỡ!</p>
-            <p>Nếu có bất kỳ câu hỏi nào, vui lòng liên hệ hỗ trợ qua email hoặc chat trong ứng dụng.</p>
-            <p>Trân trọng,<br>
-            <strong>Đội ngũ RetroTrade</strong><br>
-            <em>Hệ thống cho thuê thông minh & an toàn</em></p>
-          </div>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin:0; padding:0; background:#f5f7fa; font-family:'Inter',sans-serif; }
+        .container { max-width:600px; margin:20px auto; background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.08); }
+        .header { background:linear-gradient(135deg,#ff3b30,#d32f2f); padding:32px 24px; text-align:center; color:#fff; }
+        .header img { height:48px; margin-bottom:12px; }
+        .header h1 { margin:0; font-size:28px; font-weight:700; }
+        .body { padding:40px 32px; text-align:center; }
+        .alert-icon { font-size:48px; margin-bottom:20px; }
+        .btn { display:inline-block; background:#ff3b30; color:#fff; font-weight:600; padding:14px 32px; border-radius:12px; text-decoration:none; margin:20px 0; box-shadow:0 4px 12px rgba(255,59,48,0.3); }
+        .reason-box { background:#fff8e1; border-left:4px solid #ffb300; padding:16px; margin:24px 0; text-align:left; border-radius:0 8px 8px 0; }
+        .footer { background:#f9f9f9; padding:24px; text-align:center; color:#666; font-size:13px; }
+        @media (max-width:480px) { .body { padding:32px 20px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sản phẩm bị từ chối</h1>
+        </div>
+        <div class="body">
+            <p style="font-size:32px;">⚠️</p>
+            <p>Xin chào <strong>${ownerName}</strong>,</p>
+            <p>Chúng tôi rất tiếc phải thông báo rằng sản phẩm của bạn:</p>
+            <h2 style="color:#d32f2f; margin:20px 0;">"${
+              updatedProduct.Title
+            }"</h2>
+            <p>chưa đạt tiêu chuẩn và <strong>bị từ chối</strong>.</p>
+
+            <div class="reason-box">
+                <strong>Lý do từ chối:</strong><br>
+                ${
+                  reason ||
+                  "Vui lòng kiểm tra lại hình ảnh, mô tả và chính sách đăng sản phẩm."
+                }
+            </div>
+
+            <p>Bạn có thể chỉnh sửa sản phẩm và gửi duyệt lại bất cứ lúc nào.</p>
+            <a href="https://retrotrade.vn/my-products"
+   style="display:inline-block;
+          background:#ff5252;
+          color:#ffffff !important;
+          font-weight:700;
+          font-size:17px;
+          padding:16px 44px;
+          border-radius:50px;
+          text-decoration:none;
+          box-shadow:0 10px 25px rgba(255,82,82,0.4);
+          border:3px solid #d32f2f;"
+   target="_blank">
+  Chỉnh sửa sản phẩm
+</a>
+            <p>Nếu cần hỗ trợ, hãy chat trực tiếp với chúng tôi nhé!</p>
+            <p>Team RetroTrade ❤️</p>
+        </div>
+        <div class="footer">
+            ©2025 RetroTrade - Nền tảng chia sẻ, cho thuê và tái sử dụng đồ dùng<br>
+            Email này được gửi tự động, vui lòng không trả lời.
+        </div>
+    </div>
+</body>
+</html>
         `;
         sendEmail(ownerEmail, "Sản phẩm của bạn bị từ chối trên RetroTrade", htmlBody);
       }
