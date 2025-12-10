@@ -12,7 +12,7 @@ import {
   Package,
   MessageCircle,
   AlertTriangle,
-  // Users, // Tạm thời comment
+  Users,
   Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
@@ -27,7 +27,7 @@ interface ModeratorSidebarProps {
     | "blog"
     | "messages"
     | "dispute"
-    // | "userManagement" // Tạm thời comment
+    | "userManagement"
     | "complaints";
   activeProductTab?: "products" | "categories" | "highlights";
   activeBlogTab?: "posts" | "categories" | "comments" | "tags";
@@ -40,7 +40,7 @@ interface ModeratorSidebarProps {
       | "blog"
       | "messages"
       | "dispute"
-      // | "userManagement" // Tạm thời comment
+      | "userManagement"
       | "complaints"
   ) => void;
   onProductTabChange?: (tab: "products" | "categories" | "highlights") => void;
@@ -146,13 +146,13 @@ export function ModeratorSidebar({
       path: "/moderator/dispute-management",
       description: "Xử lý Khiếu nạivà khiếu nại",
     },
-    // {
-    //   id: "userManagement" as const,
-    //   label: "Quản lý người dùng",
-    //   icon: Users,
-    //   path: "/moderator/user-management",
-    //   description: "Khóa và mở khóa tài khoản",
-    // }, // Tạm thời comment
+    {
+      id: "userManagement" as const,
+      label: "Quản lý người dùng",
+      icon: Users,
+      path: "/moderator/user-management",
+      description: "Khóa và mở khóa tài khoản",
+    },
     {
       id: "complaints" as const,
       label: "Khiếu nại tài khoản",
@@ -235,7 +235,7 @@ export function ModeratorSidebar({
       | "blog"
       | "messages"
       | "dispute"
-      // | "userManagement" // Tạm thời comment
+      | "userManagement"
       | "complaints"
   ) => {
     if (onTabChange) {

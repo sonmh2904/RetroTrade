@@ -388,7 +388,7 @@ const getAllRefundsForAdmin = async (req, res) => {
 
       let ownerPaymentFromTx = txs
         .filter((tx) =>
-          ["owner_payment", "owner_payment_dispute"].includes(tx.typeId)
+          ["owner_payment", "owner_payment_dispute",].includes(tx.typeId)
         )
         .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
