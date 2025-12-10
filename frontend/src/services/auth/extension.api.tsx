@@ -4,6 +4,8 @@ import type { ApiResponse } from "@iService";
 export interface ExtensionRequest {
   _id: string;
   orderId: {
+    _id: string;
+    orderGuid?: string;
     startAt: string;
     endAt: string;
     rentalDuration: number;

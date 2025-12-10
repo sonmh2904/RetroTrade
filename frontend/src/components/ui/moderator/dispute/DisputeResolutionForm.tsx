@@ -64,6 +64,8 @@ interface DisputeResolutionFormProps {
   depositAmount: number; // Chỉ tính hoàn tiền từ tiền cọc
   reporterName?: string; // Tên người khiếu nại
   reportedName?: string; // Tên người bị khiếu nại
+  isReporterRenter: boolean;   // <- bắt buộc
+  finalAmount: number;
   onSuccess?: () => void;
 }
 
@@ -72,6 +74,8 @@ export default function DisputeResolutionForm({
   depositAmount, // Chỉ tính hoàn tiền từ tiền cọc
   reporterName,
   reportedName,
+  isReporterRenter,
+  finalAmount,
   onSuccess,
 }: DisputeResolutionFormProps) {
   const router = useRouter();
@@ -82,12 +86,16 @@ export default function DisputeResolutionForm({
   const [refundPercentage, setRefundPercentage] = useState<string>("");
 
   const requiresRefund = ["refund_full", "refund_partial"].includes(decision);
-  // Tính hoàn tiền chỉ dựa trên tiền cọc, không động vào tổng tiền
+
+  // Base giống backend:
+  // - reporter là renter  → finalAmount
+  // - reporter là owner   → depositAmount
+  const refundBase = isReporterRenter ? finalAmount : depositAmount;
+
   const calculatedRefund =
     refundPercentage && requiresRefund
-      ? Math.round((depositAmount * Number(refundPercentage)) / 100)
+      ? Math.round((refundBase * Number(refundPercentage)) / 100)
       : 0;
-
   const handleRefundTargetChange = (value: string) => {
     setRefundTarget(value as RefundTargetOption);
   };
@@ -138,7 +146,7 @@ export default function DisputeResolutionForm({
       )?.response?.data?.message;
       toast.error(
         apiMessage ||
-          (error instanceof Error ? error.message : "Xử lý thất bại")
+        (error instanceof Error ? error.message : "Xử lý thất bại")
       );
     } finally {
       setLoading(false);
@@ -254,27 +262,37 @@ export default function DisputeResolutionForm({
 
               <div className="mt-4 bg-orange-50 rounded-2xl p-4 border border-orange-200">
                 <p className="text-sm text-gray-600 mb-1">
-                  Số tiền dự kiến hoàn trả (từ tiền cọc)
+                  Số tiền dự kiến hoàn trả trên{" "}
+                  {isReporterRenter
+                    ? "tổng số tiền người thuê đã thanh toán"
+                    : "tiền cọc của người thuê"}
                 </p>
+
                 <p className="text-3xl font-bold text-orange-600 mb-2">
                   {calculatedRefund
-                    ? `${calculatedRefund.toLocaleString()}₫`
+                    ? `${calculatedRefund.toLocaleString("vi-VN")}₫`
                     : "0₫"}
                 </p>
-                {refundTarget && (
-                  <p className="text-sm text-orange-700">
-                    Sẽ hoàn cho:{" "}
-                    <span className="font-semibold">
-                      {refundTarget === "reporter"
-                        ? reporterName || "Người khiếu nại"
-                        : reportedName || "Người bị khiếu nại"}
-                    </span>
-                  </p>
-                )}
+
+                <p className="text-sm text-orange-700">
+                  Sẽ hoàn cho:{" "}
+                  <span className="font-semibold">
+                    {refundTarget === "reporter"
+                      ? reporterName || "Người khiếu nại"
+                      : reportedName || "Người bị khiếu nại"}
+                  </span>
+                </p>
+
                 <p className="text-xs text-orange-600 mt-1">
-                  Tiền cọc: {depositAmount.toLocaleString("vi-VN")}₫
+                  Cơ sở tính:{" "}
+                  {isReporterRenter ? (
+                    <>finalAmount: {finalAmount.toLocaleString("vi-VN")}₫</>
+                  ) : (
+                    <>Tiền cọc: {depositAmount.toLocaleString("vi-VN")}₫</>
+                  )}
                 </p>
               </div>
+
             </div>
           )}
 

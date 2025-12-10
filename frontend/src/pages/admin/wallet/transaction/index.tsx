@@ -22,6 +22,14 @@ const typeLabelsVi: { [key: string]: string } = {
   renter_payment: "Thanh toán tiền thuê",
   USER_PAYMENT: "Thanh toán đơn hàng",
   refund_from_cancelled: "Nhận lại tiền đơn thuê bị hủy",
+  EXTENSION_PAYMENT : "Thanh toán gia hạn đơn thuê",
+  SYSTEM_RECEIVE_EXTENSION : "Hệ thống hoàn tiền gia hạn đơn thuê",
+  // Tranh chấp
+  payout_renter_refund_dispute: "Hệ thống hoàn/bồi thường cho người thuê (tranh chấp)",
+  renter_refund_dispute: "Người thuê nhận tiền hoàn/bồi thường (tranh chấp)",
+  payout_owner_payment_dispute: "Hệ thống trả tiền cho chủ đồ (sau tranh chấp)",
+  owner_payment_dispute: "Chủ đồ nhận tiền sau tranh chấp",
+
 };
 
 const statusLabelsVi: { [key: string]: string } = {

@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/common/dialog";
 import { Button } from "@/components/ui/common/button";
 import { Badge } from "@/components/ui/common/badge";
@@ -18,6 +19,7 @@ import {
   DollarSign,
   FileText,
   Tag,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ExtensionRequest } from "@/services/auth/extension.api";
@@ -45,13 +47,13 @@ export default function ExtensionRequestModal({
   onApprove,
   onReject,
 }: ExtensionRequestModalProps) {
-  const [rejectMode, setRejectMode] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!extension) return null;
 
-  const orderId = extension.orderId as unknown as string;
+  const orderId = extension.orderId._id;
   const orderGuid = extension.orderGuid || "UNKNOWN";
 
   const handleApprove = async () => {
@@ -61,7 +63,7 @@ export default function ExtensionRequestModal({
       toast.success("Phê duyệt gia hạn thành công!");
       onOpenChange(false);
     } catch {
-      toast.error("Lỗi khi phê duyệt");
+      toast.error("Lỗi khi phê duyệt yêu cầu");
     } finally {
       setLoading(false);
     }
@@ -69,44 +71,49 @@ export default function ExtensionRequestModal({
 
   const handleConfirmReject = async () => {
     if (!rejectReason.trim()) {
-      return toast.error("Vui lòng nhập lý do từ chối");
+      toast.error("Vui lòng nhập lý do từ chối");
+      return;
     }
+
     setLoading(true);
     try {
       await onReject(orderId, extension._id, rejectReason);
       toast.success("Đã từ chối yêu cầu gia hạn");
+      setIsRejectModalOpen(false);
       onOpenChange(false);
     } catch {
-      toast.error("Lỗi khi từ chối");
+      toast.error("Lỗi khi từ chối yêu cầu");
     } finally {
       setLoading(false);
-      setRejectMode(false);
       setRejectReason("");
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-lg shadow-lg border border-gray-200">
-        {/* Simple Header */}
-        <div className="bg-white border-b border-gray-200 p-6">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-semibold flex items-center gap-3">
-              <Clock className="w-6 h-6 text-gray-600" />
-              Yêu cầu gia hạn hợp đồng
-            </DialogTitle>
-          </DialogHeader>
-          <div className="mt-2 flex items-center gap-2">
-            <Badge className="text-sm px-3 py-1 bg-gray-100 text-gray-700">
-              #{orderGuid.slice(0, 8).toUpperCase()}
-            </Badge>
-            <span className="text-gray-500 text-sm">• Đơn hàng đang thuê</span>
+    <>
+      {/* Main Modal - Xem chi tiết yêu cầu gia hạn */}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-lg shadow-xl border border-gray-200">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200 p-6">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-semibold flex items-center gap-3">
+                <Clock className="w-6 h-6 text-blue-600" />
+                Yêu cầu gia hạn
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-2 flex items-center gap-2">
+              <Badge className="text-sm px-3 py-1 bg-gray-100 text-gray-700">
+                #{orderGuid.slice(0, 8).toUpperCase()}
+              </Badge>
+              <span className="text-gray-500 text-sm">
+                • Đơn hàng đang thuê
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="p-6 bg-gray-50">
-          <div className="space-y-6 mb-6">
-            {/* Row 1: Thời gian gia hạn and Ngày kết thúc mới */}
+          <div className="p-6 bg-gray-50 space-y-6">
+            {/* Thông tin gia hạn */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-gray-200">
                 <div className="p-2 bg-blue-50 rounded-lg">
@@ -140,7 +147,7 @@ export default function ExtensionRequestModal({
               </div>
             </div>
 
-            {/* Row 2: Phí gia hạn and Trạng thái thanh toán */}
+            {/* Phí & Thanh toán */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-gray-200">
                 <div className="p-2 bg-green-50 rounded-lg">
@@ -172,139 +179,149 @@ export default function ExtensionRequestModal({
                 </Label>
                 <div className="flex items-center gap-3">
                   {extension.paymentStatus === "paid" ? (
-                    <>
+                    <div className="flex items-center gap-3">
                       <div className="p-2 bg-green-50 rounded-full">
                         <CheckCircle2 className="w-6 h-6 text-green-600" />
                       </div>
                       <div>
-                        <p className="text-lg font-semibold text-green-700">
+                        <p className="font-semibold text-green-700">
                           ĐÃ THANH TOÁN
                         </p>
                         <p className="text-sm text-gray-600">
-                          Người thuê đã thanh toán phí gia hạn
+                          Người thuê đã thanh toán phí
                         </p>
                       </div>
-                    </>
+                    </div>
                   ) : (
-                    <>
+                    <div className="flex items-center gap-3">
                       <div className="p-2 bg-yellow-50 rounded-full">
                         <AlertCircle className="w-6 h-6 text-yellow-600" />
                       </div>
                       <div>
-                        <p className="text-lg font-semibold text-yellow-700">
+                        <p className="font-semibold text-yellow-700">
                           CHƯA THANH TOÁN
                         </p>
                         <p className="text-sm text-gray-600">
-                          Đang chờ người thuê thanh toán
+                          Đang chờ thanh toán
                         </p>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Notes */}
+            {/* Ghi chú */}
             {extension.notes && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <Label className="text-sm font-medium text-blue-800 flex items-center gap-2 mb-3">
+                <Label className="text-sm font-medium text-blue-800 flex items-center gap-2 mb-2">
                   <FileText className="w-4 h-4" />
                   Ghi chú từ người thuê
                 </Label>
-                <p className="text-gray-700 leading-relaxed italic text-sm">
+                <p className="text-gray-700 italic text-sm leading-relaxed">
                   {extension.notes}
                 </p>
               </div>
             )}
-          </div>
 
-          {/* Action Buttons */}
-          {!rejectMode ? (
-            <div className="flex flex-col sm:flex-row gap-3 justify-end">
+            {/* Nút hành động */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-end pt-4 border-t border-gray-200">
               <Button
                 variant="outline"
                 size="lg"
-                className="rounded-lg border-gray-300"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
               >
                 Đóng
               </Button>
+
               <Button
                 variant="destructive"
                 size="lg"
-                className="bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium"
-                onClick={() => setRejectMode(true)}
+                onClick={() => setIsRejectModalOpen(true)}
                 disabled={loading}
               >
+                <X className="w-4 h-4 mr-2" />
                 Từ chối yêu cầu
               </Button>
+
               <Button
                 size="lg"
-                className="bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg"
+                className="bg-green-600 hover:bg-green-700 text-white font-medium"
                 onClick={handleApprove}
                 disabled={loading || extension.paymentStatus !== "paid"}
               >
                 {loading ? (
-                  <>Đang xử lý...</>
+                  "Đang xử lý..."
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 mr-2 inline" />
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
                     Phê duyệt gia hạn
                   </>
                 )}
               </Button>
             </div>
-          ) : (
-            <div className="space-y-4 bg-red-50 p-5 rounded-lg border border-red-200">
-              <div className="flex items-start gap-3 text-red-700">
-                <AlertCircle className="w-5 h-5 mt-1 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-base">
-                    Bạn có chắc chắn muốn từ chối?
-                  </h4>
-                  <p className="text-sm text-red-600 mt-1">
-                    Hành động này sẽ thông báo cho người thuê và không thể hoàn
-                    tác.
-                  </p>
-                </div>
-              </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
+      {/* Modal con: Nhập lý do từ chối */}
+      <Dialog open={isRejectModalOpen} onOpenChange={setIsRejectModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-6 h-6" />
+              Từ chối yêu cầu gia hạn
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-gray-600">
+              Hành động này sẽ thông báo cho người thuê biết yêu cầu gia hạn bị
+              từ chối. Vui lòng cung cấp lý do rõ ràng để tránh tranh chấp.
+            </p>
+
+            <div>
+              <Label htmlFor="reject-reason" className="text-base font-medium">
+                Lý do từ chối <span className="text-red-500">*</span>
+              </Label>
               <Textarea
+                id="reject-reason"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Vui lòng nhập lý do từ chối (bắt buộc)..."
-                className="min-h-24 text-sm rounded-lg border-2 border-red-200 focus:border-red-400"
+                placeholder="Ví dụ: Không thể gia hạn do sản phẩm đã có lịch thuê mới..."
+                className="mt-2 min-h-32 resize-none"
                 autoFocus
               />
-
-              <div className="flex gap-3 justify-end">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="rounded-lg"
-                  onClick={() => {
-                    setRejectMode(false);
-                    setRejectReason("");
-                  }}
-                  disabled={loading}
-                >
-                  Hủy bỏ
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="lg"
-                  className="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg"
-                  onClick={handleConfirmReject}
-                  disabled={loading || !rejectReason.trim()}
-                >
-                  {loading ? "Đang gửi..." : "Xác nhận từ chối"}
-                </Button>
-              </div>
+              {rejectReason.trim() === "" && (
+                <p className="text-xs text-red-500 mt-1">
+                  Lý do không được để trống
+                </p>
+              )}
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+
+          <DialogFooter className="gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRejectModalOpen(false);
+                setRejectReason("");
+              }}
+              disabled={loading}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmReject}
+              disabled={loading || !rejectReason.trim()}
+            >
+              {loading ? "Đang gửi..." : "Xác nhận từ chối"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

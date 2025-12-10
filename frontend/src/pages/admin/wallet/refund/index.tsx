@@ -19,6 +19,9 @@ interface RefundOrder {
   isRefunded?: boolean;
   refundedAt?: string;
   createdAt?: string;
+  orderStatus?: "completed" | "cancelled";
+  hasDispute?: boolean;
+  refundStatusLabel?: string;
 }
 
 export default function RefundPage() {
@@ -118,12 +121,13 @@ export default function RefundPage() {
                 <th className="p-3">STT</th>
                 <th className="p-3">Người đặt đơn</th>
                 <th className="p-3">Tên đơn hàng & Mã đơn</th>
+                <th className="p-3">Trạng thái đơn</th>
                 <th className="p-3">Người cho thuê</th>
                 <th className="p-3">Ngày đặt đơn</th>
                 <th className="p-3">Số tiền thanh toán</th>
                 <th className="p-3">Số tiền hoàn*</th>
                 <th className="p-3">Tiền chủ nhận</th>
-                <th className="p-3">Trạng thái</th>
+                <th className="p-3">Trạng thái hoàn tiền</th>
                 <th className="p-3">Thời gian hoàn tiền</th>
               </tr>
             </thead>
@@ -148,6 +152,32 @@ export default function RefundPage() {
                           {r?._id ? `Mã đơn: ${r._id}` : "Không rõ"}
                         </span>
                       </div>
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`
+      px-2 py-0.5 rounded font-semibold text-xs
+      ${r.orderStatus === "completed" && !r.hasDispute
+                            ? "bg-blue-100 text-blue-700"
+                            : ""
+                          }
+      ${r.orderStatus === "cancelled" && !r.hasDispute
+                            ? "bg-gray-100 text-gray-700"
+                            : ""
+                          }
+      ${r.orderStatus === "completed" && r.hasDispute
+                            ? "bg-orange-100 text-orange-700"
+                            : ""
+                          }
+      ${r.orderStatus === "cancelled" && r.hasDispute
+                            ? "bg-red-100 text-red-700"
+                            : ""
+                          }
+    `}
+                        style={{ whiteSpace: "nowrap", display: "inline-block" }}
+                      >
+                        {r.refundStatusLabel || "Không rõ"}
+                      </span>
                     </td>
                     <td className="p-3">{r?.ownerName || "Không rõ"}</td>
                     <td className="p-3">

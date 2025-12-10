@@ -302,66 +302,103 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
 
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('Trình duyệt của bạn không hỗ trợ lấy vị trí');
+      toast.error("Trình duyệt của bạn không hỗ trợ lấy vị trí");
       return;
     }
+
     setLocationLoading(true);
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=vi`, {
-            method: 'GET',
-            headers: { 'User-Agent': 'RetroTrade/1.0', 'Accept': 'application/json' },
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const data = await response.json();
-          if (data && data.address) {
-            const addr = data.address;
-            const street = addr.road || addr.street || addr.pedestrian || '';
-            const houseNumber = addr.house_number || '';
-            const fullStreet = houseNumber && street ? `${houseNumber} ${street}`.trim() : (street || houseNumber);
-            const ward = addr.ward || addr.suburb || addr.neighbourhood || '';
-            const district = addr.district || addr.county || addr.city_district || '';
-            const city = addr.city || addr.town || addr.municipality || '';
-            const province = addr.state || addr.province || '';
-            const finalWard = ward || district || '';
-            const finalCity = city || province || '';
-            setNewAddress(prev => ({
-              ...prev,
-              Address: fullStreet || prev.Address,
-              District: finalWard || prev.District,
-              City: finalCity || prev.City,
-              IsDefault: prev.IsDefault,
-            }));
-            toast.success('Đã lấy địa chỉ hiện tại thành công!');
-          } else {
-            toast.error('Không thể lấy địa chỉ từ tọa độ');
+
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=vi`,
+            {
+              headers: {
+                "User-Agent": "RetroTrade/1.0 (+https://retrotrade.vn)",
+              },
+            }
+          );
+
+          if (!res.ok) throw new Error("Không kết nối được dịch vụ địa chỉ");
+
+          const data = await res.json();
+          if (!data?.address) {
+            toast.error("Không tìm thấy địa chỉ từ vị trí này");
+            return;
           }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lấy địa chỉ';
-          toast.error(`${msg}. Vui lòng thử lại hoặc nhập thủ công.`);
+
+          const a = data.address;
+
+          // xử lý tỉnh thành phố
+          const rawCity =
+            a.city || a.state || a.province || a.town || a.municipality || "";
+
+          const normalizedCity = rawCity.replace(/^Thành phố\s+/i, "").trim();
+
+          // Tìm trong danh sách tỉnh đã load từ API
+          const matchedProvince = provinces.find(
+            (p) =>
+              p.name.includes(normalizedCity) ||
+              normalizedCity.includes(p.name) ||
+              (p.name === "Hà Nội" && normalizedCity.includes("Hà Nội")) ||
+              (p.name === "Hồ Chí Minh" &&
+                normalizedCity.includes("Hồ Chí Minh")) ||
+              (p.name === "Đà Nẵng" && normalizedCity.includes("Đà Nẵng")) ||
+              (p.name === "Cần Thơ" && normalizedCity.includes("Cần Thơ")) ||
+              (p.name === "Hải Phòng" && normalizedCity.includes("Hải Phòng"))
+          );
+
+          // Đường + số nhà
+          const houseNumber = a.house_number || "";
+          const road = a.road || a.street || a.pedestrian || "";
+          const fullStreet = [houseNumber, road]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+
+          // Phường/xã
+          const ward =
+            a.suburb ||
+            a.neighbourhood ||
+            a.quarter ||
+            a.village ||
+            a.city_district ||
+            a.district ||
+            "";
+
+          // Cập nhật form
+          setNewAddress((prev) => ({
+            ...prev,
+            Address: fullStreet || prev.Address,
+            District: ward || prev.District,
+            City: matchedProvince?.name || rawCity || prev.City, 
+            IsDefault: true,
+          }));
+
+          toast.success("Đã lấy địa chỉ hiện tại thành công!");
+        } catch (err) {
+          console.error("Lỗi lấy địa chỉ:", err);
+          toast.error("Không thể lấy địa chỉ. Vui lòng nhập tay.");
         } finally {
           setLocationLoading(false);
         }
       },
-      (error) => {
-        let message = 'Không thể lấy vị trí hiện tại.';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            message = 'Bạn cần cấp quyền truy cập vị trí để sử dụng tính năng này.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            message = 'Thông tin vị trí không khả dụng.';
-            break;
-          case error.TIMEOUT:
-            message = 'Yêu cầu lấy vị trí hết thời gian chờ.';
-            break;
-        }
-        toast.error(message);
+      (err) => {
+        let msg = "Không thể lấy vị trí hiện tại.";
+        if (err.code === GeolocationPositionError.PERMISSION_DENIED)
+          msg = "Bạn chưa cho phép truy cập vị trí";
+        else if (err.code === GeolocationPositionError.POSITION_UNAVAILABLE)
+          msg = "Không xác định được vị trí";
+        else if (err.code === GeolocationPositionError.TIMEOUT)
+          msg = "Hết thời gian chờ vị trí";
+
+        toast.error(msg);
         setLocationLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
