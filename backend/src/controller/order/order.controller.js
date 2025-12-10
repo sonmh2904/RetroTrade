@@ -73,7 +73,6 @@ module.exports = {
         return res.status(400).json({ message: "Số lượng không đủ" });
       }
 
-      // === CALCULATE TOTALS ===
       const images = await ItemImages.find({
         ItemId: item._id,
         IsPrimary: true,
@@ -83,7 +82,8 @@ module.exports = {
         .select("Url")
         .lean()
         .session(session);
-
+        
+      // === CALCULATE TOTALS ===
       const calc = await calculateTotals(
         item,
         quantity,
@@ -116,7 +116,7 @@ module.exports = {
       }
 
       // === DISCOUNT LOGIC (CHỈ ÁP DỤNG TRÊN TIỀN THUÊ) ===
-      const baseForDiscount = rentalAmount; // ← Đây là điểm then chốt
+      const baseForDiscount = rentalAmount; //
       let totalDiscountAmount = 0;
       let discountInfo = null;
 
