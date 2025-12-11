@@ -35,8 +35,10 @@ export function IdCardVerification({
       setError('');
       setFailedStep(null);
       
+      let isActuallySuccessful = false;
+      
       if (verificationResult) {
-        const { extractedIdCardInfo, requestId, verificationRequestSubmitted, autoRejected, rejectionReason } = verificationResult.data || {};
+        const { extractedIdCardInfo, requestId, verificationRequestSubmitted, autoRejected, rejectionReason, autoApproved } = verificationResult.data || {};
         
         // Check if request was auto-rejected due to OCR failure
         if (autoRejected) {
@@ -46,11 +48,21 @@ export function IdCardVerification({
             details: rejectionReason || 'Hệ thống không thể đọc được thông tin từ ảnh căn cước công dân. Vui lòng chụp lại ảnh rõ nét hơn hoặc đảm bảo ảnh không bị mờ, không bị che khuất thông tin.'
           });
           setFailedStep(1);
-        } else if (verificationRequestSubmitted || requestId) {
+        } else if (autoApproved) {
+          // Chỉ khi được tự động phê duyệt mới là thành công thực sự
           setResult({
             success: true,
-            message: 'Yêu cầu xác minh đã được gửi thành công',
-            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất. Bạn sẽ nhận được thông báo khi có kết quả.'
+            message: 'Xác minh danh tính thành công',
+            details: 'Danh tính của bạn đã được xác minh thành công. Tài khoản đã được kích hoạt đầy đủ tính năng.'
+          });
+          isActuallySuccessful = true;
+        } else if (verificationRequestSubmitted || requestId) {
+          // Đã gửi yêu cầu nhưng cần moderator xem xét - KHÔNG phải là thành công
+          setResult({
+            success: false,
+            status: 'warning' as const,
+            message: 'Yêu cầu xác minh đã được gửi',
+            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công và đang chờ kiểm duyệt viên xử lý. Bạn sẽ nhận được thông báo khi có kết quả.'
           });
         } else if (extractedIdCardInfo && 
           extractedIdCardInfo.idNumber && 
@@ -58,15 +70,17 @@ export function IdCardVerification({
           extractedIdCardInfo.dateOfBirth && 
           extractedIdCardInfo.address) {
           setResult({
-            success: true,
+            success: false,
+            status: 'warning' as const,
             message: 'Yêu cầu xác minh đã được gửi',
-            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Moderator sẽ xử lý trong thời gian sớm nhất.'
+            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Đang chờ kiểm duyệt viên xử lý.'
           });
         } else {
           setResult({
-            success: true,
+            success: false,
+            status: 'warning' as const,
             message: 'Yêu cầu xác minh đã được gửi',
-            details: 'Yêu cầu xác minh đã được gửi thành công. Moderator sẽ xử lý trong thời gian sớm nhất.'
+            details: 'Yêu cầu xác minh đã được gửi thành công. Đang chờ kiểm duyệt viên xử lý.'
           });
         }
       } else {
@@ -79,8 +93,8 @@ export function IdCardVerification({
       
       setStep(2);
       
-      // Call onSuccess callback
-      if (onSuccess) {
+      // Chỉ gọi onSuccess callback khi xác minh thực sự thành công (autoApproved)
+      if (onSuccess && isActuallySuccessful) {
         onSuccess();
       }
     } catch (e) {

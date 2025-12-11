@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/redux_store";
+import { decodeToken } from "@/utils/jwtHelper";
 import { Card, CardContent } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
@@ -23,6 +26,7 @@ import {
   MapPin,
   CreditCard,
   AlertCircle,
+  Lock,
 } from "lucide-react";
 import {
   verificationRequestAPI,
@@ -31,11 +35,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar";
 
 export function VerificationRequestManagement() {
+  const { accessToken } = useSelector((state: RootState) => state.auth);
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
   const [detailDialog, setDetailDialog] = useState(false);
   const [handleDialog, setHandleDialog] = useState(false);
@@ -45,6 +51,32 @@ export function VerificationRequestManagement() {
   const [isHandling, setIsHandling] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Lấy ID của moderator hiện tại từ token
+  useEffect(() => {
+    if (accessToken) {
+      const decoded = decodeToken(accessToken);
+      if (decoded?.userId) {
+        setCurrentUserId(decoded.userId);
+      }
+    }
+  }, [accessToken]);
+
+  // Kiểm tra xem request có được giao cho moderator hiện tại không
+  const isAssignedToMe = (request: VerificationRequest): boolean => {
+    if (!currentUserId || !request.assignedTo) return false;
+    const assignedToId = typeof request.assignedTo === 'object' && request.assignedTo._id 
+      ? request.assignedTo._id 
+      : request.assignedTo;
+    return assignedToId === currentUserId;
+  };
+
+  // Kiểm tra xem request có được giao cho người khác không
+  const isAssignedToOther = (request: VerificationRequest): boolean => {
+    if (!request.assignedTo) return false;
+    return !isAssignedToMe(request);
+  };
 
   useEffect(() => {
     fetchRequests();
@@ -230,8 +262,14 @@ export function VerificationRequestManagement() {
     return priorityA - priorityB;
   });
 
-  // Filter by search term
+  // Filter by search term and assignee
   const filteredRequests = sortedRequests.filter((request) => {
+    // Filter by assignee
+    if (assigneeFilter === "assignedToMe" && !isAssignedToMe(request)) {
+      return false;
+    }
+
+    // Filter by search term
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
     return (
@@ -300,6 +338,16 @@ export function VerificationRequestManagement() {
                 <option value="In Progress">Đang xử lý</option>
                 <option value="Approved">Đã duyệt</option>
                 <option value="Rejected">Đã từ chối</option>
+              </select>
+            </div>
+            <div className="w-full md:w-48">
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">Tất cả yêu cầu</option>
+                <option value="assignedToMe">Được giao cho tôi</option>
               </select>
             </div>
           </div>
@@ -401,8 +449,8 @@ export function VerificationRequestManagement() {
                     </div>
 
                     {request.assignedTo && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        Được giao cho: {request.assignedTo.fullName || request.assignedTo.email}
+                      <div className={`mt-1 text-xs ${isAssignedToMe(request) ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                        Được giao cho: {isAssignedToMe(request) ? 'Bạn' : (request.assignedTo.fullName || request.assignedTo.email)}
                       </div>
                     )}
                   </div>
@@ -427,7 +475,7 @@ export function VerificationRequestManagement() {
                         Nhận xử lý
                       </Button>
                     )}
-                    {request.status === 'In Progress' && (
+                    {request.status === 'In Progress' && isAssignedToMe(request) && (
                       <>
                         <Button
                           variant="outline"
@@ -448,6 +496,12 @@ export function VerificationRequestManagement() {
                           Từ chối
                         </Button>
                       </>
+                    )}
+                    {request.status === 'In Progress' && isAssignedToOther(request) && (
+                      <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200">
+                        <Lock className="w-4 h-4" />
+                        <span>Đang được xử lý bởi moderator khác</span>
+                      </div>
                     )}
                   </div>
                 </div>

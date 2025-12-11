@@ -18,7 +18,7 @@ import ProductCategoryManager from "@/components/ui/moderator/categories/categor
 import ProductManagement from "@/components/ui/moderator/product/product-management";
 import TopHighlightTable from "@/components/ui/moderator/product/top-highlight-table";
 import { DisputeManagement } from "@/components/ui/moderator/dispute/dispute-management";
-// import { ModeratorUserManagementTable } from "@/components/ui/moderator/user-management-table";
+import { ModeratorUserManagementTable } from "@/components/ui/moderator/user-management-table";
 import { ComplaintManagement } from "@/components/ui/moderator/complaints/complaint-management";
 import { CategoryManagementTable } from "@/components/ui/moderator/blog/category-management-table";
 
@@ -39,7 +39,7 @@ export default function ModeratorDashboard() {
     | "productManagement"
     | "messages"
     | "dispute"
-    // | "userManagement" // Tạm thời comment
+    | "userManagement"
     | "complaints"
   >("dashboard");
   const [activeBlogTab, setActiveBlogTab] = useState<
@@ -60,7 +60,7 @@ export default function ModeratorDashboard() {
       | "productManagement"
       | "messages"
       | "dispute"
-      // | "userManagement" // Tạm thời comment
+      | "userManagement"
       | "complaints"
   ) => {
     console.log("Moderator handleTabChange called with:", tab);
@@ -137,7 +137,7 @@ export default function ModeratorDashboard() {
         "productManagement",
         "messages",
         "dispute",
-        // "userManagement", // Tạm thời comment
+        "userManagement",
         "complaints",
       ].includes(tab)
     ) {
@@ -155,7 +155,7 @@ export default function ModeratorDashboard() {
         | "blog"
         | "productManagement"
         | "dispute"
-        // | "userManagement" // Tạm thời comment
+        | "userManagement"
         | "complaints";
       setActiveTab(validTab);
 
@@ -263,8 +263,8 @@ export default function ModeratorDashboard() {
         return <VerificationRequestManagement />;
       case "dispute":
         return <DisputeManagement />;
-      // case "userManagement": // Tạm thời comment
-      //   return <ModeratorUserManagementTable />;
+      case "userManagement":
+        return <ModeratorUserManagementTable />;
       case "complaints":
         return <ComplaintManagement />;
       default:
@@ -307,9 +307,9 @@ export default function ModeratorDashboard() {
       case "verification":
         return "Xác thực tài khoản";
       case "dispute":
-        return "Xử lý Khiếu nạiĐơn hàng";
-      // case "userManagement": // Tạm thời comment
-      //   return "Quản lý người dùng";
+        return "Xử lý Khiếu nại Đơn hàng";
+      case "userManagement":
+        return "Quản lý người dùng";
       case "complaints":
         return "Khiếu nại khóa tài khoản";
       default:
@@ -352,9 +352,9 @@ export default function ModeratorDashboard() {
       case "verification":
         return "Xác thực danh tính và thông tin người dùng";
       case "dispute":
-        return "Quản lý và giải quyết khiếu nại Khiếu nạiđơn hàng";
-      // case "userManagement": // Tạm thời comment
-      //   return "Quản lý người dùng cần xử lý";
+        return "Quản lý và giải quyết khiếu nại đơn hàng";
+      case "userManagement":
+        return "Quản lý người dùng cần xử lý";
       case "complaints":
         return "Xem xét và xử lý các khiếu nại về tài khoản bị khóa từ người dùng";
       default:

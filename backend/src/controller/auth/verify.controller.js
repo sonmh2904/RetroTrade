@@ -1,6 +1,5 @@
 const User = require("../../models/User.model");
 const VerificationRequest = require("../../models/VerificationRequest.model");
-const { getAdmin } = require("../../config/firebase");
 const { uploadToCloudinary } = require('../../middleware/upload.middleware');
 const { createNotification } = require("../../middleware/createNotification");
 const { encryptObject, decryptObject } = require("../../utils/cryptoHelper");
@@ -402,8 +401,6 @@ module.exports.sendOtpViaTwilio = async (req, res) => {
     }
 }
 
-// Keep Firebase function for backward compatibility (deprecated)
-module.exports.sendOtpViaFirebase = module.exports.sendOtpViaTwilio;
 
 module.exports.verifyOtpViaTwilio = async (req, res) => {
     try {
@@ -542,106 +539,6 @@ module.exports.verifyOtpViaTwilio = async (req, res) => {
     }
 }
 
-// Keep Firebase function for backward compatibility (deprecated)
-module.exports.verifyOtpViaFirebase = module.exports.verifyOtpViaTwilio;
-
-module.exports.confirmPhoneWithFirebaseIdToken = async (req, res) => {
-    try {
-        const { idToken } = req.body;
-        if (!idToken) {
-            return res.status(400).json({ code: 400, message: "Thiếu Firebase ID token" });
-        }
-
-        const admin = getAdmin();
-        const decoded = await admin.auth().verifyIdToken(idToken);
-        const phoneNumber = decoded.phone_number;
-        if (!phoneNumber) {
-            return res.status(400).json({ code: 400, message: "ID token không chứa số điện thoại" });
-        }
-
-        const formattedPhone = formatPhoneNumber(phoneNumber);
-        if (!validateVietnamesePhoneNumber(formattedPhone)) {
-            return res.status(400).json({
-                code: 400,
-                message: "Số điện thoại không đúng định dạng Việt Nam"
-            });
-        }
-
-        const userId = req.user?._id;
-        if (!userId) {
-            return res.status(401).json({
-                code: 401,
-                message: "User chưa đăng nhập. Vui lòng đăng nhập trước khi xác minh"
-            });
-        }
-
-        try {
-            // First, get the user to check current verification status
-            const currentUser = await User.findById(userId);
-            if (!currentUser) {
-                return res.status(404).json({
-                    code: 404,
-                    message: "Không tìm thấy người dùng"
-                });
-            }
-
-            // Update phone and set isPhoneConfirmed to true
-            const updatedUser = await User.findByIdAndUpdate(
-                userId,
-                { phone: formattedPhone, isPhoneConfirmed: true },
-                { new: true }
-            );
-
-            // Check if both phone and ID are now verified
-            // If ID was already verified, user is now fully verified
-            const isFullyVerified = updatedUser.isPhoneConfirmed && updatedUser.isIdVerified;
-            
-            try {
-                let notificationMessage = `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công.`;
-                if (isFullyVerified) {
-                    notificationMessage = `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công. Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).`;
-                }
-                
-                await createNotification(
-                    userId,
-                    isFullyVerified ? "Tài khoản đã được xác minh đầy đủ" : "Xác minh số điện thoại thành công",
-                    isFullyVerified ? "Tài khoản đã được xác minh đầy đủ" : "Xác minh số điện thoại thành công",
-                    notificationMessage,
-                    {
-                        phone: formattedPhone,
-                        type: isFullyVerified ? 'full_verification_success' : 'phone_verification_success',
-                        redirectUrl: '/auth/verification-history',
-                        isFullyVerified: isFullyVerified
-                    }
-                );
-            } catch (notificationError) {
-                console.error("Error creating phone verification notification:", notificationError);
-            }
-
-            return res.json({
-                code: 200,
-                message: "Xác minh số điện thoại (Firebase) thành công",
-                data: {
-                    phone: formattedPhone,
-                    userId: updatedUser._id,
-                    isPhoneConfirmed: updatedUser.isPhoneConfirmed,
-                    isIdVerified: updatedUser.isIdVerified,
-                    isFullyVerified: isFullyVerified,
-                    user: updatedUser
-                }
-            });
-        } catch (dbError) {
-            console.error('Database update error:', dbError);
-            return res.status(500).json({
-                code: 500,
-                message: "Lỗi cơ sở dữ liệu khi cập nhật số điện thoại",
-                error: dbError.message
-            });
-        }
-    } catch (error) {
-        return res.status(500).json({ code: 500, message: "Xác minh Firebase ID token thất bại", error: error.message });
-    }
-}
 
 module.exports.previewIdCardOcr = async (req, res) => {
     try {
