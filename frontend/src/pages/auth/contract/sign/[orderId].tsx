@@ -670,7 +670,7 @@ export default function SignContractPage() {
             </div>
             <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
               <DollarSign className="w-4 h-4 text-green-500" />
-              <span>{(order.totalAmount || 0).toLocaleString("vi-VN")}₫</span>
+              <span>{(order.finalAmount || 0).toLocaleString("vi-VN")}₫</span>
             </div>
           </div>
         </div>
