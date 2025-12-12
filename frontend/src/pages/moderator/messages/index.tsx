@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { toast } from "sonner";
 import { RootState } from "@/store/redux_store";
 import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
 import { useRouter } from "next/router";
@@ -247,12 +248,12 @@ const ModeratorMessagesPage: React.FC = () => {
     const isVideo = file.type.startsWith('video/');
     
     if (!isImage && !isVideo) {
-      alert('Chỉ hỗ trợ file ảnh hoặc video');
+      toast.warning('Chỉ hỗ trợ file ảnh hoặc video');
       return;
     }
 
     if (file.size > 50 * 1024 * 1024) {
-      alert('File quá lớn. Kích thước tối đa là 50MB');
+      toast.warning('File quá lớn. Kích thước tối đa là 50MB');
       return;
     }
 
@@ -278,11 +279,11 @@ const ModeratorMessagesPage: React.FC = () => {
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       } else {
         const error = await response.json();
-        alert(error.message || 'Lỗi khi gửi media');
+        toast.error(error.message || 'Lỗi khi gửi media');
       }
     } catch (error) {
       console.error("Error sending media:", error);
-      alert('Lỗi khi gửi media');
+      toast.error('Lỗi khi gửi media');
     } finally {
       setUploading(false);
       if (fileInputRef.current) {

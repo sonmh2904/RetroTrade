@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { toast } from "sonner";
 import { RootState } from "@/store/redux_store";
 import { decodeToken } from '@/utils/jwtHelper';
 import { useRouter } from "next/navigation";
@@ -364,13 +365,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
     const isVideo = file.type.startsWith('video/');
     
     if (!isImage && !isVideo) {
-      alert('Chỉ hỗ trợ file ảnh hoặc video');
+      toast.warning('Chỉ hỗ trợ file ảnh hoặc video');
       return;
     }
 
     // Validate file size (50MB max)
     if (file.size > 50 * 1024 * 1024) {
-      alert('File quá lớn. Kích thước tối đa là 50MB');
+      toast.warning('File quá lớn. Kích thước tối đa là 50MB');
       return;
     }
 
@@ -398,11 +399,11 @@ const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose, initialConversations
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       } else {
         const error = await response.json();
-        alert(error.message || 'Lỗi khi gửi media');
+        toast.error(error.message || 'Lỗi khi gửi media');
       }
     } catch (error) {
       console.error("Error sending media:", error);
-      alert('Lỗi khi gửi media');
+      toast.error('Lỗi khi gửi media');
     } finally {
       setUploading(false);
       // Reset file input

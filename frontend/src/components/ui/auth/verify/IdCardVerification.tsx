@@ -24,7 +24,7 @@ export function IdCardVerification({
 }: IdCardVerificationProps) {
   const [step, setStep] = useState(1);
   const [images, setImages] = useState<File[]>([]);
-  const [result, setResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string; details?: string; status?: 'success' | 'warning' | 'error' } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [failedStep, setFailedStep] = useState<number | null>(null);
@@ -55,8 +55,7 @@ export function IdCardVerification({
         } else if (extractedIdCardInfo && 
           extractedIdCardInfo.idNumber && 
           extractedIdCardInfo.fullName && 
-          extractedIdCardInfo.dateOfBirth && 
-          extractedIdCardInfo.address) {
+          extractedIdCardInfo.dateOfBirth) {
           setResult({
             success: true,
             message: 'Yêu cầu xác minh đã được gửi',
@@ -152,7 +151,6 @@ export function IdCardVerification({
               onNext={handleSubmitVerification}
               onBack={handleBack}
               isLoading={isLoading}
-              phoneNumber="" // Not needed for ID card verification
             />
           )}
 

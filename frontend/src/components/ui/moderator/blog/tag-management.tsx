@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -54,7 +55,10 @@ export function TagManagementTable() {
   }, []);
 
   const handleAddTag = async () => {
-    if (!newTag.trim()) return alert("Vui lòng nhập tên tag");
+    if (!newTag.trim()) {
+      toast.warning("Vui lòng nhập tên tag");
+      return;
+    }
     try {
       await createTag({ name: newTag });
       setNewTag("");

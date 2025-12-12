@@ -3,6 +3,8 @@ import { Input } from "../../common/input";
 import { useState } from "react";
 import { Upload, X, CreditCard, CheckCircle, AlertCircle, Image as ImageIcon, Shield, Edit } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
+import { toast } from "sonner";
 import { faceVerificationAPI, FaceVerificationResponse, ExtractedIdCardInfo } from "@/services/auth/faceVerification.api";
 
 interface ImageUploadProps {
@@ -183,7 +185,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
     }
 
     if (!isPrivacyAccepted) {
-      alert("Vui lòng chấp nhận chia sẻ thông tin cá nhân để tiếp tục");
+      toast.warning("Vui lòng chấp nhận chia sẻ thông tin cá nhân để tiếp tục");
       return;
     }
 
@@ -204,7 +206,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
     const confirmedIdCardInfo = editingIdCardInfo || extractedIdCardInfo;
     
     if (!confirmedIdCardInfo) {
-      alert("Vui lòng đợi hệ thống đọc thông tin từ ảnh hoặc nhập thủ công tất cả thông tin căn cước công dân.");
+      toast.warning("Vui lòng đợi hệ thống đọc thông tin từ ảnh hoặc nhập thủ công tất cả thông tin căn cước công dân.");
       return;
     }
 
@@ -234,7 +236,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
     }
 
     if (missingFields.length > 0) {
-      alert(`Vui lòng điền đầy đủ tất cả thông tin căn cước công dân trước khi gửi yêu cầu.\n\nThiếu các trường sau:\n${missingFields.map(f => `- ${f}`).join('\n')}`);
+      toast.error(`Thiếu thông tin: ${missingFields.join(', ')}. Vui lòng điền đầy đủ.`);
       // Enable editing mode so user can fill in missing fields
       setIsEditingIdCard(true);
       return;
@@ -242,7 +244,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
 
     // Validate ID number format (12 digits)
     if (confirmedIdCardInfo.idNumber && !/^\d{12}$/.test(confirmedIdCardInfo.idNumber.trim())) {
-      alert("Số căn cước công dân phải có đúng 12 chữ số. Vui lòng kiểm tra lại.");
+      toast.error("Số căn cước công dân phải có đúng 12 chữ số. Vui lòng kiểm tra lại.");
       setIsEditingIdCard(true);
       return;
     }

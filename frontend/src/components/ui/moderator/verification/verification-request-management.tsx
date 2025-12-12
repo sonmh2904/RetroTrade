@@ -50,6 +50,34 @@ export function VerificationRequestManagement() {
   const [isHandling, setIsHandling] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Lấy ID của moderator hiện tại từ token
+  useEffect(() => {
+    if (accessToken) {
+      const decoded = decodeToken(accessToken);
+      // Hỗ trợ cả userId và _id trong token
+      const id = decoded?.userId || decoded?._id;
+      if (id) {
+        setCurrentUserId(id);
+      }
+    }
+  }, [accessToken]);
+
+  // Kiểm tra xem request có được giao cho moderator hiện tại không
+  const isAssignedToMe = (request: VerificationRequest): boolean => {
+    if (!currentUserId || !request.assignedTo) return false;
+    const assignedToId = typeof request.assignedTo === 'object' && request.assignedTo._id 
+      ? request.assignedTo._id 
+      : request.assignedTo;
+    return assignedToId === currentUserId;
+  };
+
+  // Kiểm tra xem request có được giao cho người khác không
+  const isAssignedToOther = (request: VerificationRequest): boolean => {
+    if (!request.assignedTo) return false;
+    return !isAssignedToMe(request);
+  };
 
   useEffect(() => {
     fetchRequests();

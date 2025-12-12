@@ -230,30 +230,12 @@ export default function DisputeDetailPage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!router.isReady) return;
+    if (!id) return;
 
-    const rawId = router.query.id;
-    let disputeId = "";
-
-    if (typeof rawId === "string") {
-      disputeId = rawId;
-    } else if (Array.isArray(rawId)) {
-      disputeId = rawId[0];
-    } else if (rawId && typeof rawId === "object") {
-      disputeId = Object.values(rawId)[0] as string;
-    }
-
-    if (!disputeId || disputeId === "[object Object]") {
-      console.error("disputeId is invalid:", disputeId);
-      setError(true);
-      setLoading(false);
-      return;
-    }
-
-    getDisputeById(disputeId)
+    getDisputeById(id)
       .then((res) => {
         if (res.code === 200 && res.data) {
-          setDispute(res.data);
+          setDispute(res.data as DisputeFromAPI);
         } else {
           setError(true);
         }

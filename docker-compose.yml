@@ -1,0 +1,86 @@
+# ============================================
+# Docker Compose - RetroTrade Production
+# ============================================
+# Usage: docker-compose up -d
+# Sử dụng file .env có sẵn trong backend/ và frontend/
+# MongoDB Atlas: Dùng MONGODB_URI từ backend/.env
+# ============================================
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # Backend API Server
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: retrotrade-backend
+    restart: unless-stopped
+    # Sử dụng file .env có sẵn (bao gồm MONGODB_URI kết nối Atlas)
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=production
+      - FRONTEND_URL=http://localhost:3000
+    ports:
+      - "9999:9999"
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - retrotrade-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/api/v1/test-cors"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================
+  # Frontend Next.js App
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: retrotrade-frontend
+    restart: unless-stopped
+    # Sử dụng file .env có sẵn trong frontend/
+    env_file:
+      - ./frontend/.env
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:9999/api/v1
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:9999
+      - PUBLIC_API_URL=http://backend:9999/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - retrotrade-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  retrotrade-network:
+    driver: bridge
+
+# ==========================================
+# Volumes
+# ==========================================
+volumes:
+  backend_uploads:
+    driver: local
+

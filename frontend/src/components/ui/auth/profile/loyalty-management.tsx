@@ -694,9 +694,9 @@ export function LoyaltyManagement() {
                                     })}
                                   </span>
                                 </div>
-                                {transaction.metadata?.discountPercent && (
+                                {transaction.metadata?.discountPercent != null && (
                                   <p className="text-xs text-purple-600 mt-1">
-                                    Discount: {transaction.metadata.discountPercent}%
+                                    Discount: {String(transaction.metadata.discountPercent)}%
                                   </p>
                                 )}
                               </div>

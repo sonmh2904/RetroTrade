@@ -9,8 +9,7 @@ import type { UserProfile } from "@iService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/common/dialog"
 import { PhoneVerification } from "@/components/ui/auth/verify/PhoneVerification"
 import OTPInput from "../verify/OTPInput"
-import { sendOtpFirebase, verifyOtpFirebase } from "@/services/auth/auth.api"
-import Script from "next/script"
+import { sendOtp, verifyOtp } from "@/services/auth/verificationRequest.api"
 
 interface DetailedInfoCardProps {
   userProfile: UserProfile;

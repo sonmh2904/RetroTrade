@@ -138,19 +138,19 @@ export default function DisputeManagementPage() {
                 disputes.map((d) => (
                   <tr key={d._id} className="border-b hover:bg-gray-50">
                     <td className="p-4 font-medium">
-                      {getOrderGuid(d.orderId).slice(0, 12)}...
+                      {(getOrderGuid(d.orderId) || '').slice(0, 12)}...
                     </td>
 
                     <td className="p-4 flex items-center gap-2">
                       <Avatar>
                         <AvatarFallback>
-                          {d.reporterId.fullName[0]}
+                          {typeof d.reporterId === 'object' && d.reporterId?.fullName ? d.reporterId.fullName[0] : '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">{d.reporterId.fullName}</p>
+                        <p className="font-medium">{typeof d.reporterId === 'object' ? d.reporterId?.fullName || 'N/A' : 'N/A'}</p>
                         <p className="text-xs text-gray-500">
-                          {d.reporterId.email}
+                          {typeof d.reporterId === 'object' ? d.reporterId?.email || '' : ''}
                         </p>
                       </div>
                     </td>
