@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
+import { listOrders } from "@/services/auth/order.api";
 
 const ProductComparisonModal = dynamic(
   () => import("@/components/ui/products/ProductComparisonModal"),
@@ -289,7 +290,7 @@ export default function ProductDetailPage() {
       )
       .map((order: Order) => order._id);
   }, [orders, id]);
-
+  
   useEffect(() => {
     console.log("isAuthenticated:", isAuthenticated);
     console.log("orders.length:", orders.length);
@@ -1580,7 +1581,7 @@ export default function ProductDetailPage() {
             <div className="bg-white rounded-xl shadow-sm border overflow-hidden mt-6">
               <div className="p-6">
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  <RatingSection itemId={product._id} orders={orders} />
+                  <RatingSection itemId={product._id} />
                 </div>
               </div>
             </div>

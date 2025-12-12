@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const { Types } = mongoose;
 const path = require("path");
+const User = require("../../models/User.model");
 const Contracts = require("../../models/Order/Contracts.model");
 const OrderModel = require("../../models/Order/Order.model");
 const ContractTemplate = require("../../models/ContractTemplate.model");
@@ -12,8 +13,42 @@ const { generateString } = require("../../utils/generateString");
 const {
   encryptSignature,
   decryptSignature,
+  decryptObject,
 } = require("../../utils/cryptoHelper");
 const { generatePDF } = require("../../utils/pdfExport");
+const { createNotification } = require("../../middleware/createNotification");
+
+const getDecryptedIdCardInfo = async (userId) => {
+  if (!userId) return null;
+  try {
+    const user = await User.findById(userId).select(
+      "idCardInfoEncrypted idCardInfo fullName"
+    );
+    if (!user) return null;
+
+    // Ưu tiên dữ liệu đã giải mã từ encrypted field (an toàn hơn)
+    if (
+      user.idCardInfoEncrypted?.encryptedData &&
+      user.idCardInfoEncrypted?.iv
+    ) {
+      const decryptedJson = decryptObject(
+        user.idCardInfoEncrypted.encryptedData.toString("hex"),
+        user.idCardInfoEncrypted.iv
+      );
+      return decryptedJson; // { idNumber, fullName, dateOfBirth, address }
+    }
+
+    // Fallback: dùng plaintext nếu có (chỉ dùng khi debug hoặc dữ liệu cũ)
+    if (user.idCardInfo?.idNumber) {
+      return user.idCardInfo;
+    }
+
+    return null;
+  } catch (err) {
+    console.error("Lỗi giải mã CCCD user:", userId, err.message);
+    return null;
+  }
+};
 
 // Tạo mẫu hợp đồng
 exports.createTemplate = async (req, res) => {
@@ -206,39 +241,103 @@ exports.previewTemplate = async (req, res) => {
         .json({ message: "Mẫu hợp đồng không tồn tại hoặc không hoạt động" });
     }
 
+    // GIẢI MÃ CCCD CỦA 2 BÊN – CHỈ LẤY SỐ CCCD
+    const [renterIdInfo, ownerIdInfo] = await Promise.all([
+      getDecryptedIdCardInfo(order.renterId._id),
+      getDecryptedIdCardInfo(order.ownerId._id),
+    ]);
+
     const dataMap = {
-      renterName: order.renterId?.fullName || "N/A",
-      renterEmail: order.renterId?.email || "N/A",
-      renterPhone: order.renterId?.phone || "N/A",
+      // THÔNG TIN 2 BÊN 
       ownerName: order.ownerId?.fullName || "N/A",
       ownerEmail: order.ownerId?.email || "N/A",
       ownerPhone: order.ownerId?.phone || "N/A",
+      ownerIdCardNumber: ownerIdInfo?.idNumber || "Chưa xác minh danh tính",
+      ownerFullNameOnId:
+        ownerIdInfo?.fullName || order.ownerId?.fullName || "N/A",
+
+      renterName: order.renterId?.fullName || "N/A",
+      renterEmail: order.renterId?.email || "N/A",
+      renterPhone: order.renterId?.phone || "N/A",
+      renterIdCardNumber: renterIdInfo?.idNumber || "Chưa xác minh danh tính",
+      renterFullNameOnId:
+        renterIdInfo?.fullName || order.renterId?.fullName || "N/A",
+
+      //THÔNG TIN SẢN PHẨM & THỜI GIAN
       itemTitle: order.itemId?.Title || "N/A",
       itemDescription: order.itemId?.Description || "N/A",
-      basePrice:
-        typeof order.itemId?.BasePrice !== "undefined"
-          ? Number(order.itemId.BasePrice).toFixed(2)
-          : "0.00",
-      depositAmount:
-        typeof order.itemId?.DepositAmount !== "undefined"
-          ? Number(order.itemId.DepositAmount).toFixed(2)
-          : "0.00",
+      basePrice: Number(order.itemId?.BasePrice || 0).toLocaleString("vi-VN"),
+      unitCount: order.unitCount,
+      depositAmount: Number(order.itemId?.DepositAmount || 0).toLocaleString(
+        "vi-VN"
+      ),
       rentalStartDate: order.startAt
         ? new Date(order.startAt).toLocaleDateString("vi-VN")
+        : "N/A",
+      rentalStartTime: order.startAt
+        ? new Date(order.startAt).toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
         : "N/A",
       rentalEndDate: order.endAt
         ? new Date(order.endAt).toLocaleDateString("vi-VN")
         : "N/A",
-      totalAmount:
-        typeof order.totalAmount !== "undefined"
-          ? Number(order.totalAmount).toFixed(2)
-          : "0.00",
-      serviceFee:
-        typeof order.serviceFee !== "undefined"
-          ? Number(order.serviceFee).toFixed(2)
-          : "0.00",
-      currency: order.currency || "VND",
-      unitCount: order.unitCount || 1,
+      rentalEndTime: order.endAt
+        ? new Date(order.endAt).toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "N/A",
+      rentalPeriodFull:
+        order.startAt && order.endAt
+          ? `${new Date(order.startAt).toLocaleString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })} → ${new Date(order.endAt).toLocaleString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`
+          : "N/A",
+      rentalDuration: order.rentalDuration || "N/A",
+      rentalUnit: order.rentalUnit || "ngày",
+
+      // TIỀN
+      rentalAmount: Number(
+        order.totalAmount - order.depositAmount - order.serviceFee || 0
+      ).toLocaleString("vi-VN"),
+      depositAmountFormatted: Number(order.depositAmount || 0).toLocaleString(
+        "vi-VN"
+      ),
+      serviceFeeFormatted: Number(order.serviceFee || 0).toLocaleString(
+        "vi-VN"
+      ),
+
+      // TỔNG TRƯỚC GIẢM GIÁ
+      totalBeforeDiscount: Number(order.totalAmount || 0).toLocaleString(
+        "vi-VN"
+      ),
+
+      // GIẢM GIÁ
+      discountAmount: order.discount?.totalAmountApplied
+        ? Number(order.discount.totalAmountApplied).toLocaleString("vi-VN")
+        : "0",
+      discountCode: order.discount?.code || "Không có",
+
+      // TỔNG SAU GIẢM GIÁ – CHÍNH LÀ SỐ TIỀN PHẢI TRẢ
+      finalAmount: Number(
+        order.finalAmount || order.totalAmount || 0
+      ).toLocaleString("vi-VN"),
+
+      currency: "VND",
+      today: new Date().toLocaleDateString("vi-VN"),
+      orderGuid: order.orderGuid || "N/A",
     };
 
     const filledContent = buildFilledContent(template, dataMap, customClauses);
@@ -251,6 +350,7 @@ exports.previewTemplate = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Preview contract error:", error);
     return res.status(500).json({
       message: "Lỗi preview mẫu hợp đồng",
       details: error.message,
@@ -314,39 +414,104 @@ exports.confirmCreateContract = async (req, res) => {
         .json({ message: "Mẫu hợp đồng không tồn tại hoặc không hoạt động" });
     }
 
+    // GIẢI MÃ CCCD CHO TẠO HỢP ĐỒNG THẬT
+    const [renterIdInfo, ownerIdInfo] = await Promise.all([
+      getDecryptedIdCardInfo(order.renterId._id),
+      getDecryptedIdCardInfo(order.ownerId._id),
+    ]);
+
     const dataMap = {
-      renterName: order.renterId?.fullName || "N/A",
-      renterEmail: order.renterId?.email || "N/A",
-      renterPhone: order.renterId?.phone || "N/A",
+      //THÔNG TIN 2 BÊN
       ownerName: order.ownerId?.fullName || "N/A",
       ownerEmail: order.ownerId?.email || "N/A",
       ownerPhone: order.ownerId?.phone || "N/A",
+      ownerIdCardNumber: ownerIdInfo?.idNumber || "Chưa xác minh danh tính",
+      ownerFullNameOnId:
+        ownerIdInfo?.fullName || order.ownerId?.fullName || "N/A",
+
+      renterName: order.renterId?.fullName || "N/A",
+      renterEmail: order.renterId?.email || "N/A",
+      renterPhone: order.renterId?.phone || "N/A",
+      renterIdCardNumber: renterIdInfo?.idNumber || "Chưa xác minh danh tính",
+      renterFullNameOnId:
+        renterIdInfo?.fullName || order.renterId?.fullName || "N/A",
+
+      //THÔNG TIN SẢN PHẨM & THỜI GIAN
       itemTitle: order.itemId?.Title || "N/A",
       itemDescription: order.itemId?.Description || "N/A",
-      basePrice:
-        typeof order.itemId?.BasePrice !== "undefined"
-          ? Number(order.itemId.BasePrice).toFixed(2)
-          : "0.00",
-      depositAmount:
-        typeof order.itemId?.DepositAmount !== "undefined"
-          ? Number(order.itemId.DepositAmount).toFixed(2)
-          : "0.00",
+      basePrice: Number(order.itemId?.BasePrice || 0).toLocaleString("vi-VN"),
+      unitCount: order.unitCount,
+      depositAmount: Number(order.itemId?.DepositAmount || 0).toLocaleString(
+        "vi-VN"
+      ),
       rentalStartDate: order.startAt
         ? new Date(order.startAt).toLocaleDateString("vi-VN")
+        : "N/A",
+      rentalStartTime: order.startAt
+        ? new Date(order.startAt).toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
         : "N/A",
       rentalEndDate: order.endAt
         ? new Date(order.endAt).toLocaleDateString("vi-VN")
         : "N/A",
-      totalAmount:
-        typeof order.totalAmount !== "undefined"
-          ? Number(order.totalAmount).toFixed(2)
-          : "0.00",
-      serviceFee:
-        typeof order.serviceFee !== "undefined"
-          ? Number(order.serviceFee).toFixed(2)
-          : "0.00",
-      currency: order.currency || "VND",
-      unitCount: order.unitCount || 1,
+      rentalEndTime: order.endAt
+        ? new Date(order.endAt).toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "N/A",
+
+      rentalPeriodFull:
+        order.startAt && order.endAt
+          ? `${new Date(order.startAt).toLocaleString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })} → ${new Date(order.endAt).toLocaleString("vi-VN", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`
+          : "N/A",
+      rentalDuration: order.rentalDuration || "N/A",
+      rentalUnit: order.rentalUnit || "ngày",
+
+      // TIỀN
+      rentalAmount: Number(
+        order.totalAmount - order.depositAmount - order.serviceFee || 0
+      ).toLocaleString("vi-VN"),
+      depositAmountFormatted: Number(order.depositAmount || 0).toLocaleString(
+        "vi-VN"
+      ),
+      serviceFeeFormatted: Number(order.serviceFee || 0).toLocaleString(
+        "vi-VN"
+      ),
+
+      // TỔNG TRƯỚC GIẢM GIÁ
+      totalBeforeDiscount: Number(order.totalAmount || 0).toLocaleString(
+        "vi-VN"
+      ),
+
+      // GIẢM GIÁ
+      discountAmount: order.discount?.totalAmountApplied
+        ? Number(order.discount.totalAmountApplied).toLocaleString("vi-VN")
+        : "0",
+      discountCode: order.discount?.code || "Không có",
+
+      // TỔNG SAU GIẢM GIÁ – CHÍNH LÀ SỐ TIỀN PHẢI TRẢ
+      finalAmount: Number(
+        order.finalAmount || order.totalAmount || 0
+      ).toLocaleString("vi-VN"),
+
+      currency: "VND",
+      today: new Date().toLocaleDateString("vi-VN"),
+      orderGuid: order.orderGuid || "N/A",
     };
 
     const filledContent = buildFilledContent(template, dataMap, customClauses);
@@ -363,68 +528,58 @@ exports.confirmCreateContract = async (req, res) => {
     const saved = await newContract.save({ session });
     await session.commitTransaction();
 
+    //Gửi thông báo cho người thuê (renter) khi hợp đồng được tạo
+    await createNotification(
+      order.renterId._id,
+      "Contract Created",
+      "Hợp đồng thuê mới",
+      `Hợp đồng cho "${
+        order.itemId?.Title || "đơn hàng"
+      }" đã được tạo. Vui lòng kiểm tra và ký để xác nhận giao dịch.`,
+      {
+        contractId: saved._id.toString(),
+        orderId: orderId.toString(),
+        orderGuid: order.orderGuid,
+      }
+    );
+
+    // Trả về thông tin hợp đồng mới tạo
     const contract = await Contracts.findById(saved._id)
+      .populate("templateId", "templateName")
       .populate({
         path: "signatures",
         populate: {
           path: "signatureId",
-          model: "UserSignature",
-          select: "signatureImagePath validFrom validTo isActive iv userId",
-          populate: {
-            path: "userId",
-            select: "_id fullName roleId",
-          },
+          select: "signatureImagePath userId",
+          populate: { path: "userId", select: "fullName" },
         },
-      })
-      .populate("templateId", "templateName");
+      });
 
-    const signatures = (contract.signatures || []).map((s) => {
-      const sig =
-        s.signatureId && typeof s.signatureId === "object"
-          ? {
-              _id: s.signatureId._id,
-              signatureImagePath: s.signatureId.signatureImagePath,
-              validFrom: s.signatureId.validFrom,
-              validTo: s.signatureId.validTo,
-              isActive: s.signatureId.isActive,
-              signerName: s.signatureId.userId?.fullName || "Unknown",
-              signerRole: s.signatureId.userId?.roleId || null,
-              signerUserId: s.signatureId.userId?._id?.toString() || null,
-            }
-          : null;
+    const signatures = (contract.signatures || []).map((s) => ({
+      _id: s._id.toString(),
+      signatureUrl: s.signatureId?.signatureImagePath || "",
+      signerName: s.signatureId?.userId?.fullName || "Unknown",
+      signedAt: s.signedAt,
+    }));
 
-      return {
-        _id: s._id?.toString(),
-        contractId: s.contractId?.toString() || s.contractId,
-        signatureId: sig,
-        signedAt: s.signedAt,
-        isValid: s.isValid,
-        verificationInfo: s.verificationInfo,
-        positionX: s.positionX || 0,
-        positionY: s.positionY || 0,
-      };
+    return res.status(201).json({
+      message: "Hợp đồng đã được tạo thành công",
+      data: {
+        contractId: contract._id.toString(),
+        status: contract.status,
+        content: contract.contractContent,
+        templateName: contract.templateId?.templateName,
+        signatures,
+        isFullySigned: false,
+        canSign: true,
+      },
     });
-
-    const responseData = {
-      contractId: contract._id.toString(),
-      status: contract.status,
-      content: contract.contractContent || "",
-      signatures,
-      templateName: contract.templateId?.templateName || null,
-      signaturesCount: signatures.length,
-      isFullySigned: contract.status === "Signed",
-      canSign: contract.status === "PendingSignature",
-    };
-
-    return res
-      .status(201)
-      .json({ message: "Hợp đồng đã được tạo thành công", data: responseData });
   } catch (error) {
     await session.abortTransaction();
-    return res.status(500).json({
-      message: "Lỗi tạo hợp đồng",
-      details: error.message,
-    });
+    console.error("confirmCreateContract error:", error);
+    return res
+      .status(500)
+      .json({ message: "Lỗi tạo hợp đồng", details: error.message });
   } finally {
     session.endSession();
   }
@@ -651,11 +806,13 @@ exports.signContract = async (req, res) => {
       return res.status(400).json({ message: "Hợp đồng không hợp lệ để ký" });
     }
 
-    const order = await OrderModel.findById(contract.rentalOrderId).session(
-      session
-    );
+    const order = await OrderModel.findById(contract.rentalOrderId)
+      .session(session)
+      .populate("renterId", "fullName")
+      .populate("ownerId", "fullName")
+      .populate("itemId", "Title");
     if (
-      ![order.renterId.toString(), order.ownerId.toString()].includes(
+      ![order.renterId._id.toString(), order.ownerId._id.toString()].includes(
         userId.toString()
       )
     ) {
@@ -847,6 +1004,77 @@ exports.signContract = async (req, res) => {
       ],
       { session }
     );
+
+    // Gửi thông báo cho 2 bên khi 1 bên ký hợp đồng
+    // Xác định bên ký và bên còn lại
+    const signerRole = isOwner ? "Chủ sở hữu" : "Người thuê";
+    const otherUserId = isOwner ? order.renterId._id : order.ownerId._id;
+    const otherRole = isOwner ? "người thuê" : "chủ sở hữu";
+    const otherName = isOwner
+      ? order.renterId.fullName
+      : order.ownerId.fullName;
+    const itemTitle = order.itemId?.Title || "đơn hàng";
+
+    // Thông báo cho bên còn lại (other)
+    await createNotification(
+      otherUserId,
+      "Contract Signed",
+      "Hợp đồng đã được ký",
+      `${signerRole} "${
+        order[isOwner ? "ownerId" : "renterId"].fullName
+      }" đã ký hợp đồng cho "${itemTitle}". Vui lòng kiểm tra và ký để hoàn tất.`,
+      {
+        contractId: contract._id.toString(),
+        orderId: order._id.toString(),
+        orderGuid: order.orderGuid,
+        signerName: order[isOwner ? "ownerId" : "renterId"].fullName,
+        signerRole: signerRole,
+      }
+    );
+
+    // Thông báo cho bên vừa ký (signer) để xác nhận hành động của họ
+    await createNotification(
+      userId,
+      "Contract Signed",
+      "Xác nhận chữ ký hợp đồng",
+      `Bạn đã ký hợp đồng cho "${itemTitle}". Đang chờ ${otherRole} "${otherName}" ký để hoàn tất.`,
+      {
+        contractId: contract._id.toString(),
+        orderId: order._id.toString(),
+        orderGuid: order.orderGuid,
+        otherName: otherName,
+        otherRole: otherRole,
+      }
+    );
+
+    // Nếu đã ký đủ 2 chữ ký, gửi thông báo hoàn tất cho cả 2 bên
+    if (signaturesCount >= 2) {
+      await createNotification(
+        order.renterId._id,
+        "Contract Fully Signed",
+        "Hợp đồng hoàn tất",
+        `Hợp đồng cho "${itemTitle}" đã được ký đầy đủ bởi cả hai bên.`,
+        {
+          contractId: contract._id.toString(),
+          orderId: order._id.toString(),
+          orderGuid: order.orderGuid,
+          status: "Signed",
+        }
+      );
+
+      await createNotification(
+        order.ownerId._id,
+        "Contract Fully Signed",
+        "Hợp đồng hoàn tất",
+        `Hợp đồng cho "${itemTitle}" đã được ký đầy đủ bởi cả hai bên.`,
+        {
+          contractId: contract._id.toString(),
+          orderId: order._id.toString(),
+          orderGuid: order.orderGuid,
+          status: "Signed",
+        }
+      );
+    }
 
     await session.commitTransaction();
 

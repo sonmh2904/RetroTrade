@@ -12,11 +12,17 @@ const ItemConditions = require("../../models/Product/ItemConditions.model");
 const PriceUnits = require("../../models/Product/PriceUnits.model");
 const User = require("../../models/User.model");
 const Tags = require("../../models/Tag.model");
+const Order = require("../../models/Order/Order.model");
 
 const cloudinary = require("cloudinary").v2;
 
-const MAX_PRICE = 100000000; // 100 triệu VND - giá trị tối đa cho BasePrice và DepositAmount
-const MAX_DURATION = 365; // 365 ngày - giá trị tối đa cho MinRentalDuration và MaxRentalDuration
+const DURATION_RULES = {
+  1: { min: 1, max: 720, unit: "giờ" }, // Giờ: tối đa 30 ngày
+  2: { min: 1, max: 365, unit: "ngày" }, // Ngày
+  3: { min: 1, max: 52, unit: "tuần" }, // Tuần: tối đa ~1 năm
+  4: { min: 1, max: 12, unit: "tháng" }, // Tháng: tối đa 1 năm
+};
+const MAX_PRICE = 1000000000; // 1 tỷ VND - giá trị tối đa cho BasePrice và DepositAmount
 
 const extractPublicId = (url) => {
   if (!url) return null;
@@ -53,6 +59,24 @@ const saveUserAddress = async (
     IsDefault: false,
   });
   return await newAddress.save({ session });
+};
+
+// Hàm helper kiểm tra sản phẩm có đang được thuê (có order active) không
+const hasActiveOrders = async (itemId, session = null) => {
+  const activeStatuses = [
+    "pending",
+    "confirmed",
+    "delivery",
+    "received",
+    "progress",
+    "returned",
+    "disputed",
+  ];
+  const activeOrders = await Order.find({
+    itemId: itemId,
+    orderStatus: { $in: activeStatuses },
+  }).session(session);
+  return activeOrders.length > 0;
 };
 
 const addProduct = async (req, res) => {
@@ -146,30 +170,45 @@ const addProduct = async (req, res) => {
     if (!ConditionId || isNaN(parseInt(ConditionId))) {
       throw new Error("Tình trạng là bắt buộc");
     }
-    if (!PriceUnitId || isNaN(parseInt(PriceUnitId))) {
-      throw new Error("Đơn vị giá là bắt buộc  ");
-    }
     if (!Description || Description.trim().length === 0) {
       throw new Error("Mô tả là bắt buộc");
     }
+    if (!PriceUnitId || isNaN(parseInt(PriceUnitId))) {
+      throw new Error("Đơn vị giá là bắt buộc");
+    }
+
+    const parsedPriceUnitId = parseInt(PriceUnitId);
+    const durationRule = DURATION_RULES[parsedPriceUnitId];
+    if (!durationRule) {
+      throw new Error("Đơn vị giá không hợp lệ");
+    }
+
+    const parsedMinDuration = parseInt(MinRentalDuration);
+    const parsedMaxDuration = parseInt(MaxRentalDuration);
+
     if (
-      !MinRentalDuration ||
-      isNaN(parseInt(MinRentalDuration)) ||
-      parseInt(MinRentalDuration) < 1 ||
-      parseInt(MinRentalDuration) > MAX_DURATION
+      isNaN(parsedMinDuration) ||
+      parsedMinDuration < durationRule.min ||
+      parsedMinDuration > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối thiểu là bắt buộc và phải từ 1 đến ${MAX_DURATION} ngày`
+        `Thời gian thuê tối thiểu là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
       );
     }
+
     if (
-      !MaxRentalDuration ||
-      isNaN(parseInt(MaxRentalDuration)) ||
-      parseInt(MaxRentalDuration) < 1 ||
-      parseInt(MaxRentalDuration) > MAX_DURATION
+      isNaN(parsedMaxDuration) ||
+      parsedMaxDuration < durationRule.min ||
+      parsedMaxDuration > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối đa là bắt buộc và phải từ 1 đến ${MAX_DURATION} ngày`
+        `Thời gian thuê tối đa là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
+      );
+    }
+
+    if (parsedMinDuration > parsedMaxDuration) {
+      throw new Error(
+        "Thời gian thuê tối thiểu không thể lớn hơn thời gian thuê tối đa"
       );
     }
 
@@ -178,9 +217,6 @@ const addProduct = async (req, res) => {
     const parsedDepositAmount = parseFloat(DepositAmount);
     const parsedCategoryId = new mongoose.Types.ObjectId(CategoryId);
     const parsedConditionId = parseInt(ConditionId);
-    const parsedPriceUnitId = parseInt(PriceUnitId);
-    const parsedMinDuration = parseInt(MinRentalDuration);
-    const parsedMaxDuration = parseInt(MaxRentalDuration);
 
     if (parsedMinDuration > parsedMaxDuration) {
       throw new Error(
@@ -433,6 +469,14 @@ const updateProduct = async (req, res) => {
       );
     }
 
+    // Kiểm tra sản phẩm có đang được thuê (có order active) không
+    const hasActive = await hasActiveOrders(id, session);
+    if (hasActive) {
+      throw new Error(
+        "Không thể cập nhật sản phẩm khi có đơn hàng đang thuê. Chỉ có thể cập nhật sau khi tất cả đơn hàng hoàn tất hoặc bị hủy."
+      );
+    }
+
     // Xóa ItemReject nếu trước đó rejected
     if (existingItem.StatusId === 3) {
       await ItemReject.deleteOne({ ItemId: id });
@@ -543,28 +587,49 @@ const updateProduct = async (req, res) => {
     if (!Description || Description.trim().length === 0) {
       throw new Error("Mô tả là bắt buộc");
     }
-    const finalMinDuration = MinRentalDuration
-      ? parseInt(MinRentalDuration)
-      : existingItem.MinRentalDuration;
+
+    const parsedPriceUnitId = parseInt(PriceUnitId);
+    const durationRule = DURATION_RULES[parsedPriceUnitId];
+    if (!durationRule) {
+      throw new Error("Đơn vị giá không hợp lệ");
+    }
+
+    // Lấy giá trị Min/Max: nếu người dùng gửi thì dùng mới, không thì giữ cũ
+    const minValue =
+      MinRentalDuration !== undefined
+        ? parseInt(MinRentalDuration)
+        : existingItem.MinRentalDuration;
+
+    const maxValue =
+      MaxRentalDuration !== undefined
+        ? parseInt(MaxRentalDuration)
+        : existingItem.MaxRentalDuration;
+
     if (
-      !finalMinDuration ||
-      finalMinDuration < 1 ||
-      finalMinDuration > MAX_DURATION
+      !minValue ||
+      isNaN(minValue) ||
+      minValue < durationRule.min ||
+      minValue > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối thiểu là bắt buộc và phải từ 1 đến ${MAX_DURATION} ngày`
+        `Thời gian thuê tối thiểu là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
       );
     }
-    const finalMaxDuration = MaxRentalDuration
-      ? parseInt(MaxRentalDuration)
-      : existingItem.MaxRentalDuration;
+
     if (
-      !finalMaxDuration ||
-      finalMaxDuration < 1 ||
-      finalMaxDuration > MAX_DURATION
+      !maxValue ||
+      isNaN(maxValue) ||
+      maxValue < durationRule.min ||
+      maxValue > durationRule.max
     ) {
       throw new Error(
-        `Thời gian thuê tối đa là bắt buộc và phải từ 1 đến ${MAX_DURATION} ngày`
+        `Thời gian thuê tối đa là bắt buộc và phải từ ${durationRule.min} đến ${durationRule.max} ${durationRule.unit}`
+      );
+    }
+
+    if (minValue > maxValue) {
+      throw new Error(
+        "Thời gian thuê tối thiểu không thể lớn hơn thời gian thuê tối đa"
       );
     }
 
@@ -573,9 +638,8 @@ const updateProduct = async (req, res) => {
     const parsedDepositAmount = parseFloat(DepositAmount);
     const parsedCategoryId = new mongoose.Types.ObjectId(CategoryId);
     const parsedConditionId = parseInt(ConditionId);
-    const parsedPriceUnitId = parseInt(PriceUnitId);
-    const parsedMinDuration = finalMinDuration;
-    const parsedMaxDuration = finalMaxDuration;
+    const parsedMinDuration = minValue;
+    const parsedMaxDuration = maxValue;
 
     if (parsedMinDuration > parsedMaxDuration) {
       throw new Error(
@@ -846,7 +910,11 @@ const updateProduct = async (req, res) => {
         console.error("Abort transaction error:", abortError);
       }
     }
-    console.error("Lỗi cập nhật sản phẩm:", error);
+    const activeOrderErrorMsg =
+      "Không thể cập nhật sản phẩm khi có đơn hàng đang thuê. Chỉ có thể cập nhật sau khi tất cả đơn hàng hoàn tất hoặc bị hủy.";
+    if (error.message !== activeOrderErrorMsg) {
+      console.error("Lỗi cập nhật sản phẩm:", error);
+    }
     return res.status(500).json({
       success: false,
       message: error.message || "Lỗi server khi cập nhật sản phẩm",
@@ -978,6 +1046,14 @@ const deleteProduct = async (req, res) => {
       throw new Error("Sản phẩm không tồn tại hoặc bạn không có quyền xóa");
     }
 
+    // Kiểm tra sản phẩm có đang được thuê (có order active) không
+    const hasActive = await hasActiveOrders(id, session);
+    if (hasActive) {
+      throw new Error(
+        "Không thể xóa sản phẩm khi có đơn hàng đang thuê. Chỉ có thể xóa sau khi tất cả đơn hàng hoàn tất hoặc bị hủy."
+      );
+    }
+
     await Item.findByIdAndUpdate(
       id,
       { IsDeleted: true, UpdatedAt: new Date() },
@@ -1041,7 +1117,11 @@ const deleteProduct = async (req, res) => {
         console.error("Abort transaction error:", abortError);
       }
     }
-    console.error("Lỗi xóa sản phẩm:", error);
+    const activeOrderErrorMsg =
+      "Không thể xóa sản phẩm khi có đơn hàng đang thuê. Chỉ có thể xóa sau khi tất cả đơn hàng hoàn tất hoặc bị hủy.";
+    if (error.message !== activeOrderErrorMsg) {
+      console.error("Lỗi xóa sản phẩm:", error);
+    }
     return res.status(500).json({
       success: false,
       message: error.message || "Lỗi server khi xóa sản phẩm",

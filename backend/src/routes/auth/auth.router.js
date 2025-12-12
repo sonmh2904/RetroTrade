@@ -23,17 +23,19 @@ router.get('/facebook/callback', userAuthController.handleFacebookCallback);
 // Complaint route (public - for banned users)
 router.post('/complaint', complaintController.submitComplaint);
 
-// Phone verification via Firebase ID token (client performs Firebase Phone Auth)
-router.post('/phone/confirm-firebase', authenticateToken, verifyController.confirmPhoneWithFirebaseIdToken);
-// Firebase Auth REST: send and verify OTP from backend (still needs recaptchaToken from client)
-router.post('/phone/send-otp-firebase', authenticateToken, verifyController.sendOtpViaFirebase);
-router.post('/phone/verify-otp-firebase', authenticateToken, verifyController.verifyOtpViaFirebase);
+// Phone verification via Twilio
+router.post('/phone/send-otp', authenticateToken, verifyController.sendOtpViaTwilio);
+router.post('/phone/verify-otp', authenticateToken, verifyController.verifyOtpViaTwilio);
 
 // ID card OCR preview (1 image: idCardFront) - only extracts info, doesn't create request
 router.post('/verify-face/preview-ocr', authenticateToken, upload.single('image'), verifyController.previewIdCardOcr);
 
-// ID card verification using OCR with file upload (2 images: idCardFront, idCardBack)
-router.post('/verify-face', authenticateToken, upload.array('images', 2), verifyController.verifyFaceImages);
+// ID card verification using OCR with file upload (3 images: idCardFront, idCardBack, userPhoto)
+// Manual verification: sends request to moderator
+router.post('/verify-face', authenticateToken, upload.array('images', 3), verifyController.verifyFaceImages);
+
+// Auto verification: compares faces and auto-approves if similarity > 50%
+router.post('/verify-face/auto', authenticateToken, upload.array('images', 3), verifyController.verifyFaceImagesAuto);
 
 // Verification request routes
 const verificationRequestController = require("../../controller/auth/verificationRequest.controller");

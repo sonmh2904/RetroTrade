@@ -29,7 +29,6 @@ const payment = async (req, res) => {
         if (user.role === 'admin') {
             return res.status(403).json({ error: 'Admin không được phép thanh toán đơn hàng' });
         }
-
         // 2. Tìm order
         const order = await Order.findOne({ _id: orderObjectId, isDeleted: { $ne: true } });
         if (!order) return res.status(404).json({ error: 'Đơn hàng không tồn tại hoặc đã xóa' });

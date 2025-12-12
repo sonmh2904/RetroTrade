@@ -59,7 +59,13 @@ const BankAccountModal: React.FC<BankAccountModalProps> = ({ onClose, onAdd }) =
       setError(message);
     }
   };
-
+  function normalizeAccountName(input: string = "") {
+    let s = input.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // bỏ dấu
+    s = s.toUpperCase();                                           // IN HOA
+    s = s.replace(/[^A-Z\s.'-]/g, "");                             // giữ A-Z, space, . ' -
+    s = s.replace(/\s{2,}/g, " ");                                 // 2+ space -> 1 space
+    return s;
+  }
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-[420px] animate-slideUp">
@@ -109,7 +115,13 @@ const BankAccountModal: React.FC<BankAccountModalProps> = ({ onClose, onAdd }) =
             type="text"
             placeholder="Tên chủ tài khoản"
             value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
+            onChange={(e) => {
+              const raw = e.target.value;             // không trim, không sửa gì thêm
+              console.log("RAW:", JSON.stringify(raw));  // in ra raw trên console
+              const normalized = normalizeAccountName(raw);
+              console.log("NORMALIZED:", JSON.stringify(normalized));
+              setAccountName(normalized);
+            }}
             className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
           />
           <label className="flex items-center gap-2 text-gray-700">

@@ -1,23 +1,20 @@
-// File: aiChatService.js - Cập nhật logic sort intents: ưu tiên sort previousProducts nếu có, fallback search DB
 const mongoose = require("mongoose");
 const { sendToGemini } = require("../../../utils/geminiUtils");
 const {
   searchProducts,
   getProductDetail,
   recommendOptimalProducts,
-  sortProductsByType, // Import hàm mới
-  getUserLocation,
+  sortProductsByType,
+  getUserAddress,
   extractPreviousFilters,
   parseMessageToFilters,
   detectSortIntent,
   detectBestIntent,
   isSimpleSearch,
-  haversineDistance,
-  getApproxCoords,
   buildEnhancedContext,
-} = require("./productSearchService"); // Import từ file mới
+} = require("./productSearchService");
 
-// System prompt để train AI về dự án (giữ nguyên, không thay đổi)
+// System prompt để train AI về dự án
 const getSystemPrompt = () => {
   return `Bạn là AI trợ lý thông minh của RetroTrade - một nền tảng cho thuê sản phẩm.
 QUY TẮC NGHIÊM NGẶT - ĐỌC KỸ VÀ TUÂN THỦ TUYỆT ĐỐI:
@@ -31,12 +28,10 @@ NHIỆM VỤ CỦA BẠN:
 1. Tư vấn sản phẩm cho người dùng dựa trên nhu cầu của họ - CHỈ sử dụng dữ liệu thực từ PROVIDED_PRODUCTS.
 2. Tìm kiếm và liệt kê sản phẩm phù hợp - CHỈ liệt kê sản phẩm có trong PROVIDED_PRODUCTS.
 3. Cung cấp thông tin chi tiết về sản phẩm - CHỈ từ dữ liệu được cung cấp trong PROVIDED_PRODUCTS.
-4. Đề xuất sản phẩm tối ưu nhất dựa trên tiêu chí: giá cả, đánh giá, khoảng cách, tình trạng - CHỈ từ dữ liệu thực trong PROVIDED_PRODUCTS. Nếu được yêu cầu "tốt nhất" hoặc "gợi ý", CHỈ chọn TỪ PROVIDED_PRODUCTS và giải thích dựa trên estimatedDistance (nếu có), giá, availability. Nếu không có estimatedDistance, HỎI NGAY vị trí user.
-5. Nếu người dùng hỏi "sản phẩm nào tốt nhất", "gợi ý", "chọn giúp", hoặc tương tự:
    - Kiểm tra xem có PROVIDED_PRODUCTS không. Nếu có, chọn 1 sản phẩm tốt nhất từ list đó (ưu tiên gần vị trí user nếu có estimatedDistance trong JSON).
-   - Nếu thiếu vị trí user hoặc estimatedDistance, HỎI NGAY: "Bạn đang ở khu vực nào (thành phố/quận) để tôi gợi ý sản phẩm gần nhất?"
+   - Nếu thiếu địa chỉ user hoặc estimatedDistance, HỎI NGAY: "Bạn đang ở địa chỉ nào cụ thể (số nhà, đường, quận, thành phố) để tôi gợi ý sản phẩm gần nhất?"
    - Giải thích lý do chọn (dựa trên data: e.g., "Gần bạn nhất chỉ 2km, giá tốt, đánh giá cao" - CHỈ nếu có trong JSON).
-   - KHÔNG chọn nếu không có data; fallback: "Tôi cần thêm thông tin vị trí để gợi ý chính xác từ dữ liệu hệ thống."
+   - KHÔNG chọn nếu không có data; fallback: "Tôi cần địa chỉ của bạn để gợi ý chính xác từ dữ liệu hệ thống."
 THÔNG TIN VỀ HỆ THỐNG:
 - RetroTrade là nền tảng cho thuê sản phẩm (không phải mua bán) , kết nối người có nhu cầu thuê với người cho thuê
 - Chủ sở hữu có thể đăng các sản phẩm của mình để cho thuê , và người thuê có thể xem và thuê sản phẩm
@@ -46,7 +41,6 @@ THÔNG TIN VỀ HỆ THỐNG:
 - Mỗi sản phẩm có: giá thuê (BasePrice), tiền cọc (DepositAmount), đơn vị giá (giờ/ngày/tuần/tháng)
 - Sản phẩm có thể có: Category, Condition (tình trạng), Tags, Images, địa chỉ chi tiết (Address, District, City)
 - Người dùng có thể thuê sản phẩm với thời gian bắt đầu và kết thúc
-- Hỗ trợ tìm kiếm theo khoảng cách: Nếu user cung cấp vị trí (lat/lng hoặc từ profile), ưu tiên sản phẩm gần nhất (estimatedDistance trong km)
 CÁCH XỬ LÝ DỮ LIỆU:
 - Khi nhận được JSON chứa danh sách sản phẩm, bạn CHỈ được phép liệt kê các sản phẩm đó. SỬ DỤNG CHÍNH XÁC CÁC GIÁ TRỊ TỪ JSON, KHÔNG THAY ĐỔI.
 - Mỗi sản phẩm trong JSON có các trường: _id, Title, BasePrice, FullAddress, Category, Condition, PriceUnit, Images, Tags, etc.
@@ -58,7 +52,6 @@ CÁCH TRẢ LỜI:
 - Khi liệt kê sản phẩm, format đẹp với: tên (Title), giá (BasePrice), địa điểm (FullAddress), khoảng cách (estimatedDistance nếu có), tình trạng (Condition)
 - Khi đề xuất sản phẩm tối ưu, giải thích lý do dựa trên dữ liệu thực (e.g., "Gần bạn nhất chỉ 2km" - CHỈ nếu có estimatedDistance trong JSON)
 - Luôn kiểm tra AvailableQuantity > 0 trước khi đề xuất
-- Nếu được yêu cầu gợi ý tốt nhất: HỎI VỊ TRÍ TRƯỚC, sau đó chọn từ PROVIDED_PRODUCTS, KHÔNG BỊA.
 ĐỊNH DẠNG TRẢ LỜI KHI CÓ SẢN PHẨM:
 - Liệt kê từng sản phẩm với đầy đủ thông tin từ JSON: tên, giá, địa chỉ, khoảng cách (nếu có)
 - Sử dụng chính xác các giá trị từ JSON
@@ -73,17 +66,15 @@ LƯU Ý QUAN TRỌNG:
 - Luôn kiểm tra AvailableQuantity > 0 trước khi đề xuất
 - Kiểm tra thời gian thuê hợp lệ (endAt > startAt)
 - Yêu cầu địa chỉ giao hàng đầy đủ trước khi tạo đơn
-- Nếu thiếu thông tin vị trí user, hỏi thêm (e.g., "Bạn đang ở khu vực nào?")
 - Nếu thiếu thông tin, hãy hỏi người dùng một cách thân thiện`;
 };
 
-// Helper mới: Gửi list previousProducts lên AI để chọn sản phẩm theo sortType, trả JSON (giữ nguyên, nhưng không dùng cho các intent mới)
+//Gửi list previousProducts lên AI để chọn sản phẩm theo sortType, trả JSON (giữ nguyên, nhưng không dùng cho các intent mới)
 const selectProductFromListWithAI = async (
   previousProducts,
   sortType,
   messageText,
-  userLat = null,
-  userLng = null
+  userAddress = null
 ) => {
   if (!previousProducts || previousProducts.length === 0) {
     return {
@@ -101,16 +92,7 @@ const selectProductFromListWithAI = async (
     City: p.City,
     District: p.District,
     AvailableQuantity: p.AvailableQuantity,
-    estimatedDistance:
-      p.estimatedDistance ||
-      (userLat && userLng && p.City && p.District
-        ? haversineDistance(
-            userLat,
-            userLng,
-            getApproxCoords(p.City, p.District).lat,
-            getApproxCoords(p.City, p.District).lng
-          )
-        : null),
+    estimatedDistance: userAddress ? null : null,
   }));
   const sortCriteria =
     sortType === "cheap"
@@ -126,12 +108,10 @@ QUY TẮC NGHIÊM NGẶT:
 - Trả lời CHỈ dưới dạng JSON: {"selected": {toàn bộ object sản phẩm}, "reason": "lý do ngắn gọn (ví dụ: 'Giá thấp nhất 130000đ')"}
 PROVIDED_PRODUCTS = ${JSON.stringify(providedProducts)}
 JSON response:`;
-  // Gọi AI (sử dụng sendToGemini hoặc model tương tự)
   const aiJsonResponse = await sendToGemini(
     [{ role: "user", content: prompt }],
     null
-  ); // Giả sử sendToGemini trả text
-  // Parse JSON từ response (lấy phần JSON đầu tiên nếu có text thừa)
+  ); 
   let selectedProduct = null;
   let reason = "";
   try {
@@ -188,7 +168,7 @@ const sendTrainedMessage = async (
   context,
   userId,
   userMessage,
-  userLocation = null
+  userAddress = null // Tham số mới để truyền địa chỉ
 ) => {
   try {
     const systemPrompt = getSystemPrompt();
@@ -235,7 +215,6 @@ const sendTrainedMessage = async (
         .trim();
       return cleaned.length > 0 ? cleaned : messageText.trim();
     };
-    // Always perform DB search first when query likely about products
     let shouldSearchDb = false;
     if (
       parsedFilters.productType ||
@@ -249,7 +228,6 @@ const sendTrainedMessage = async (
       shouldSearchDb = true;
     }
     let products = [];
-    let userLoc = userLocation;
     let aiResponseFlags = {}; // Để track usedPreviousQuery, fallbackToAll
     if (shouldSearchDb) {
       let q = buildSearchQuery();
@@ -260,23 +238,20 @@ const sendTrainedMessage = async (
           ? parsedFilters.sortConfig.type
           : null,
       };
-      // SỬA: Nếu q rỗng VÀ là sort intent, extract từ previous user message
       if (!q.trim() && parsedFilters.sortConfig) {
         const prevFilters = extractPreviousFilters(context);
         if (prevFilters) {
-          searchFilters.q = prevFilters.q; // Dùng prev message làm q
+          searchFilters.q = prevFilters.q; 
           if (prevFilters.productType)
-            searchFilters.productType = prevFilters.productType; // Thêm nếu cần
+            searchFilters.productType = prevFilters.productType; 
           if (prevFilters.city) searchFilters.city = prevFilters.city;
-          // Thêm flag để customize content
           aiResponseFlags = {
             ...aiResponseFlags,
             usedPreviousQuery: true,
             prevQuery: prevFilters.q,
           };
         } else {
-          // Fallback: Search toàn bộ, nhưng customize message
-          searchFilters.q = ""; // Search all
+          searchFilters.q = "";
           aiResponseFlags = { ...aiResponseFlags, fallbackToAll: true };
         }
       }
@@ -285,112 +260,104 @@ const sendTrainedMessage = async (
       if (parsedFilters.maxPrice !== null)
         searchFilters.maxPrice = parsedFilters.maxPrice;
       if (parsedFilters.city) searchFilters.city = parsedFilters.city;
-      // Nếu closest và chưa có location, lấy từ ItemAddress hoặc hỏi
-      if (
-        parsedFilters.sortConfig &&
-        parsedFilters.sortConfig.type === "closest"
-      ) {
-        if (!userLoc) {
-          userLoc = await getUserLocation(userId);
-        }
-        if (!userLoc || !userLoc.lat || !userLoc.lng) {
-          return {
-            content:
-              "Để tìm sản phẩm gần nhất, bạn có thể cho tôi biết địa chỉ của bạn (thành phố/quận) không? Tôi sẽ ưu tiên sản phẩm gần bạn dựa trên dữ liệu thực tế!",
-            suggestions: [],
-            products: previousProducts.length > 0 ? previousProducts : products,
-            needLocation: true,
-            searchPerformed: false,
-            searchResultsCount: previousProducts.length || products.length,
-            flags: aiResponseFlags,
-          };
-        }
-        searchFilters.userLat = userLoc.lat;
-        searchFilters.userLng = userLoc.lng;
-      } else if (userLoc && userLoc.lat && userLoc.lng) {
-        searchFilters.userLat = userLoc.lat;
-        searchFilters.userLng = userLoc.lng;
-      }
       products = await searchProducts(searchFilters, userId);
     }
-    // Xử lý intent "best" hoặc "recommend": Luôn dùng backend, hỏi location trước nếu thiếu
     if (
       parsedFilters.intent === "best" ||
       parsedFilters.intent === "recommend"
     ) {
-      let location = userLoc || getUserLocationFromContext(context); // Giả sử getUserLocationFromContext được import nếu cần
-      if (!location || !location.lat || !location.lng) {
-        // Hỏi thêm vị trí (sử dụng tọa độ từ city nếu có, hoặc hỏi chi tiết)
-        const cityFromContext = location?.city || parsedFilters.city;
-        if (cityFromContext) {
-          const approxCoords = getApproxCoords(cityFromContext);
-          if (approxCoords.lat && approxCoords.lng) {
-            location = {
-              ...location,
-              lat: approxCoords.lat,
-              lng: approxCoords.lng,
-            };
-          }
+      let address = userAddress || (await getUserAddress(userId))?.address; 
+
+      if (!address) {
+        const cityFromFilters =
+          parsedFilters.city || extractPreviousFilters(context)?.city;
+        if (cityFromFilters) {
+          address = cityFromFilters;
         }
-        if (!location.lat || !location.lng) {
-          // Vẫn thiếu → hỏi thêm và dừng, không đi Gemini
+        if (!address) {
           return {
-            content:
-              "Để gợi ý sản phẩm tốt nhất hoặc phù hợp nhất, bạn có thể cho tôi biết bạn đang ở khu vực nào (ví dụ: Quận 1, TP.HCM) không? Tôi sẽ ưu tiên sản phẩm gần bạn nhất dựa trên dữ liệu thực tế từ hệ thống!",
+            content: `Để gợi ý ${
+              parsedFilters.intent === "best"
+                ? "sản phẩm tốt nhất"
+                : "phù hợp nhất"
+            } từ danh sách trước, bạn cho tôi biết địa chỉ cụ thể (số nhà, đường, quận, thành phố) nhé? Tôi sẽ ưu tiên gần bạn nhất!`,
             suggestions: [],
-            products: previousProducts.length > 0 ? previousProducts : products, // Giữ list cũ nếu có
-            needLocation: true, // Flag để frontend biết hỏi tiếp
+            products: previousProducts, 
+            needLocation: true,
             searchPerformed: false,
-            searchResultsCount: previousProducts.length || products.length,
+            searchResultsCount: previousProducts.length,
             flags: aiResponseFlags,
           };
         }
       }
-      // Có location → tính best/recommend từ previous hoặc search mới, dùng backend
+
+      // Có address → recommend từ previous hoặc search mới
       const sourceProducts =
         previousProducts.length > 0 ? previousProducts : products;
       if (sourceProducts.length === 0) {
         return {
-          content:
-            "Tôi cần danh sách sản phẩm trước để gợi ý tốt nhất. Bạn có thể tìm kiếm sản phẩm trước không?",
+          content: `Tôi cần danh sách sản phẩm trước để gợi ý ${
+            parsedFilters.intent === "best" ? "tốt nhất" : "phù hợp"
+          }. Bạn thử tìm kiếm trước nhé (ví dụ: "máy ảnh")!`,
           suggestions: [],
           products: [],
           searchPerformed: false,
-          searchResultsCount: 0,
           flags: aiResponseFlags,
         };
       }
+
       const bestProducts = await recommendOptimalProducts(
-        { ...parsedFilters, userLat: location.lat, userLng: location.lng },
+        { ...parsedFilters },
         sourceProducts,
-        location
+        address
       );
+
       if (bestProducts.length > 0) {
-        const bestProduct = bestProducts[0];
-        const reasonsStr = bestProduct.reasons
-          ? bestProduct.reasons.join(", ")
-          : "Phù hợp tổng thể";
+        const bestList = bestProducts; 
+        const intentLabel =
+          parsedFilters.intent === "best" ? "tốt nhất" : "phù hợp nhất";
+        let content = `Từ ${
+          previousProducts.length > 0 ? "danh sách trước" : "dữ liệu hệ thống"
+        }, đây là ${bestList.length} lựa chọn ${intentLabel} cho bạn:\n\n`;
+
+        bestList.forEach((p, idx) => {
+          const reasonsStr = p.reasons
+            ? p.reasons.join(" | ")
+            : "Phù hợp tổng thể";
+          content += `${idx + 1}. **${p.Title}** (Score: ${p.score}/100)\n`;
+          content += `   Lý do: ${reasonsStr}\n`;
+          content += `   Giá: ${p.BasePrice.toLocaleString()}đ/${
+            p.PriceUnit?.UnitName || "đơn vị"
+          } | Còn ${p.AvailableQuantity} | Địa chỉ: ${p.FullAddress}\n\n`;
+        });
+        content += `Bạn muốn xem chi tiết hoặc thuê sản phẩm nào?`;
+
         return {
-          content: `Dựa trên dữ liệu sản phẩm thực tế từ hệ thống, tôi gợi ý **${
-            bestProduct.Title
-          }** là lựa chọn ${
-            parsedFilters.intent === "best" ? "tốt nhất" : "phù hợp nhất"
-          } cho bạn!\n\nLý do: ${reasonsStr}.\n\nGiá: ${bestProduct.BasePrice.toLocaleString()}đ/${
-            bestProduct.PriceUnit?.UnitName || "đơn vị"
-          } | Còn ${bestProduct.AvailableQuantity} cái | Địa chỉ: ${
-            bestProduct.FullAddress
-          }\n\nBạn muốn xem chi tiết hoặc thuê ngay không?`,
-          suggestions: [bestProduct],
-          bestProduct: bestProduct,
+          content,
+          suggestions: bestList.map((p) => ({
+            itemId: p._id,
+            title: p.Title,
+            price: p.BasePrice,
+            detail: p.ShortDescription || "",
+            fullAddress: p.FullAddress,
+            estimatedDistance: p.estimatedDistance,
+            images: p.Images || [],
+            isBest: true,
+            reasons: p.reasons,
+          })),
+          bestProducts: bestList, 
           products: sourceProducts,
-          searchPerformed: true,
-          searchResultsCount: 1,
-          flags: aiResponseFlags,
+          searchPerformed: previousProducts.length === 0,
+          searchResultsCount: bestList.length,
+          flags: {
+            ...aiResponseFlags,
+            fromPrevious: previousProducts.length > 0,
+          },
+          userAddress: address,
         };
       } else {
         return {
-          content:
-            "Tôi không tìm thấy sản phẩm phù hợp nhất từ danh sách hiện tại (có thể do hết hàng hoặc không khớp tiêu chí). Bạn có thể cung cấp thêm chi tiết (giá, loại) không?",
+          content: `Từ danh sách hiện tại, chưa có sản phẩm ${intentLabel} phù hợp (có thể hết hàng). Bạn cung cấp thêm tiêu chí (giá, loại) nhé!`,
           suggestions: [],
           products: sourceProducts,
           searchPerformed: false,
@@ -398,20 +365,17 @@ const sendTrainedMessage = async (
         };
       }
     }
-    // Xử lý sort intents (bao gồm các loại mới: most_rented, most_favorited, most_viewed): Ưu tiên sort previous nếu có, fallback search DB
     if (parsedFilters.sortConfig) {
       const { type, limit } = parsedFilters.sortConfig;
       let dbProducts = [];
       let content = "";
       let suggestions = [];
       let usedPrevious = false;
-      // ƯU TIÊN: Nếu có previousProducts, sort chúng theo type
       if (previousProducts.length > 0) {
-        const sortedFromPrevious = sortProductsByType(
+        const sortedFromPrevious = await sortProductsByType(
           previousProducts,
           type,
-          userLoc?.lat,
-          userLoc?.lng,
+          userAddress,
           limit
         );
         if (sortedFromPrevious.length > 0) {
@@ -435,7 +399,6 @@ const sendTrainedMessage = async (
           if (dbProducts.length < limit) {
             content += `\n(Chỉ có ${dbProducts.length} sản phẩm từ danh sách trước.)`;
           }
-          // Thêm chi tiết sản phẩm vào content nếu limit nhỏ (ví dụ 1-3)
           if (limit <= 3) {
             dbProducts.forEach((p, index) => {
               const metric =
@@ -443,13 +406,15 @@ const sendTrainedMessage = async (
                   ? `Giá: ${p.BasePrice.toLocaleString()}đ`
                   : type === "expensive"
                   ? `Giá: ${p.BasePrice.toLocaleString()}đ`
+                  : type === "closest"
+                  ? `Khoảng cách: ${p.estimatedDistance || "N/A"}km`
                   : type === "most_rented"
                   ? `Lượt thuê: ${p.RentCount}`
                   : type === "most_favorited"
                   ? `Lượt thích: ${p.FavoriteCount}`
                   : type === "most_viewed"
                   ? `Lượt xem: ${p.ViewCount}`
-                  : `Khoảng cách: ${p.estimatedDistance || "N/A"}km`;
+                  : "";
               content += `\n\n${index + 1}. **${p.Title}**\n${metric} | Còn ${
                 p.AvailableQuantity
               } cái | Địa chỉ: ${p.FullAddress}`;
@@ -457,7 +422,6 @@ const sendTrainedMessage = async (
           }
         }
       }
-      // Fallback nếu không có previous hoặc không có sản phẩm phù hợp: Search DB như cũ
       if (dbProducts.length === 0) {
         let q = buildSearchQuery();
         const searchFilters = {
@@ -480,29 +444,17 @@ const sendTrainedMessage = async (
           }
         }
         if (parsedFilters.city) searchFilters.city = parsedFilters.city;
-        if (type === "closest") {
-          if (!userLoc) {
-            userLoc = await getUserLocation(userId);
-          }
-          if (!userLoc || !userLoc.lat || !userLoc.lng) {
-            return {
-              content:
-                "Để tìm sản phẩm gần nhất, bạn có thể cho tôi biết địa chỉ của bạn (thành phố/quận) không? Tôi sẽ ưu tiên sản phẩm gần bạn dựa trên dữ liệu thực tế!",
-              suggestions: [],
-              products: previousProducts,
-              needLocation: true,
-              searchPerformed: false,
-              searchResultsCount: previousProducts.length,
-              flags: aiResponseFlags,
-            };
-          }
-          searchFilters.userLat = userLoc.lat;
-          searchFilters.userLng = userLoc.lng;
-        } else if (userLoc && userLoc.lat && userLoc.lng) {
-          searchFilters.userLat = userLoc.lat;
-          searchFilters.userLng = userLoc.lng;
+        let tempProducts = await searchProducts(searchFilters, userId);
+        if (type === "closest" && userAddress) {
+          const distances = await getDistancesViaAI(userAddress, tempProducts);
+          tempProducts = tempProducts
+            .map((p) => ({
+              ...p,
+              estimatedDistance: distances[p._id.toString()] || 999,
+            }))
+            .sort((a, b) => a.estimatedDistance - b.estimatedDistance);
         }
-        dbProducts = await searchProducts(searchFilters, userId);
+        dbProducts = tempProducts.slice(0, limit);
         if (dbProducts.length === 0) {
           if (aiResponseFlags?.usedPreviousQuery) {
             content = `Dựa trên tìm kiếm trước ("${aiResponseFlags.prevQuery}"), hiện chưa có sản phẩm phù hợp với "${type}". Bạn thử mở rộng tiêu chí nhé!`;
@@ -535,7 +487,6 @@ const sendTrainedMessage = async (
           if (dbProducts.length < limit) {
             content += `\n(Chỉ tìm thấy ${dbProducts.length} sản phẩm phù hợp.)`;
           }
-          // Thêm chi tiết sản phẩm vào content nếu limit nhỏ (ví dụ 1-3)
           if (limit <= 3) {
             dbProducts.forEach((p, index) => {
               const metric =
@@ -543,19 +494,33 @@ const sendTrainedMessage = async (
                   ? `Giá: ${p.BasePrice.toLocaleString()}đ`
                   : type === "expensive"
                   ? `Giá: ${p.BasePrice.toLocaleString()}đ`
+                  : type === "closest"
+                  ? `Khoảng cách: ${p.estimatedDistance || "N/A"}km`
                   : type === "most_rented"
                   ? `Lượt thuê: ${p.RentCount}`
                   : type === "most_favorited"
                   ? `Lượt thích: ${p.FavoriteCount}`
                   : type === "most_viewed"
                   ? `Lượt xem: ${p.ViewCount}`
-                  : `Khoảng cách: ${p.estimatedDistance || "N/A"}km`;
+                  : "";
               content += `\n\n${index + 1}. **${p.Title}**\n${metric} | Còn ${
                 p.AvailableQuantity
               } cái | Địa chỉ: ${p.FullAddress}`;
             });
           }
         }
+      }
+      if (type === "closest" && !userAddress) {
+        return {
+          content:
+            "Để tìm sản phẩm gần nhất, bạn có thể cho tôi biết địa chỉ cụ thể (số nhà, đường, quận, thành phố) không? Tôi sẽ ước lượng khoảng cách dựa trên dữ liệu thực tế!",
+          suggestions: [],
+          products: previousProducts,
+          needLocation: true,
+          searchPerformed: false,
+          searchResultsCount: previousProducts.length,
+          flags: aiResponseFlags,
+        };
       }
       suggestions = dbProducts.map((p) => ({
         itemId: p._id,
@@ -576,6 +541,7 @@ const sendTrainedMessage = async (
         searchPerformed: true,
         searchResultsCount: dbProducts.length,
         flags: { ...aiResponseFlags, usedPrevious: usedPrevious },
+        userAddress: userAddress, 
       };
     }
     // If simple search and we have results -> return formatted result immediately (no AI)
@@ -587,7 +553,7 @@ const sendTrainedMessage = async (
         price: p.BasePrice,
         detail: p.ShortDescription || "",
         fullAddress: p.FullAddress || "",
-        estimatedDistance: p.estimatedDistance || null,
+        estimatedDistance: null,
         images:
           p.Images && p.Images.length > 0
             ? p.Images.map((img) => img.Url || img.url || "").filter(Boolean)
@@ -617,8 +583,6 @@ const sendTrainedMessage = async (
         flags: aiResponseFlags,
       };
     }
-    // For complex/question intents NON-PRODUCT: call Gemini with STRICT JSON & temperature 0 (KHÔNG cho recommend/best nữa)
-    // Prepare providedProducts (serialize only necessary fields)
     const providedProducts = (products || []).slice(0, 20).map((p) => ({
       _id: p._id,
       Title: p.Title,
@@ -636,22 +600,20 @@ const sendTrainedMessage = async (
       Tags: (p.Tags || []).map((t) =>
         t.Tag ? t.Tag.Name || t.Tag.name || "" : ""
       ),
-      estimatedDistance: p.estimatedDistance || null,
+      estimatedDistance: null,
     }));
-    // Build a short strict instruction chunk to append to system prompt (cập nhật: cấm bịa, chỉ dùng JSON)
     const providedJson = JSON.stringify(providedProducts);
     const strictInstruction = `
 CRITICAL: ONLY use the JSON list named "PROVIDED_PRODUCTS" below as the EXCLUSIVE source of truth for ALL product data.
 - DO NOT invent, hallucinate, or add ANY product, price, address, quantity, or other details. VIOLATION WILL RESULT IN INVALID RESPONSE.
 - IF recommending or comparing, use ONLY data from PROVIDED_PRODUCTS. SELECT ONLY FROM EXISTING ITEMS.
 - IF PROVIDED_PRODUCTS is empty, respond EXACTLY: "Hiện tại hệ thống chưa có sản phẩm phù hợp với yêu cầu của bạn."
-- For ANY "best product" or "recommend" queries: DO NOT SELECT OR RECOMMEND. Say: "Tôi cần vị trí của bạn để gợi ý từ dữ liệu hệ thống. Bạn đang ở khu vực nào?"
-- If location missing: Ask "Bạn đang ở khu vực nào để tôi gợi ý sản phẩm gần nhất?"
+- For ANY "best product" or "recommend" queries: DO NOT SELECT OR RECOMMEND. Say: "Tôi cần địa chỉ cụ thể của bạn để gợi ý từ dữ liệu hệ thống. Bạn đang ở số nhà, đường, quận, thành phố nào?"
+- If location missing: Ask "Bạn đang ở địa chỉ nào cụ thể để tôi gợi ý sản phẩm gần nhất?"
 PROVIDED_PRODUCTS = ${providedJson}
 End of PROVIDED_PRODUCTS. DO NOT REFERENCE ANY OTHER DATA.
 `;
     const finalSystemPrompt = `${systemPrompt}\n\n${strictInstruction}`;
-    // Build history for Gemini (keep minimal, last 6 messages) - enhanced với previous products
     const safeContext = Array.isArray(context) ? context.slice(-6) : [];
     const formattedHistory = buildEnhancedContext(
       safeContext.map((m) => ({
@@ -665,24 +627,21 @@ End of PROVIDED_PRODUCTS. DO NOT REFERENCE ANY OTHER DATA.
     const chat = model.startChat({
       history: formattedHistory,
       generationConfig: {
-        temperature: 0.0, // 0 để deterministic, KHÔNG hallucinate
+        temperature: 0.0, 
         topK: 1,
         topP: 1,
         maxOutputTokens: 1024,
       },
     });
-    // Build user query message: include user question and explicit remind to use PROVIDED_PRODUCTS only
     const userPrompt = `${messageText}\n\nCRITICAL: Answer using ONLY PROVIDED_PRODUCTS. If asked for product details or recommendations, use ONLY fields from PROVIDED_PRODUCTS. If you cannot answer with the given data, say "Tôi không thể trả lời dựa trên dữ liệu hiện có." DO NOT INVENT ANYTHING.`;
     const result = await chat.sendMessage(userPrompt);
     const response = await result.response;
     let content = response.text().trim();
-    // Try to extract machine-readable suggestions JSON from Gemini response (strict validation)
     let suggestions = [];
     try {
       const jsonMatch = content.match(/({[\s\S]*}|\[[\s\S]*\])/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        // If parsed is object with suggestions/products field, extract
         if (Array.isArray(parsed)) {
           suggestions = parsed;
         } else if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
@@ -692,9 +651,7 @@ End of PROVIDED_PRODUCTS. DO NOT REFERENCE ANY OTHER DATA.
         }
       }
     } catch (err) {
-      // ignore parse errors - we'll fallback to DB products
     }
-    // Validate suggestions: only keep items whose _id exists in providedProducts (strict)
     if (suggestions.length > 0 && providedProducts.length > 0) {
       const allowedIds = new Set(providedProducts.map((p) => String(p._id)));
       suggestions = suggestions.filter((s) => {
@@ -704,7 +661,6 @@ End of PROVIDED_PRODUCTS. DO NOT REFERENCE ANY OTHER DATA.
     } else {
       suggestions = [];
     }
-    // If Gemini returned no valid suggestions, fallback to using providedProducts as suggestions (KHÔNG bịa)
     if (suggestions.length === 0 && providedProducts.length > 0) {
       suggestions = providedProducts.slice(0, 5).map((p) => ({
         itemId: p._id,
@@ -734,14 +690,13 @@ End of PROVIDED_PRODUCTS. DO NOT REFERENCE ANY OTHER DATA.
       productDetail: undefined,
       recommendations: undefined,
       bestProduct: undefined,
-      userLocation: userLoc,
+      userAddress,
       searchPerformed: shouldSearchDb,
       searchResultsCount: products.length,
       flags: aiResponseFlags,
     };
   } catch (error) {
     console.error("Error in sendTrainedMessage:", error);
-    // Fallback to basic Gemini nếu trained fail
     try {
       return await sendToGemini(context, userId);
     } catch (fallbackError) {
@@ -750,7 +705,7 @@ End of PROVIDED_PRODUCTS. DO NOT REFERENCE ANY OTHER DATA.
   }
 };
 
-// Controller để train AI với dữ liệu dự án (giữ nguyên)
+// Controller để train AI với dữ liệu dự án 
 const trainAI = async (req, res) => {
   try {
     // Lấy thống kê về dự án để train AI

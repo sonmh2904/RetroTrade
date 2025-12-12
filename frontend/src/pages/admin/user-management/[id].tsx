@@ -145,7 +145,6 @@ export default function UserProfilePage() {
   }
 
   return (
-    <AdminLayout>
       <div>
         {/* Header */}
         <div className="mb-6">
@@ -330,6 +329,5 @@ export default function UserProfilePage() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   )
 }

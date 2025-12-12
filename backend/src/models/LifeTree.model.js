@@ -3,7 +3,7 @@ const { Schema, Types } = mongoose;
 
 const lifeTreeSchema = new Schema(
   {
-    userId: { type: Types.ObjectId, ref: 'User', required: true, unique: true, index: true },
+    userId: { type: Types.ObjectId, ref: 'User', required: true, unique: true },
     stage: { type: Number, min: 0, max: 5, default: 0 },
     growth: { type: Number, min: 0, max: 100, default: 0 },
     lastCareAt: { type: Date },
@@ -17,7 +17,7 @@ const lifeTreeSchema = new Schema(
   { timestamps: true }
 );
 
-lifeTreeSchema.index({ userId: 1 });
+// Note: userId index is automatically created by unique: true on the userId field
 
 module.exports = mongoose.model('LifeTree', lifeTreeSchema);
 

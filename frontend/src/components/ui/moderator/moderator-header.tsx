@@ -54,7 +54,7 @@ export function ModeratorHeader() {
     setUserInfo(null);
     dispatch(logout());
     toast.success("Đăng xuất thành công");
-    router.push('/');
+    router.push('/auth/login');
   };
 
   const handleGoToProfile = () => {
@@ -86,7 +86,7 @@ export function ModeratorHeader() {
         </div>
 
         {/* Center - Search */}
-        <div className="flex-1 max-w-md mx-4">
+        {/* <div className="flex-1 max-w-md mx-4">
           <form onSubmit={handleSearch} className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
@@ -96,7 +96,7 @@ export function ModeratorHeader() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </form>
-        </div>
+        </div> */}
 
         {/* Right side - Actions and user menu */}
         <div className="flex items-center gap-3">

@@ -13,10 +13,17 @@ const {
   notifyOrderCompleted,
   notifyOrderCancelled,
   notifyOrderDisputed,
+  notifyOrderDelivery,
+  notifyOrderReceived
 } = require("../../middleware/orderNotification");
 const Discount = require("../../models/Discount/Discount.model");
 const DiscountAssignment = require("../../models/Discount/DiscountAssignment.model");
 const DiscountRedemption = require("../../models/Discount/DiscountRedemption.model");
+const { logOrderAudit } = require("../../middleware/auditLog.service");
+const { createNotification } = require("../../middleware/createNotification");
+const { refundExtensionRequest } = require("../wallet/refundCancelledOrder.Controller");
+const ExtensionRequest = require("../../models/Order/ExtensionRequest.model");
+
 
 function isTimeRangeOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(bStart) < new Date(aEnd);
@@ -45,7 +52,7 @@ module.exports = {
         paymentMethod = "Wallet",
         shippingAddress,
         note = "",
-        discountCode, // legacy
+        discountCode,
         publicDiscountCode,
         privateDiscountCode,
       } = req.body;
@@ -53,7 +60,6 @@ module.exports = {
       const finalStartAt = startAt || rentalStartDate;
       const finalEndAt = endAt || rentalEndDate;
 
-      // === VALIDATE REQUIRED FIELDS ===
       if (!itemId || !finalStartAt || !finalEndAt || !shippingAddress) {
         await session.abortTransaction();
         return res.status(400).json({ message: "Thiếu các trường bắt buộc" });
@@ -70,7 +76,6 @@ module.exports = {
         return res.status(400).json({ message: "Số lượng không đủ" });
       }
 
-      // === CALCULATE TOTALS ===
       const images = await ItemImages.find({
         ItemId: item._id,
         IsPrimary: true,
@@ -80,7 +85,8 @@ module.exports = {
         .select("Url")
         .lean()
         .session(session);
-
+        
+      // === CALCULATE TOTALS ===
       const calc = await calculateTotals(
         item,
         quantity,
@@ -100,9 +106,20 @@ module.exports = {
         duration,
         unitName,
       } = calc;
+      if (
+        duration < item.MinRentalDuration ||
+        duration > item.MaxRentalDuration
+      ) {
+        await session.abortTransaction();
+        session.endSession();
+
+        return res.status(400).json({
+          message: `Thời gian thuê phải từ ${item.MinRentalDuration} đến ${item.MaxRentalDuration} ${unitName}`,
+        });
+      }
 
       // === DISCOUNT LOGIC (CHỈ ÁP DỤNG TRÊN TIỀN THUÊ) ===
-      const baseForDiscount = rentalAmount; // ← Đây là điểm then chốt
+      const baseForDiscount = rentalAmount; //
       let totalDiscountAmount = 0;
       let discountInfo = null;
 
@@ -280,6 +297,12 @@ module.exports = {
       );
 
       await notifyOrderCreated(newOrder);
+      await logOrderAudit({
+        orderId: newOrder._id,
+        operation: "INSERT",
+        userId: renterId,
+        changeSummary: `Order created: (status: ${newOrder.orderStatus}) | total=${totalAmount}, discount=${totalDiscountAmount}, final=${finalOrderAmount}`,
+      });
 
       return res.status(201).json({
         message: "Tạo đơn hàng thành công",
@@ -385,6 +408,13 @@ module.exports = {
       }
 
       await notifyOrderConfirmed(order); // Gửi notification khi xác nhận đơn
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: pending → confirmed`,
+      });
+
       return res.json({
         message: "Order confirmed and inventory reserved",
         orderGuid: order.orderGuid,
@@ -396,6 +426,103 @@ module.exports = {
       return res
         .status(500)
         .json({ message: "Failed to confirm order", error: err.message });
+    }
+  },
+
+  // 2. Owner bấm "Bắt đầu giao hàng" → delivery
+  startDelivery: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const order = await Order.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          ownerId: req.user._id,
+          orderStatus: "confirmed",
+          isDeleted: false,
+        },
+        {
+          orderStatus: "delivery",
+          "lifecycle.deliveryAt": new Date(),
+        },
+        { new: true, session }
+      );
+
+      if (!order) throw new Error("Only confirmed orders can start delivery");
+
+      await session.commitTransaction();
+
+      session.endSession();
+
+      // Post-actions ngoài transaction
+      // console.log("Delivery started for order:", order._id);
+
+      // Notification (nếu có) nên thực hiện ở đây
+      await notifyOrderDelivery(order);
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: order.ownerId,
+        changeSummary: `Order status changed: confirmed → delivery`,
+      });
+
+      res.json({
+        success: true,
+        message: "Delivery started",
+        orderGuid: order.orderGuid,
+      });
+    } catch (err) {
+      await session.abortTransaction().catch(() => {}); // chỉ abort nếu chưa commit
+      session.endSession();
+      res.status(400).json({ success: false, message: err.message });
+    }
+  },
+
+  // Khách xác nhận đã nhận hàng
+  receiveOrder: async (req, res) => {
+    try {
+      const renterId = req.user._id;
+      const orderId = req.params.id;
+
+      if (!Types.ObjectId.isValid(orderId))
+        return res.status(400).json({ message: "Invalid order id" });
+
+      const order = await Order.findById(orderId);
+      if (!order || order.isDeleted)
+        return res.status(404).json({ message: "Order not found" });
+
+      if (order.renterId.toString() !== renterId.toString())
+        return res.status(403).json({ message: "Forbidden: not renter" });
+
+      if (order.orderStatus !== "delivery")
+        return res.status(400).json({
+          message: "Order must be in delivery status to mark as received",
+        });
+
+      order.orderStatus = "received";
+      order.lifecycle.receivedAt = new Date();
+      await order.save();
+
+      // Notification
+      await notifyOrderReceived(order);
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: renterId,
+        changeSummary: `Order status changed: delivery → received (item handed to renter)`,
+      });
+
+      return res.json({
+        message: "Order marked as received",
+        orderGuid: order.orderGuid,
+        orderStatus: order.orderStatus,
+      });
+    } catch (err) {
+      console.error("receiveOrder err:", err);
+      return res.status(500).json({
+        message: "Failed to mark order as received",
+        error: err.message,
+      });
     }
   },
 
@@ -413,22 +540,23 @@ module.exports = {
       if (order.ownerId.toString() !== ownerId.toString())
         return res.status(403).json({ message: "Forbidden: not owner" });
 
-      if (order.orderStatus !== "confirmed")
-        return res
-          .status(400)
-          .json({ message: "Only confirmed orders can be started" });
-
-      if (order.startAt && new Date(order.startAt) > new Date()) {
+      if (order.orderStatus !== "received")
         return res.status(400).json({
-          message: "Cannot start rental before scheduled start date",
+          message: "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
         });
-      }
 
       order.orderStatus = "progress";
       order.paymentStatus = "paid";
       order.lifecycle.startedAt = new Date();
       await order.save();
       await notifyOrderStarted(order); // Gửi notification khi bắt đầu thuê
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: received → progress`,
+      });
+
       return res.json({
         message: "Order started",
         orderGuid: order.orderGuid,
@@ -444,40 +572,127 @@ module.exports = {
   },
 
   renterReturn: async (req, res) => {
+    const session = await mongoose.startSession();
     try {
+      session.startTransaction();
+
       const renterId = req.user._id;
       const orderId = req.params.id;
       const { notes } = req.body;
 
-      if (!Types.ObjectId.isValid(orderId))
-        return res.status(400).json({ message: "Invalid order id" });
+      if (!Types.ObjectId.isValid(orderId)) {
+        await session.abortTransaction();
+        return res.status(400).json({ message: "ID đơn hàng không hợp lệ" });
+      }
 
-      const order = await Order.findById(orderId);
-      if (!order || order.isDeleted)
-        return res.status(404).json({ message: "Order not found" });
+      const order = await Order.findOne({
+        _id: orderId,
+        renterId,
+        orderStatus: "progress",
+        isDeleted: false,
+      }).session(session);
 
-      if (order.renterId.toString() !== renterId.toString())
-        return res.status(403).json({ message: "Forbidden: not renter" });
-
-      if (order.orderStatus !== "progress")
+      if (!order) {
+        await session.abortTransaction();
         return res.status(400).json({
-          message: "Order must be in progress to mark as returned",
+          message: "Không tìm thấy đơn hàng hoặc không thể trả hàng lúc này",
         });
+      }
+
+      // tự động từ chối và hoàn tiền yêu cầu gia hạn đang PENDING 
+      const pendingExtension = await ExtensionRequest.findOne({
+        orderId: order._id,
+        status: "pending",
+      }).session(session);
+
+      if (pendingExtension) {
+        pendingExtension.status = "rejected";
+        pendingExtension.rejectedReason =
+          "Người thuê đã trả hàng trước khi chủ duyệt gia hạn";
+        pendingExtension.notes += `\n[Từ chối tự động] Người thuê xác nhận trả hàng sớm.`;
+        pendingExtension.updatedAt = new Date();
+        await pendingExtension.save({ session });
+
+        if (
+          pendingExtension.paymentStatus === "paid" &&
+          pendingExtension.extensionFee > 0
+        ) {
+          await refundExtensionRequest(
+            pendingExtension._id.toString(),
+            session
+          );
+
+          await createNotification(
+            renterId,
+            "ExtensionRejected",
+            "Gia hạn bị từ chối – Đã hoàn tiền",
+            `Yêu cầu gia hạn đơn #${
+              order.orderGuid
+            } đã bị từ chối tự động vì bạn xác nhận trả hàng. ${pendingExtension.extensionFee.toLocaleString()}đ đã được hoàn vào ví ngay lập tức.`,
+            {
+              orderId: order._id,
+              extensionRequestId: pendingExtension._id,
+              action: "extension_rejected_refunded_immediately",
+            }
+          );
+        } else {
+          await createNotification(
+            renterId,
+            "ExtensionRejected",
+            "Gia hạn bị từ chối",
+            `Yêu cầu gia hạn đơn #${order.orderGuid} đã bị từ chối tự động vì bạn xác nhận trả hàng trước khi chủ duyệt.`,
+            {
+              orderId: order._id,
+              extensionRequestId: pendingExtension._id,
+              action: "extension_rejected_no_refund",
+            }
+          );
+        }
+
+        await pendingExtension.save({ session });
+
+        await logOrderAudit({
+          orderId: order._id,
+          operation: "UPDATE",
+          userId: renterId,
+          changeSummary: `Tự động từ chối & hoàn tiền yêu cầu gia hạn #${pendingExtension._id} do trả hàng sớm`,
+        });
+      }
 
       order.orderStatus = "returned";
-      order.returnInfo.returnedAt = new Date();
-      order.returnInfo.notes = notes || "";
-      await order.save();
-      await notifyOrderReturned(order); // Gửi notification khi trả sản phẩm
+      order.returnInfo = {
+        ...order.returnInfo,
+        returnedAt: new Date(),
+        notes: notes || "Người thuê xác nhận đã trả hàng",
+      };
+      await order.save({ session });
+
+      await notifyOrderReturned(order);
+
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: renterId,
+        changeSummary: "Order status changed: progress → returned",
+      });
+
+      await session.commitTransaction();
+      session.endSession();
+
       return res.status(200).json({
-        message: "Order marked as returned",
+        message: "Xác nhận trả hàng thành công",
         orderGuid: order.orderGuid,
+        extensionRejected: !!pendingExtension,
+        refundImmediate: pendingExtension?.paymentStatus === "paid",
       });
     } catch (err) {
-      console.error("renterReturn err:", err);
-      return res
-        .status(500)
-        .json({ message: "Failed to mark as returned", error: err.message });
+      await session.abortTransaction().catch(() => {});
+      session.endSession();
+      console.error("renterReturn error:", err);
+      return res.status(500).json({
+        message: "Lỗi khi xác nhận trả hàng",
+        error: err.message,
+      });
     }
   },
 
@@ -569,6 +784,13 @@ module.exports = {
       session.endSession();
 
       await notifyOrderCompleted(order); // Gửi notification khi hoàn tất đơn
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: ownerId,
+        changeSummary: `Order status changed: returned → completed`,
+      });
+
       return res.json({
         message: "Order completed",
         orderGuid: order.orderGuid,
@@ -647,6 +869,13 @@ module.exports = {
         await order.save({ session });
 
         await notifyOrderCancelled(order); // Gửi notification
+        await logOrderAudit({
+          orderId: order._id,
+          operation: "UPDATE",
+          userId: userId,
+          changeSummary: `Order cancelled`,
+        });
+
         await session.commitTransaction();
         session.endSession();
         return res.json({
@@ -701,6 +930,13 @@ module.exports = {
       order.lifecycle.disputedAt = new Date();
       await order.save();
       await notifyOrderDisputed(order); // Gửi notification
+      await logOrderAudit({
+        orderId: order._id,
+        operation: "UPDATE",
+        userId: userId,
+        changeSummary: `Order cancelled`,
+      });
+
       return res.json({
         message: "Dispute opened",
         orderGuid: order.orderGuid,
@@ -760,7 +996,7 @@ module.exports = {
   listOrders: async (req, res) => {
     try {
       const userId = req.user._id;
-      const { status, paymentStatus, search, page = 1, limit = 20 } = req.query;
+      const { status, paymentStatus, search } = req.query;
 
       const filter = {
         isDeleted: false,
@@ -772,15 +1008,11 @@ module.exports = {
       if (search)
         filter["itemSnapshot.title"] = { $regex: search, $options: "i" };
 
-      const skip = (Number(page) - 1) * Number(limit);
-
       const [orders, total] = await Promise.all([
         Order.find(filter)
           .populate("renterId", "fullName email")
           .populate("ownerId", "fullName email")
           .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(Number(limit))
           .lean(),
         Order.countDocuments(filter),
       ]);
@@ -790,9 +1022,9 @@ module.exports = {
         data: orders,
         pagination: {
           total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
+          page: 1,
+          limit: total,
+          totalPages: 1,
         },
       });
     } catch (err) {
@@ -803,10 +1035,11 @@ module.exports = {
       });
     }
   },
-  listOrdersByOnwer: async (req, res) => {
+
+  listOrdersByOwner: async (req, res) => {
     try {
       const userId = req.user._id;
-      const { status, paymentStatus, search, page = 1, limit = 20 } = req.query;
+      const { status, paymentStatus, search, page = 1, limit } = req.query;
 
       const filter = {
         isDeleted: false,
@@ -815,19 +1048,25 @@ module.exports = {
 
       if (status) filter.orderStatus = status;
       if (paymentStatus) filter.paymentStatus = paymentStatus;
-      if (search)
-        filter["itemSnapshot.title"] = { $regex: search, $options: "i" };
+      if (search) {
+        filter["itemSnapshot.title"] = { $regex: search.trim(), $options: "i" };
+      }
 
-      const skip = (Number(page) - 1) * Number(limit);
+      // Nếu không có limit → không skip, không limit → trả hết
+      const pageNum = Number(page);
+      const limitNum = limit ? Number(limit) : null;
+      const skip = limitNum ? (pageNum - 1) * limitNum : 0;
+
+      const query = Order.find(filter)
+        .populate("renterId", "fullName email avatarUrl userGuid phone bio")
+        .sort({ createdAt: -1 });
+
+      if (limitNum) {
+        query.skip(skip).limit(limitNum);
+      }
 
       const [orders, total] = await Promise.all([
-        Order.find(filter)
-          .populate("renterId", "fullName email")
-          .populate("ownerId", "fullName email")
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(Number(limit))
-          .lean(),
+        query.lean(),
         Order.countDocuments(filter),
       ]);
 
@@ -836,17 +1075,170 @@ module.exports = {
         data: orders,
         pagination: {
           total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
+          page: pageNum,
+          limit: limitNum || total, // nếu không có limit thì trả về total
+          totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
         },
       });
     } catch (err) {
-      console.error("listOrdersByOnwer err:", err);
+      console.error("listOrdersByOwner error:", err);
       return res.status(500).json({
-        message: "Failed to list orders",
+        message: "Lỗi khi lấy danh sách đơn hàng",
         error: err.message,
       });
     }
   },
+
+  listOrdersByRenter: async (req, res) => {
+    try {
+      const renterId = req.user._id;
+
+      const {
+        status,
+        paymentStatus,
+        search,
+        page = 1,
+        limit, // có thể có hoặc không
+      } = req.query;
+
+      const filter = {
+        isDeleted: false,
+        renterId,
+      };
+
+      if (status) filter.orderStatus = status;
+      if (paymentStatus) filter.paymentStatus = paymentStatus;
+      if (search) {
+        filter["itemSnapshot.title"] = { $regex: search.trim(), $options: "i" };
+      }
+
+      const pageNum = Number(page);
+      const limitNum = limit ? Number(limit) : null;
+      const skip = limitNum ? (pageNum - 1) * limitNum : 0;
+
+      const query = Order.find(filter)
+        .populate("ownerId", "fullName avatarUrl userGuid phone bio")
+        .populate("itemId", "Title Images")
+        .sort({ createdAt: -1 });
+
+      if (limitNum) query.skip(skip).limit(limitNum);
+
+      const [orders, total] = await Promise.all([
+        query.lean(),
+        Order.countDocuments(filter),
+      ]);
+
+      const ordersWithImages = orders.map((order) => ({
+        ...order,
+        _primaryImage:
+          order.itemSnapshot?.images?.[0] ||
+          order.itemId?.Images?.[0]?.Url ||
+          null,
+      }));
+
+      return res.json({
+        message: "Lấy danh sách đơn hàng thành công",
+        data: ordersWithImages, // ← mảng trực tiếp, không bọc trong { data: ... }
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum || total,
+          totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
+        },
+      });
+    } catch (err) {
+      console.error("listOrdersByRenter error:", err);
+      return res.status(500).json({
+        message: "Lỗi khi lấy danh sách đơn hàng",
+        error: err.message,
+      });
+    }
+  },
+  getLatestOrderByRenter: async (req, res) => {
+    try {
+      const renterId = req.user._id || req.user.id;
+
+      const order = await Order.findOne({
+        renterId,
+        orderStatus: "completed",
+      })
+        .sort({ createdAt: -1 }) // mới nhất
+        .lean();
+
+      if (!order) {
+        return res.status(200).json({
+          code: 200,
+          message: "No completed orders found",
+          data: null,
+        });
+      }
+
+      return res.status(200).json({
+        code: 200,
+        message: "Latest completed order fetched",
+        data: {
+          orderId: order._id,
+          itemId: order.itemId?._id ?? order.itemId,
+          ownerId: order.ownerId?._id ?? order.ownerId,
+        },
+      });
+    } catch (err) {
+      console.error("getLatestOrderByRenter error:", err);
+      return res.status(500).json({
+        code: 500,
+        message: "Server error",
+        data: null,
+      });
+    }
+  },
+  getLatestOrderByOwner: async (req, res) => {
+    try {
+      const ownerId = req.user._id;
+      const { renterId, orderStatus = "completed" } = req.query;
+
+      if (!renterId) {
+        return res.status(400).json({
+          code: 400,
+          message: "Vui lòng cung cấp renterId",
+          data: null,
+        });
+      }
+
+      const order = await Order.findOne({
+        renterId,
+        ownerId, // ← Bắt buộc là owner hiện tại
+        orderStatus,
+      })
+        .sort({ createdAt: -1 }) // Lấy đơn mới nhất
+        .lean();
+
+      if (!order) {
+        return res.status(200).json({
+          code: 200,
+          message: "No completed orders found",
+          data: null,
+        });
+      }
+
+      return res.status(200).json({
+        code: 200,
+        message: "Latest completed order fetched",
+        data: {
+          orderId: order._id,
+          itemId: order.itemId?._id ?? order.itemId,
+          ownerId: order.ownerId?._id ?? order.ownerId,
+          renterId: order.renterId, // ← thêm để biết đơn này thuộc renter nào
+        },
+      });
+    } catch (err) {
+      console.error("getLatestOrderByOwner error:", err);
+      return res.status(500).json({
+        code: 500,
+        message: "Server error",
+        data: null,
+      });
+    }
+  },
 };
+
+

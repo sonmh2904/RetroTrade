@@ -1,6 +1,6 @@
 const Rating = require("../../models/Order/Rating.model");
 const Item = require("../../models/Product/Item.model");
-const { uploadToCloudinary } = require("../../middleware/upload.middleware"); 
+const { uploadRatingToCloudinary } = require("../../middleware/uploadRating.middleware");
 const mongoose = require("mongoose");
 
 
@@ -19,15 +19,18 @@ exports.createRating = async (req, res) => {
         .json({ message: "Bạn đã đánh giá sản phẩm này rồi." });
     }
 
-    let imageUrls = [];
+   let images = [];
+   let videos = [];
 
-    if (req.files && req.files.length > 0) {
-      const uploaded = await uploadToCloudinary(
-        req.files,
-        "retrotrade/ratings"
-      );
-      imageUrls = uploaded.map((img) => img.Url);
-    }
+   if (req.files.images) {
+     const uploadedImages = await uploadRatingToCloudinary(req.files.images);
+     images = uploadedImages.images;
+   }
+
+   if (req.files.videos) {
+     const uploadedVideos = await uploadRatingToCloudinary(req.files.videos);
+     videos = uploadedVideos.videos;
+   }
 
     const newRating = await Rating.create({
       orderId,
@@ -35,15 +38,16 @@ exports.createRating = async (req, res) => {
       renterId,
       rating,
       comment,
-      images: imageUrls,
+      images,
+      videos,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Đánh giá thành công!",
       rating: newRating,
     });
   } catch (err) {
-    console.error("❌ Lỗi upload hoặc tạo đánh giá:", err);
+    console.error(" Lỗi tạo đánh giá:", err);
     res.status(500).json({ message: "Lỗi khi tạo đánh giá." });
   }
 };
@@ -51,51 +55,58 @@ exports.createRating = async (req, res) => {
 exports.updateRating = async (req, res) => {
   try {
     const { id } = req.params;
-    const { rating, comment } = req.body;
-
+    const { rating, comment, images, videos } = req.body;
     const review = await Rating.findById(id);
     if (!review)
       return res.status(404).json({ message: "Không tìm thấy đánh giá." });
 
-    const userId = req.user._id;
-    if (review.renterId.toString() !== userId.toString()) {
-      return res.status(403).json({
-        message: "Bạn không có quyền chỉnh sửa đánh giá này.",
-      });
+    if (review.renterId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Không có quyền." });
     }
 
-    if (rating) review.rating = rating;
-    if (comment) review.comment = comment;
+    // Cập nhật rating & comment
+    if (rating !== undefined) review.rating = Number(rating);
+    if (comment !== undefined) review.comment = comment?.trim();
 
-    // Nếu có ảnh mới
-    if (req.files && req.files.length > 0) {
-      const uploaded = await uploadToCloudinary(
-        req.files,
-        "retrotrade/ratings"
-      );
+    // === XỬ LÝ ẢNH & VIDEO MỚI (nếu có upload) ===
+    let newImageUrls = [];
+    let newVideoUrls = [];
 
-      const imageUrls = uploaded.map((img) => img.Url);
+    if (req.files?.images?.length > 0 || req.files?.videos?.length > 0) {
+      const uploaded = await uploadRatingToCloudinary([
+        ...(req.files.images || []),
+        ...(req.files.videos || []),
+      ]);
 
-      review.images = imageUrls; // ghi đè
-
-      // nếu muốn append
-      // review.images.push(...imageUrls);
+      newImageUrls = uploaded.images || [];
+      newVideoUrls = uploaded.videos || [];
     }
 
+   const finalImages =
+     Array.isArray(images) && images.length > 0
+       ? [...images, ...newImageUrls].slice(0, 5) // FE gửi danh sách cũ → dùng nó
+       : [...(review.images || []), ...newImageUrls].slice(0, 5); // FE không gửi → giữ nguyên cũ + thêm mới
+
+   const finalVideos =
+     Array.isArray(videos) && videos.length > 0
+       ? [...videos, ...newVideoUrls].slice(0, 1)
+       : [...(review.videos || []), ...newVideoUrls].slice(0, 1);
+       
+    review.images = finalImages;
+    review.videos = finalVideos;
     review.isEdited = true;
+
     await review.save();
 
-    res.json({
+    return res.json({
       message: "Cập nhật đánh giá thành công!",
       rating: review,
     });
   } catch (err) {
-    console.error("❌ Lỗi khi update rating:", err);
-    res.status(500).json({ message: "Lỗi khi cập nhật đánh giá." });
+    console.error("Lỗi update rating:", err);
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
-
-
 
 
 exports.deleteRating = async (req, res) => {

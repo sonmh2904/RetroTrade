@@ -2,45 +2,131 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/common/card";
-import { dashboardApi, RevenueDataPoint } from "@/services/admin/dashboard.api";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/common/select";
+import { DollarSign, TrendingUp, ShoppingCart, ArrowUpRight, ArrowDownRight, Filter } from "lucide-react";
+import { dashboardApi } from "@/services/admin/dashboard.api";
+import { Button } from "@/components/ui/common/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/common/dropdown-menu";
+import dynamic from 'next/dynamic';
+
+// Dynamically import Recharts to avoid SSR issues
+const AreaChart = dynamic(
+  () => import('recharts').then((mod) => mod.AreaChart),
+  { ssr: false }
+);
+const Area = dynamic(
+  () => import('recharts').then((mod) => mod.Area),
+  { ssr: false }
+);
+const XAxis = dynamic(
+  () => import('recharts').then((mod) => mod.XAxis),
+  { ssr: false }
+);
+const YAxis = dynamic(
+  () => import('recharts').then((mod) => mod.YAxis),
+  { ssr: false }
+);
+const CartesianGrid = dynamic(
+  () => import('recharts').then((mod) => mod.CartesianGrid),
+  { ssr: false }
+);
+const Tooltip = dynamic(
+  () => import('recharts').then((mod) => mod.Tooltip),
+  { ssr: false }
+);
+const ResponsiveContainer = dynamic(
+  () => import('recharts').then((mod) => mod.ResponsiveContainer),
+  { ssr: false }
+);
+const Legend = dynamic(
+  () => import('recharts').then((mod) => mod.Legend),
+  { ssr: false }
+);
+
+interface RevenueData {
+  date: string;
+  revenue: number;
+  orders: number;
+}
 
 export function RevenueChart() {
-  const [data, setData] = useState<RevenueDataPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
+  const [revenueStats, setRevenueStats] = useState<any>(null);
   const [period, setPeriod] = useState("30d");
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
       try {
-        const revenueData = await dashboardApi.getRevenueStats(period);
-        setData(revenueData);
+        const revenueStatsData = await dashboardApi.getRevenueStats(period);
+        
+        // Check if data has timeline property or is direct array
+        const timelineData = (revenueStatsData as any).timeline || revenueStatsData;
+        
+        // Calculate totals from the data
+        const totalRevenue = timelineData.reduce((sum: number, item: any) => sum + (item.revenue || 0), 0);
+        const totalOrders = timelineData.reduce((sum: number, item: any) => sum + (item.orders || 0), 0);
+        
+        setRevenueStats({ 
+          timeline: timelineData, 
+          totals: { 
+            total: totalRevenue, 
+            orders: totalOrders 
+          } 
+        });
+        setRevenueData(timelineData);
       } catch (error) {
         console.error("Error fetching revenue data:", error);
-      } finally {
-        setLoading(false);
       }
     };
 
     fetchData();
   }, [period]);
 
-
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    return `${d.getDate()}/${d.getMonth() + 1}`;
+  // Format number with thousands separator
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
-  const maxRevenue = data.length > 0 ? Math.max(...data.map((d) => d.revenue)) : 0;
-  const minRevenue = data.length > 0 ? Math.min(...data.map((d) => d.revenue)) : 0;
-  const range = maxRevenue - minRevenue;
+  // Format currency
+  const formatCurrency = (num: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(num);
+  };
 
-  if (loading) {
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const revenue = payload.find((p: any) => p.dataKey === 'revenue')?.value || 0;
+      const orders = payload.find((p: any) => p.dataKey === 'orders')?.value || 0;
+      
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+          <p className="font-medium text-gray-900 mb-2">{new Date(label).toLocaleDateString('vi-VN')}</p>
+          <div className="space-y-1">
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+              <span className="text-sm">Doanh thu: <span className="font-medium">{formatCurrency(revenue)}</span></span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+              <span className="text-sm">Đơn hàng: <span className="font-medium">{formatNumber(orders)}</span></span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (!revenueStats) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Biểu đồ Doanh thu</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-green-600" />
+            Thống kê Doanh thu
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px] flex items-center justify-center">
@@ -51,126 +137,157 @@ export function RevenueChart() {
     );
   }
 
-  // Generate line chart path
-  const generateLinePath = () => {
-    if (data.length === 0) return "";
-    const width = 100;
-    const height = 100;
-    const stepX = width / (data.length - 1 || 1);
-    
-    let path = `M 0 ${height - ((data[0].revenue - minRevenue) / range) * height}`;
-    data.forEach((item, index) => {
-      if (index > 0) {
-        const x = index * stepX;
-        const y = height - ((item.revenue - minRevenue) / range) * height;
-        path += ` L ${x} ${y}`;
-      }
-    });
-    return path;
-  };
-
-  // Generate area path
-  const generateAreaPath = () => {
-    const linePath = generateLinePath();
-    if (!linePath) return "";
-    const width = 100;
-    const height = 100;
-    return `${linePath} L ${width} ${height} L 0 ${height} Z`;
-  };
-
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Biểu đồ Doanh thu (Line Chart)</CardTitle>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Chọn khoảng thời gian" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7d">7 ngày qua</SelectItem>
-            <SelectItem value="30d">30 ngày qua</SelectItem>
-            <SelectItem value="90d">90 ngày qua</SelectItem>
-            <SelectItem value="1y">1 năm qua</SelectItem>
-          </SelectContent>
-        </Select>
+        <CardTitle className="flex items-center gap-2">
+          <DollarSign className="w-5 h-5 text-green-600" />
+          Thống kê Doanh thu
+        </CardTitle>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              {period === '7d' ? '7 ngày qua' : period === '30d' ? '30 ngày qua' : period === '90d' ? '90 ngày qua' : period === '1y' ? '1 năm qua' : '30 ngày qua'}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setPeriod('7d')}>
+              7 ngày qua
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPeriod('30d')}>
+              30 ngày qua
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPeriod('90d')}>
+              90 ngày qua
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPeriod('1y')}>
+              1 năm qua
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardHeader>
       <CardContent>
-        <div className="h-[400px] space-y-4">
-          {data.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Không có dữ liệu
+        {/* Stats Overview - 2 per row for revenue */}
+        {revenueStats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between mb-2">
+                <DollarSign className="w-5 h-5 text-green-600" />
+                <span className="text-xs text-green-600">Tổng doanh thu</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{formatCurrency(revenueStats.totals.total || 0)}</div>
+              <div className="text-sm text-gray-600">Tổng doanh thu từ các đơn hàng</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <ShoppingCart className="w-5 h-5 text-blue-600" />
+                <span className="text-xs text-blue-600">Đơn hàng hoàn thành</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{(revenueStats.totals.orders || 0).toLocaleString()}</div>
+              <div className="text-sm text-gray-600">Số đơn hàng đã hoàn thành</div>
+            </div>
+          </div>
+        )}
+
+        {/* Chart Section */}
+        <div className="h-[400px]">
+          {revenueData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              Không có dữ liệu cho khoảng thời gian đã chọn
             </div>
           ) : (
-            <div className="h-full flex flex-col">
-              {/* Line Chart with Area */}
-              <div className="flex-1 relative pb-12 overflow-hidden">
-                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {/* Area fill */}
-                  <defs>
-                    <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.05" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d={generateAreaPath()}
-                    fill="url(#revenueGradient)"
-                    className="transition-all duration-500"
-                  />
-                  {/* Line */}
-                  <path
-                    d={generateLinePath()}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="0.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-500"
-                  />
-                  {/* Data points */}
-                  {data.map((item, index) => {
-                    const width = 100;
-                    const stepX = width / (data.length - 1 || 1);
-                    const x = index * stepX;
-                    const y = 100 - ((item.revenue - minRevenue) / range) * 100;
-                    return (
-                      <g key={index}>
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r="1.5"
-                          fill="#10b981"
-                          className="transition-all duration-300 hover:r-2"
-                        />
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r="3"
-                          fill="#10b981"
-                          fillOpacity="0.2"
-                          className="animate-pulse"
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
-                {/* X-axis labels */}
-                <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-gray-600 px-1 overflow-hidden">
-                  {data.map((item, index) => (
-                    <span 
-                      key={index} 
-                      className="transform -rotate-45 origin-left whitespace-nowrap"
-                      style={{ 
-                        maxWidth: `${100 / data.length}%`,
-                        paddingRight: '4px'
-                      }}
-                    >
-                      {formatDate(item.date)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(value) => new Date(value).toLocaleDateString('vi-VN', { day: 'numeric', month: 'short' })}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  width={40}
+                  tickFormatter={(value) => {
+                    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}tr`;
+                    if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+                    return value.toString();
+                  }}
+                />
+                <YAxis 
+                  yAxisId="right" 
+                  orientation="right"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#3b82f6', fontSize: 12 }}
+                  width={40}
+                  tickFormatter={(value) => {
+                    if (value >= 1000) return `${value / 1000}k`;
+                    return value.toString();
+                  }}
+                />
+                <Tooltip 
+                  content={<CustomTooltip />}
+                  cursor={{ stroke: '#e5e7eb', strokeWidth: 1, strokeDasharray: '3 3' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{
+                    paddingTop: '20px',
+                    fontSize: '12px',
+                  }}
+                />
+                
+                {/* Revenue Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="revenue" 
+                  stroke="#10b981" 
+                  fillOpacity={1} 
+                  fill="url(#colorRevenue)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  name="Doanh thu"
+                />
+                
+                {/* Orders Area */}
+                <Area 
+                  type="monotone" 
+                  dataKey="orders"
+                  name="Đơn hàng"
+                  stroke="#3b82f6" 
+                  fillOpacity={1} 
+                  fill="url(#colorOrders)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  yAxisId="right"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           )}
         </div>
       </CardContent>

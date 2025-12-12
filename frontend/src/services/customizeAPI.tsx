@@ -129,6 +129,7 @@ const api = {
   get: (url: string, options: ExtendedRequestInit = {}) =>
     customFetch(`${BASE_URL}${url}`, { ...options, method: "GET" }),
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   post: (url: string, data?: any, options: ExtendedRequestInit = {}) => {
     const isFormData = data instanceof FormData;
 

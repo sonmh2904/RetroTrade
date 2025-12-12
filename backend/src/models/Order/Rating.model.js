@@ -37,6 +37,7 @@ const ratingSchema = new mongoose.Schema(
         type: String,
       },
     ],
+    videos: [{ type: String }],
     isEdited: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
   },

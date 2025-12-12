@@ -1,14 +1,10 @@
 import { useEffect, useState } from "react";
 import { CreditCard, ArrowDown, ArrowUp, Send, PlusCircle } from "lucide-react";
-import { getMyWallet, depositToWallet, getAllBankAccounts, deleteBankAccount, addBankAccount, withdrawFromWallet } from "@/services/wallet/wallet.api";
+import { getMyWallet, depositToWallet, getAllBankAccounts, deleteBankAccount, addBankAccount, withdrawFromWallet, getRecentWalletTransactions, getUserWalletTransactions } from "@/services/wallet/wallet.api";
 import BankAccountModal from "./bankaccountmodal";
 import OwnerLayout from "../layout";
-
-const TRANSACTIONS = [
-  { name: "Thuê áo dài truyền thống", time: "Hôm nay, 14:30", amount: -250000, type: "Thuê" },
-  { name: "Hoàn tiền cọc", time: "Hôm qua, 10:15", amount: 500000, type: "Hoàn Tiền" },
-  { name: "Thuê váy dạ hội", time: "2 ngày trước, 16:20", amount: -450000, type: "Thuê" },
-];
+import { useRouter } from "next/router";
+import { toast } from "sonner";
 
 export default function WalletPage() {
   return (
@@ -20,8 +16,9 @@ export default function WalletPage() {
 
 function WalletPageContent() {
   const weekLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-  const weekSpend = [120000, 450000, 160000, 90000, 172000, 370000, 240000];
-  const maxSpend = Math.max(...weekSpend);
+  const [weekSpend, setWeekSpend] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const maxSpend = Math.max(...weekSpend, 1); // Tránh chia cho 0
+
 
   const [wallet, setWallet] = useState<{ balance: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +45,17 @@ function WalletPageContent() {
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
+  // Hàm format số tiền theo định dạng VNĐ
+  const formatVNMoney = (value: string) => {
+    const num = Number(value);
+    if (isNaN(num)) return "0";
+    return num.toLocaleString("vi-VN");
+  }
+  const vnNum2words = require('vn-num2words');
+
+  // Lấy thông tin ví khi load trang
   useEffect(() => {
     (async () => {
       try {
@@ -62,7 +70,7 @@ function WalletPageContent() {
     })();
   }, []);
 
-
+  // Lấy danh sách tài khoản ngân hàng
   useEffect(() => {
     (async () => {
       try {
@@ -74,7 +82,7 @@ function WalletPageContent() {
       }
     })();
   }, []);
-
+  // Chọn tài khoản mặc định khi load danh sách ngân hàng
   useEffect(() => {
     if (bankAccounts.length > 0 && !selectedBankId) {
       const def = bankAccounts.find(acc => acc.isDefault);
@@ -93,7 +101,7 @@ function WalletPageContent() {
     setLoadingDeposit(true);
 
     try {
-      const res = await depositToWallet(Number(amount), note);
+      const res = await depositToWallet(Number(amount), note,'/owner/mywallet');
       const payload = res?.data?.data ?? res?.data ?? res;
 
       const checkoutUrl = payload?.checkoutUrl ?? null;
@@ -150,61 +158,121 @@ function WalletPageContent() {
   };
 
   // Rút tiền
- const handleWithdraw = async () => {
-  setWithdrawError(null);
-  setSuccessMessage(null);
-
-  // Validate đầu vào phía trước
-  if (!withdrawAmount || isNaN(Number(withdrawAmount))) {
-    setWithdrawError("Vui lòng nhập số tiền hợp lệ!");
-    return;
-  }
-  if (!selectedBankId) {
-    setWithdrawError("Vui lòng chọn tài khoản ngân hàng nhận tiền!");
-    return;
-  }
-
-  setLoadingWithdraw(true);
-
-  try {
-    // Nhận về data từ API
-    const res = await withdrawFromWallet(
-      Number(withdrawAmount),
-      withdrawNote,
-      selectedBankId
-    ); // với parseFetchResponse đã fix, res chính là { message, transaction }
-
-    // Lấy message thành công từ response (hoặc fallback)
-    const msg = res?.message || "Yêu cầu rút tiền đã được gửi. Vui lòng chờ admin duyệt.";
-
-    setShowWithdrawModal(false);
-    setWithdrawAmount("");
-    setWithdrawNote("");
+  const handleWithdraw = async () => {
     setWithdrawError(null);
-    setSuccessMessage(msg); // Thông báo thành công cho user
+    setSuccessMessage(null);
 
-    setTimeout(() => setSuccessMessage(null), 3500);
-  } catch (error: any) {
-    let msg = "Có lỗi xảy ra khi rút tiền.";
-    if (error && typeof error === "object") {
-      if (error.response?.data?.message) {
-        msg = error.response.data.message;
-      } else if (error.message) {
-        msg = error.message;
+    // Validate đầu vào phía trước
+    if (!withdrawAmount || isNaN(Number(withdrawAmount))) {
+      setWithdrawError("Vui lòng nhập số tiền hợp lệ!");
+      return;
+    }
+    if (!selectedBankId) {
+      setWithdrawError("Vui lòng chọn tài khoản ngân hàng nhận tiền!");
+      return;
+    }
+
+    setLoadingWithdraw(true);
+
+    try {
+      // Nhận về data từ API
+      const res = await withdrawFromWallet(
+        Number(withdrawAmount),
+        withdrawNote,
+        selectedBankId
+      ); // với parseFetchResponse đã fix, res chính là { message, transaction }
+
+      // Lấy message thành công từ response (hoặc fallback)
+      const msg = res?.message || "Yêu cầu rút tiền đã được gửi. Vui lòng chờ admin duyệt.";
+
+      setShowWithdrawModal(false);
+      setWithdrawAmount("");
+      setWithdrawNote("");
+      setWithdrawError(null);
+      setSuccessMessage(msg); // Thông báo thành công cho user
+
+      setTimeout(() => setSuccessMessage(null), 3500);
+    } catch (error: any) {
+      let msg = "Có lỗi xảy ra khi rút tiền.";
+      if (error && typeof error === "object") {
+        if (error.response?.data?.message) {
+          msg = error.response.data.message;
+        } else if (error.message) {
+          msg = error.message;
+        }
+      }
+      setWithdrawError(msg);
+    } finally {
+      setLoadingWithdraw(false);
+    }
+  };
+  // Lấy giao dịch gần đây (3 giao dịch gần nhất)
+  useEffect(() => {
+    (async () => {
+      setLoadingTransactions(true);
+      try {
+        const res = await getRecentWalletTransactions();
+        setRecentTransactions(res.transactions ?? []);
+      } catch {
+        setRecentTransactions([]);
+      } finally {
+        setLoadingTransactions(false);
+      }
+    })();
+  }, []);
+  // Chuyển đến trang xem tất cả giao dịch
+  const router = useRouter();
+  const handleViewAllTransactions = () => {
+    router.push('/wallet/transactions');
+  };
+  const convertWithdrawStatusVN = (st: string): string => {
+    switch (st) {
+      case "pending":
+        return "Chờ duyệt";
+      case "approved":
+        return "Đã duyệt";
+      case "rejected":
+        return "Từ chối";
+      case "completed":
+        return "Hoàn thành";
+      default:
+        return st;
+    }
+  };
+  // Xây dựng biểu đồ chi tiêu trong tuần
+  type WalletTransaction = {
+    amount: number;
+    createdAt: string;
+    // ... các trường khác (nếu cần)
+  };
+
+  useEffect(() => {
+    async function fetchAndBuildChart() {
+      try {
+        const res = await getUserWalletTransactions();
+        const txs: WalletTransaction[] = res.transactions ?? [];
+        let spend = [0, 0, 0, 0, 0, 0, 0];
+        const now = new Date();
+        txs.forEach((tx: WalletTransaction) => {
+          const d = new Date(tx.createdAt);
+          if ((now.valueOf() - d.valueOf()) < 7 * 86400000 && tx.amount < 0) {
+            const dow = (d.getDay() + 6) % 7;
+            spend[dow] += Math.abs(tx.amount);
+          }
+        });
+        setWeekSpend(spend);
+      } catch {
+        setWeekSpend([0, 0, 0, 0, 0, 0, 0]);
       }
     }
-    setWithdrawError(msg);
-  } finally {
-    setLoadingWithdraw(false);
-  }
-};
-
+    fetchAndBuildChart();
+  }, []);
 
 
 
 
   return (
-    <div>
+    <div className="p-10 bg-gray-50 min-h-screen">
 
 
       <h1 className="text-4xl font-bold text-gray-900 mb-1">Ví của tôi</h1>
@@ -252,17 +320,28 @@ function WalletPageContent() {
               <ArrowUp className="mb-1 text-indigo-500" />
               <span className="text-sm font-medium">Rút tiền</span>
             </button>
-            <button className="flex flex-col items-center px-5 py-4 bg-white rounded-xl shadow transition hover:bg-indigo-100">
+            <button
+              className="flex flex-col items-center px-5 py-4 bg-white rounded-xl shadow transition hover:bg-indigo-100"
+              onClick={() => {
+                setSuccessMessage("Tính năng sắp ra mắt!");
+                setTimeout(() => setSuccessMessage(null), 3500); // 60 giây
+              }}
+            >
               <Send className="mb-1 text-indigo-500" />
               <span className="text-sm font-medium">Chuyển</span>
             </button>
             <button
               className="flex flex-col items-center px-5 py-4 bg-white rounded-xl shadow transition hover:bg-indigo-100"
-              onClick={() => setSuccessMessage("Tính năng sắp ra mắt!")}
+              onClick={() => {
+                setSuccessMessage("Tính năng sắp ra mắt!");
+                setTimeout(() => setSuccessMessage(null), 3500);
+              }}
             >
               <PlusCircle className="mb-1 text-indigo-500" />
               <span className="text-sm font-medium">Thêm thẻ</span>
             </button>
+
+
           </div>
         </div>
 
@@ -377,27 +456,56 @@ function WalletPageContent() {
 
         {/* Giao dịch gần đây */}
         <div className="bg-white rounded-xl shadow p-6">
-          <div className="font-semibold mb-3">Giao dịch gần đây</div>
           <div className="flex flex-col gap-3">
-            {TRANSACTIONS.map((t, idx) => (
-              <div
-                key={idx}
-                className="flex justify-between items-center p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 transition"
-              >
-                <div>
-                  <div className={`font-medium ${t.amount > 0 ? "text-green-500" : "text-red-500"}`}>
-                    {t.name}
+            <div className="flex justify-between items-center mb-3">
+              <div className="font-semibold text-lg">Giao dịch gần đây</div>
+              <button onClick={handleViewAllTransactions} className="text-indigo-600 hover:underline text-sm font-medium">
+                Xem tất cả
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {loadingTransactions ? (
+                <div className="text-gray-500">Đang tải giao dịch...</div>
+              ) : recentTransactions.length === 0 ? (
+                <div className="text-gray-500">Chưa có giao dịch gần đây.</div>
+              ) : (
+                recentTransactions.map((t, idx) => (
+                  <div key={t._id || idx} className="flex justify-between items-center p-3 rounded-xl bg-gray-50 hover:bg-indigo-50 transition">
+                    <div>
+                      <div className={`font-medium ${t.amount > 0 ? "text-green-500" : "text-red-500"}`}>
+                        {t.typeId === "USER_PAYMENT"
+                          ? "Thanh toán : " + t.orderId?.itemSnapshot?.title || "Thanh toán đơn hàng"
+                          : t.note || t.typeId}
+
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {new Date(t.createdAt).toLocaleString("vi-VN")}
+                        {t.typeId === "withdraw" && t.status
+                          ? (
+                            <span style={{ marginLeft: 8, color: "#64748b", fontWeight: 500 }}>
+                              | {convertWithdrawStatusVN(t.status)}
+                            </span>
+                          )
+                          : null}
+
+                        {/* Dòng mã đơn nằm dưới ngày tháng */}
+                        {t.orderId && (
+                          <div className="mt-1 px-2 py-0.5 bg-gray-100 rounded text-gray-700 w-fit">
+                            Mã đơn: {typeof t.orderId === "string" ? t.orderId : t.orderId._id}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                    <div className={`font-bold ${t.amount > 0 ? "text-green-600" : "text-red-600"} text-lg`}>
+                      {(t.amount > 0 ? "+" : "") + t.amount.toLocaleString("vi-VN")}đ
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{t.time}</div>
-                </div>
-                <div
-                  className={`font-bold ${t.amount > 0 ? "text-green-600" : "text-red-600"
-                    } text-lg`}
-                >
-                  {(t.amount > 0 ? "+" : "") + t.amount.toLocaleString()}đ
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
+
           </div>
         </div>
       </div>
@@ -417,13 +525,25 @@ function WalletPageContent() {
               </div>
             )}
             <div className="space-y-4">
+
               <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVNMoney(amount)}
+                onChange={e => {
+                  // Loại bỏ tất cả ký tự không phải số (dấu chấm, ký tự lạ...)
+                  const raw = e.target.value.replace(/[^\d]/g, '');
+                  setAmount(raw);
+                }}
                 placeholder="Số tiền (VND)"
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
               />
+              {/* Hiển thị số tiền bằng chữ tiếng Việt */}
+              {amount && (
+                <div className="text-sm text-gray-500 italic pl-2 pb-2">
+                  Bằng chữ: {vnNum2words(amount.replace(/[^\d]/g, ''))} đồng
+                </div>
+              )}
               <input
                 type="text"
                 value={note}
@@ -472,12 +592,23 @@ function WalletPageContent() {
 
             <div className="space-y-4">
               <input
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={formatVNMoney(withdrawAmount)}
+                onChange={e => {
+                  // Chỉ cho nhập số, loại bỏ mọi ký tự không phải số
+                  const raw = e.target.value.replace(/[^\d]/g, '');
+                  setWithdrawAmount(raw);
+                }}
                 placeholder="Số tiền (VND)"
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
               />
+              {/* Hiển thị số tiền bằng chữ tiếng Việt */}
+              {withdrawAmount && (
+                <div className="text-sm text-gray-500 italic pl-2 pb-2">
+                  Bằng chữ: {vnNum2words(withdrawAmount.replace(/[^\d]/g, ''))} đồng
+                </div>
+              )}
               <select
                 value={selectedBankId || ""}
                 onChange={e => setSelectedBankId(e.target.value)}
@@ -533,9 +664,10 @@ function WalletPageContent() {
               setSuccessMessage("Thêm tài khoản ngân hàng thành công!");
               setTimeout(() => setSuccessMessage(null), 3500);
             } catch (error) {
-              setSuccessMessage(null);
-              setWithdrawError("Thêm tài khoản thất bại!");
-              setTimeout(() => setWithdrawError(null), 3500);
+              // setSuccessMessage(null);
+              // setWithdrawError("Thêm tài khoản thất bại!");
+              // setTimeout(() => setWithdrawError(null), 3500);
+              throw error;
             }
           }}
         />

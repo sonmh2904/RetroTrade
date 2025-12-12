@@ -2,8 +2,8 @@ const mongoose = require("mongoose");
 
 const discountAssignmentSchema = new mongoose.Schema(
   {
-    discountId: { type: mongoose.Schema.Types.ObjectId, ref: "Discount", required: true, index: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    discountId: { type: mongoose.Schema.Types.ObjectId, ref: "Discount", required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     perUserLimit: { type: Number, default: 1, min: 0 },
     usedCount: { type: Number, default: 0, min: 0 },
     effectiveFrom: { type: Date },

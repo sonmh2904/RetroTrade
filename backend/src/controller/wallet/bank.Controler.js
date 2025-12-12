@@ -1,5 +1,5 @@
 
-const BankAccount = require('../../models/BankAccount.model'); // import model bạn đã tạo
+const BankAccount = require('../../models/BankAccount.model'); 
 const { getAllBanks } = require('../../utils/bankUtils');
 
 
@@ -41,18 +41,19 @@ const addBankAccount = async (req, res) => {
             });
         }
 
-        // Validate tên chủ TK: 3-50 ký tự, chữ cái + Tiếng Việt + khoảng trắng/dấu, không khoảng trắng liền tiếp
-        if (!/^[A-Za-zÀ-Ỵà-ỵ\s.'-]{3,50}$/.test(accountName.trim()) || /\s{2,}/.test(accountName.trim())) {
+        // Cho phép: chữ cái in HOA không dấu, khoảng trắng, dấu chấm, gạch ngang, dấu nháy đơn
+        if (
+            !/^[A-Z\s.'-]{3,50}$/.test(accountName.trim()) || // kiểm tra ký tự cho phép, độ dài
+            /\s{2,}/.test(accountName.trim()) // không cho phép 2 dấu cách liền nhau
+        ) {
             return res.status(400).json({
-                message: "Tên chủ tài khoản từ 3-50 ký tự, chỉ chứa chữ cái và khoảng trắng!"
+                message: "Tên chủ tài khoản từ 3-50 ký tự, chỉ chứa chữ cái IN HOA không dấu và khoảng trắng!"
             });
         }
-
-
         // Kiểm tra số tài khoản đã tồn tại cùng user chưa để tránh duplicate
         const exists = await BankAccount.findOne({ userId, accountNumber });
         if (exists) {
-            return res.status(409).json({ message: "Số tài khoản này đã được lưu trước đó." });
+            return res.status(400).json({ message: "Số tài khoản này đã được lưu trước đó." });
         }
 
         // Nếu đặt là mặc định, reset các tài khoản khác thành false

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { MapPin, Edit2, Trash2, Check, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, Edit2, Trash2, Check, X, Plus, ChevronDown, ChevronUp, Loader2, Search, CheckCircle } from 'lucide-react';
 import {
   getUserAddresses,
   createUserAddress,
@@ -8,6 +8,12 @@ import {
   deleteUserAddress,
   type UserAddress,
 } from '@/services/auth/userAddress.api';
+import {
+  getProvinces,
+  getWardsByProvinceCode,
+  type Province,
+  type Ward,
+} from '@/services/address/address.api';
 
 type AddressSelectorProps = {
   selectedAddressId?: string | null;
@@ -25,6 +31,19 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
   const [locationLoading, setLocationLoading] = useState(false);
   const [showAllAddresses, setShowAllAddresses] = useState(false);
 
+  // Address API states
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [wards, setWards] = useState<Ward[]>([]);
+  const [provinceCode, setProvinceCode] = useState<number>(0);
+  const [districtSearchTerm, setDistrictSearchTerm] = useState('');
+  const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
+  const [districtLoading, setDistrictLoading] = useState(false);
+  const districtDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Gợi ý địa chỉ states
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+
   useEffect(() => {
     if (controlledSelectedId !== undefined) {
       setSelectedAddressId(controlledSelectedId);
@@ -32,6 +51,7 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
   }, [controlledSelectedId]);
 
   const loadAddresses = async () => {
+    setAddressesLoading(true);
     try {
       const res = await getUserAddresses();
       if (Array.isArray(res?.data)) {
@@ -44,12 +64,89 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
       }
     } catch {
       toast.error('Không thể tải danh sách địa chỉ');
+    } finally {
+      setAddressesLoading(false);
     }
   };
 
+  const fetchProvinces = useCallback(async () => {
+    try {
+      const data = await getProvinces();
+      setProvinces(data);
+    } catch (error) {
+      console.error("Error fetching provinces:", error);
+      toast.error("Không thể tải danh sách tỉnh/thành phố");
+      setProvinces([]);
+    }
+  }, []);
+
+  const loadWards = useCallback(async (code: number) => {
+    if (code <= 0) {
+      setWards([]);
+      setDistrictSearchTerm('');
+      return;
+    }
+    setDistrictLoading(true);
+    try {
+      const wardsData = await getWardsByProvinceCode(code);
+      setWards(wardsData);
+      // If existing district doesn't match any ward, keep as free text
+      if (newAddress.District && !wardsData.some((ward) => ward.ward === newAddress.District)) {
+        setDistrictSearchTerm(newAddress.District);
+      }
+    } catch (error) {
+      console.error("Error loading wards:", error);
+      toast.error("Không thể tải danh sách xã/phường");
+      setWards([]);
+    } finally {
+      setDistrictLoading(false);
+    }
+  }, [newAddress.District]);
+
   useEffect(() => {
+    fetchProvinces();
     loadAddresses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Set provinceCode when City changes
+  useEffect(() => {
+    if (newAddress.City && provinces.length > 0) {
+      const selectedProvince = provinces.find((p) => p.name === newAddress.City);
+      if (selectedProvince) {
+        setProvinceCode(selectedProvince.province_code);
+      } else {
+        setProvinceCode(0);
+      }
+    } else {
+      setProvinceCode(0);
+    }
+  }, [newAddress.City, provinces]);
+
+  // Load wards when provinceCode changes
+  useEffect(() => {
+    loadWards(provinceCode);
+  }, [provinceCode, loadWards]);
+
+  // Sync districtSearchTerm with district
+  useEffect(() => {
+    setDistrictSearchTerm(newAddress.District);
+  }, [newAddress.District]);
+
+  // Handle outside click for district dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        districtDropdownRef.current &&
+        !districtDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowDistrictDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const handleAddressSelect = (addressId: string) => {
@@ -67,12 +164,7 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
     }
     setAddressLoading(true);
     try {
-      const response = await createUserAddress({
-        Address: newAddress.Address.trim(),
-        City: newAddress.City.trim(),
-        District: newAddress.District.trim(),
-        IsDefault: true,
-      });
+      const response = await createUserAddress(newAddress);
       if (response?.data) {
         // Optimistically select the newly created address
         const created = response.data as UserAddress;
@@ -81,7 +173,7 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
           if (onSelect) onSelect(created);
         }
         await loadAddresses();
-        setNewAddress({ Address: '', City: '', District: '', IsDefault: false });
+        setNewAddress({ Address: '', City: '', District: '', IsDefault: true });
         setIsEditingAddress(false);
         toast.success('Tạo địa chỉ thành công');
       } else {
@@ -108,7 +200,7 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
       const response = await updateUserAddress(addressId, updateData);
       if (response?.data) {
         await loadAddresses();
-        setNewAddress({ Address: '', City: '', District: '', IsDefault: false });
+        setNewAddress({ Address: '', City: '', District: '', IsDefault: true });
         setIsEditingAddress(false);
         setEditingAddressId(null);
         toast.success('Cập nhật địa chỉ thành công');
@@ -143,8 +235,61 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
     const address = userAddresses.find(a => a._id === addressId);
     if (address) {
       setEditingAddressId(addressId);
-      setNewAddress({ Address: address.Address, City: address.City, District: address.District, IsDefault: address.IsDefault });
+      setNewAddress({ 
+        Address: address.Address || '', 
+        City: address.City || '', 
+        District: address.District || '', 
+        IsDefault: address.IsDefault || false 
+      });
       setIsEditingAddress(true);
+    }
+  };
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedName = e.target.value;
+    const selectedProvince = provinces.find((p) => p.name === selectedName);
+    setNewAddress(prev => ({ ...prev, City: selectedName }));
+    setProvinceCode(selectedProvince ? selectedProvince.province_code : 0);
+    setNewAddress(prev => ({ ...prev, District: '' }));
+    setDistrictSearchTerm('');
+  };
+
+  // Searchable dropdown functions for wards
+  const filteredWards = wards.filter((ward) =>
+    ward.ward.toLowerCase().includes(districtSearchTerm.toLowerCase())
+  );
+
+  const handleDistrictInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value;
+    setDistrictSearchTerm(value);
+    if (!showDistrictDropdown) {
+      setShowDistrictDropdown(true);
+    }
+  };
+
+  const handleDistrictFocus = () => {
+    if (wards.length > 0 && !showDistrictDropdown) {
+      setShowDistrictDropdown(true);
+    }
+  };
+
+  const selectDistrict = (wardName: string) => {
+    setNewAddress(prev => ({ ...prev, District: wardName }));
+    setDistrictSearchTerm(wardName);
+    setShowDistrictDropdown(false);
+  };
+
+  const handleDistrictKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setShowDistrictDropdown(false);
+    } else if (
+      e.key === "Enter" &&
+      showDistrictDropdown &&
+      filteredWards.length > 0
+    ) {
+      selectDistrict(filteredWards[0].ward);
     }
   };
 
@@ -157,66 +302,117 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
 
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('Trình duyệt của bạn không hỗ trợ lấy vị trí');
+      toast.error("Trình duyệt của bạn không hỗ trợ lấy vị trí");
       return;
     }
+
     setLocationLoading(true);
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=vi`, {
-            method: 'GET',
-            headers: { 'User-Agent': 'RetroTrade/1.0', 'Accept': 'application/json' },
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const data = await response.json();
-          if (data && data.address) {
-            const addr = data.address;
-            const street = addr.road || addr.street || addr.pedestrian || '';
-            const houseNumber = addr.house_number || '';
-            const fullStreet = houseNumber && street ? `${houseNumber} ${street}`.trim() : (street || houseNumber);
-            const ward = addr.ward || addr.suburb || addr.neighbourhood || '';
-            const district = addr.district || addr.county || addr.city_district || '';
-            const city = addr.city || addr.town || addr.municipality || '';
-            const province = addr.state || addr.province || '';
-            const finalWard = ward || district || '';
-            const finalCity = city || province || '';
-            setNewAddress(prev => ({
-              ...prev,
-              Address: fullStreet || prev.Address,
-              District: finalWard || prev.District,
-              City: finalCity || prev.City,
-            }));
-            toast.success('Đã lấy địa chỉ hiện tại thành công!');
-          } else {
-            toast.error('Không thể lấy địa chỉ từ tọa độ');
+
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=vi`,
+            {
+              headers: {
+                "User-Agent": "RetroTrade/1.0 (+https://retrotrade.vn)",
+              },
+            }
+          );
+
+          if (!res.ok) throw new Error("Không kết nối được dịch vụ địa chỉ");
+
+          const data = await res.json();
+          if (!data?.address) {
+            toast.error("Không tìm thấy địa chỉ từ vị trí này");
+            return;
           }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lấy địa chỉ';
-          toast.error(`${msg}. Vui lòng thử lại hoặc nhập thủ công.`);
+
+          const a = data.address;
+
+          // xử lý tỉnh thành phố
+          const rawCity =
+            a.city || a.state || a.province || a.town || a.municipality || "";
+
+          const normalizedCity = rawCity.replace(/^Thành phố\s+/i, "").trim();
+
+          // Tìm trong danh sách tỉnh đã load từ API
+          const matchedProvince = provinces.find(
+            (p) =>
+              p.name.includes(normalizedCity) ||
+              normalizedCity.includes(p.name) ||
+              (p.name === "Hà Nội" && normalizedCity.includes("Hà Nội")) ||
+              (p.name === "Hồ Chí Minh" &&
+                normalizedCity.includes("Hồ Chí Minh")) ||
+              (p.name === "Đà Nẵng" && normalizedCity.includes("Đà Nẵng")) ||
+              (p.name === "Cần Thơ" && normalizedCity.includes("Cần Thơ")) ||
+              (p.name === "Hải Phòng" && normalizedCity.includes("Hải Phòng"))
+          );
+
+          // Đường + số nhà
+          const houseNumber = a.house_number || "";
+          const road = a.road || a.street || a.pedestrian || "";
+          const fullStreet = [houseNumber, road]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+
+          // Phường/xã
+          const ward =
+            a.suburb ||
+            a.neighbourhood ||
+            a.quarter ||
+            a.village ||
+            a.city_district ||
+            a.district ||
+            "";
+
+          // Cập nhật form
+          setNewAddress((prev) => ({
+            ...prev,
+            Address: fullStreet || prev.Address,
+            District: ward || prev.District,
+            City: matchedProvince?.name || rawCity || prev.City, 
+            IsDefault: true,
+          }));
+
+          toast.success("Đã lấy địa chỉ hiện tại thành công!");
+        } catch (err) {
+          console.error("Lỗi lấy địa chỉ:", err);
+          toast.error("Không thể lấy địa chỉ. Vui lòng nhập tay.");
         } finally {
           setLocationLoading(false);
         }
       },
-      (error) => {
-        let message = 'Không thể lấy vị trí hiện tại.';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            message = 'Bạn cần cấp quyền truy cập vị trí để sử dụng tính năng này.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            message = 'Thông tin vị trí không khả dụng.';
-            break;
-          case error.TIMEOUT:
-            message = 'Yêu cầu lấy vị trí hết thời gian chờ.';
-            break;
-        }
-        toast.error(message);
+      (err) => {
+        let msg = "Không thể lấy vị trí hiện tại.";
+        if (err.code === GeolocationPositionError.PERMISSION_DENIED)
+          msg = "Bạn chưa cho phép truy cập vị trí";
+        else if (err.code === GeolocationPositionError.POSITION_UNAVAILABLE)
+          msg = "Không xác định được vị trí";
+        else if (err.code === GeolocationPositionError.TIMEOUT)
+          msg = "Hết thời gian chờ vị trí";
+
+        toast.error(msg);
         setLocationLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
+  };
+
+  const selectAddress = (addr: UserAddress) => {
+    setNewAddress({
+      Address: addr.Address || '',
+      City: addr.City || '',
+      District: addr.District || '',
+      IsDefault: addr.IsDefault || false
+    });
+    const selectedProvince = provinces.find((p) => p.name === addr.City);
+    setProvinceCode(selectedProvince ? selectedProvince.province_code : 0);
+    setIsEditingAddress(true);
+    setShowAddressSuggestions(false);
   };
 
   return (
@@ -224,7 +420,13 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
       <div className="flex items-center justify-between mb-3">
         <label className="block text-sm font-semibold text-gray-700">Chọn địa chỉ đã lưu</label>
         <button
-          onClick={() => { setIsEditingAddress(true); setEditingAddressId(null); setNewAddress({ Address: '', City: '', District: '', IsDefault: false }); }}
+          onClick={() => { 
+            setIsEditingAddress(true); 
+            setEditingAddressId(null); 
+            setNewAddress({ Address: '', City: '', District: '', IsDefault: true }); 
+            setProvinceCode(0);
+            setDistrictSearchTerm('');
+          }}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -237,7 +439,13 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-800">{editingAddressId ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'}</h3>
             <button
-              onClick={() => { setIsEditingAddress(false); setEditingAddressId(null); setNewAddress({ Address: '', City: '', District: '', IsDefault: false }); }}
+              onClick={() => { 
+                setIsEditingAddress(false); 
+                setEditingAddressId(null); 
+                setNewAddress({ Address: '', City: '', District: '', IsDefault: true }); 
+                setProvinceCode(0);
+                setDistrictSearchTerm('');
+              }}
               className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
               title="Đóng"
             >
@@ -277,38 +485,82 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Phường/Xã</label>
-                <input
-                  type="text"
-                  placeholder="Nhập phường/xã"
-                  value={newAddress.District}
-                  onChange={(e) => setNewAddress({ ...newAddress, District: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
-                />
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Tỉnh/Thành phố</label>
+                <select
+                  value={newAddress.City}
+                  onChange={handleCityChange}
+                  className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white text-black"
+                >
+                  <option value="">Chọn tỉnh/thành phố</option>
+                  {provinces.map((province) => (
+                    <option key={province.province_code} value={province.name}>
+                      {province.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Tỉnh/Thành phố</label>
-                <input
-                  type="text"
-                  placeholder="Nhập tỉnh/thành phố"
-                  value={newAddress.City}
-                  onChange={(e) => setNewAddress({ ...newAddress, City: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
-                />
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Phường/Xã</label>
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={districtSearchTerm}
+                      onChange={handleDistrictInputChange}
+                      onFocus={handleDistrictFocus}
+                      onKeyDown={handleDistrictKeyDown}
+                      disabled={!newAddress.City || districtLoading}
+                      placeholder="Tìm kiếm xã/phường"
+                      className="w-full pl-10 pr-10 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    {districtLoading && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1 text-emerald-600">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-xs">Đang tải</span>
+                      </div>
+                    )}
+                  </div>
+                  {showDistrictDropdown && wards.length > 0 && (
+                    <div
+                      ref={districtDropdownRef}
+                      className="absolute top-full left-0 w-full bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto mt-1"
+                    >
+                      {filteredWards.length > 0 ? (
+                        filteredWards.map((ward, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 hover:bg-emerald-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-black"
+                            onClick={() => selectDistrict(ward.ward)}
+                          >
+                            {ward.ward}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-3 text-gray-500 text-center">
+                          Không tìm thấy kết quả
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {newAddress.City && wards.length === 0 && !districtLoading && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Không có dữ liệu xã/phường cho tỉnh này.
+                  </p>
+                )}
               </div>
             </div>
-            {editingAddressId && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isDefault"
-                  checked={newAddress.IsDefault}
-                  onChange={(e) => setNewAddress({ ...newAddress, IsDefault: e.target.checked })}
-                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                />
-                <label htmlFor="isDefault" className="text-sm text-gray-700 cursor-pointer">Đặt làm địa chỉ mặc định</label>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isDefault"
+                checked={newAddress.IsDefault}
+                onChange={(e) => setNewAddress({ ...newAddress, IsDefault: e.target.checked })}
+                className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+              />
+              <label htmlFor="isDefault" className="text-sm text-gray-700 cursor-pointer">Đặt làm địa chỉ mặc định</label>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => { if (editingAddressId) { handleUpdateAddress(editingAddressId); } else { handleCreateAddress(); } }}
@@ -318,7 +570,13 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
                 {addressLoading ? 'Đang xử lý...' : editingAddressId ? 'Cập nhật' : 'Thêm mới'}
               </button>
               <button
-                onClick={() => { setIsEditingAddress(false); setEditingAddressId(null); setNewAddress({ Address: '', City: '', District: '', IsDefault: false }); }}
+                onClick={() => { 
+                  setIsEditingAddress(false); 
+                  setEditingAddressId(null); 
+                  setNewAddress({ Address: '', City: '', District: '', IsDefault: true }); 
+                  setProvinceCode(0);
+                  setDistrictSearchTerm('');
+                }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-semibold"
               >
                 Hủy
@@ -463,6 +721,62 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Gợi ý địa chỉ - sử dụng để fill form editing */}
+        {userAddresses.length > 0 && (
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() =>
+                setShowAddressSuggestions(!showAddressSuggestions)
+              }
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium mb-3 transition-colors"
+            >
+              Gợi ý địa chỉ trước đó ({userAddresses.length})
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${
+                  showAddressSuggestions ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {showAddressSuggestions && (
+              <div className="bg-gray-50 rounded-lg p-4 max-h-40 overflow-y-auto border border-gray-200">
+                {addressesLoading ? (
+                  <p className="text-gray-500 text-sm">Đang tải...</p>
+                ) : (
+                  <div className="space-y-2">
+                    {userAddresses.map((addr, index) => (
+                      <button
+                        key={addr._id || index}
+                        type="button"
+                        onClick={() => selectAddress(addr)}
+                        className={`w-full text-left p-3 bg-white rounded-md hover:bg-blue-50 border border-gray-200 transition-colors text-sm ${
+                          addr.IsDefault
+                            ? "border-green-500 bg-green-50"
+                            : ""
+                        }`}
+                      >
+                        <div className="font-medium text-gray-900 flex items-center gap-2">
+                          {addr.District}, {addr.City}
+                          {addr.IsDefault && (
+                            <CheckCircle
+                              size={16}
+                              className="text-green-600"
+                            />
+                          )}
+                        </div>
+                        <div className="text-gray-600 truncate">
+                          {addr.Address}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

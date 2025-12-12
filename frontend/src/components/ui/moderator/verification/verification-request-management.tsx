@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/redux_store";
+import { decodeToken } from "@/utils/jwtHelper";
 import { Card, CardContent } from "@/components/ui/common/card";
 import { Badge } from "@/components/ui/common/badge";
 import { Button } from "@/components/ui/common/button";
@@ -22,6 +25,8 @@ import {
   Calendar,
   MapPin,
   CreditCard,
+  AlertCircle,
+  Lock,
 } from "lucide-react";
 import {
   verificationRequestAPI,
@@ -30,23 +35,19 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/common/avatar";
 
 export function VerificationRequestManagement() {
+  const { accessToken } = useSelector((state: RootState) => state.auth);
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
   const [detailDialog, setDetailDialog] = useState(false);
   const [handleDialog, setHandleDialog] = useState(false);
   const [handleAction, setHandleAction] = useState<'approved' | 'rejected'>('approved');
   const [moderatorNotes, setModeratorNotes] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [idCardInfo, setIdCardInfo] = useState({
-    idNumber: "",
-    fullName: "",
-    dateOfBirth: "",
-    address: ""
-  });
   const [isHandling, setIsHandling] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
@@ -168,15 +169,6 @@ export function VerificationRequestManagement() {
     setHandleAction(action);
     setModeratorNotes("");
     setRejectionReason("");
-    // Pre-fill idCardInfo from request if available
-    setIdCardInfo({
-      idNumber: request.idCardInfo?.idNumber || "",
-      fullName: request.idCardInfo?.fullName || "",
-      dateOfBirth: request.idCardInfo?.dateOfBirth 
-        ? new Date(request.idCardInfo.dateOfBirth).toISOString().split('T')[0]
-        : "",
-      address: request.idCardInfo?.address || ""
-    });
     setHandleDialog(true);
   };
 
@@ -188,26 +180,26 @@ export function VerificationRequestManagement() {
       return;
     }
 
-    // Validate idCardInfo when approving
+    // Validate idCardInfo from request when approving
     if (handleAction === 'approved') {
-      if (!idCardInfo.idNumber.trim()) {
-        toast.error("Vui lòng nhập số căn cước công dân");
+      if (!selectedRequest.idCardInfo) {
+        toast.error("Yêu cầu này không có thông tin OCR. Không thể duyệt.");
         return;
       }
-      if (!/^\d{12}$/.test(idCardInfo.idNumber.trim())) {
-        toast.error("Số căn cước công dân phải có 12 chữ số");
+      if (!selectedRequest.idCardInfo.idNumber || !selectedRequest.idCardInfo.idNumber.trim()) {
+        toast.error("Thông tin OCR không đầy đủ: thiếu số căn cước công dân");
         return;
       }
-      if (!idCardInfo.fullName.trim()) {
-        toast.error("Vui lòng nhập họ và tên");
+      if (!/^\d{12}$/.test(selectedRequest.idCardInfo.idNumber.trim())) {
+        toast.error("Số căn cước công dân không hợp lệ (phải có 12 chữ số)");
         return;
       }
-      if (!idCardInfo.dateOfBirth) {
-        toast.error("Vui lòng nhập ngày tháng năm sinh");
+      if (!selectedRequest.idCardInfo.fullName || !selectedRequest.idCardInfo.fullName.trim()) {
+        toast.error("Thông tin OCR không đầy đủ: thiếu họ và tên");
         return;
       }
-      if (!idCardInfo.address.trim()) {
-        toast.error("Vui lòng nhập địa chỉ thường trú");
+      if (!selectedRequest.idCardInfo.dateOfBirth) {
+        toast.error("Thông tin OCR không đầy đủ: thiếu ngày tháng năm sinh");
         return;
       }
     }
@@ -220,11 +212,13 @@ export function VerificationRequestManagement() {
         {
           moderatorNotes: moderatorNotes.trim() || undefined,
           rejectionReason: handleAction === 'rejected' ? rejectionReason.trim() : undefined,
-          idCardInfo: handleAction === 'approved' ? {
-            idNumber: idCardInfo.idNumber.trim(),
-            fullName: idCardInfo.fullName.trim(),
-            dateOfBirth: idCardInfo.dateOfBirth,
-            address: idCardInfo.address.trim()
+          idCardInfo: handleAction === 'approved' && selectedRequest.idCardInfo && 
+            selectedRequest.idCardInfo.idNumber && 
+            selectedRequest.idCardInfo.fullName && 
+            selectedRequest.idCardInfo.dateOfBirth ? {
+            idNumber: selectedRequest.idCardInfo.idNumber.trim(),
+            fullName: selectedRequest.idCardInfo.fullName.trim(),
+            dateOfBirth: selectedRequest.idCardInfo.dateOfBirth,
           } : undefined
         }
       );
@@ -270,8 +264,14 @@ export function VerificationRequestManagement() {
     return priorityA - priorityB;
   });
 
-  // Filter by search term
+  // Filter by search term and assignee
   const filteredRequests = sortedRequests.filter((request) => {
+    // Filter by assignee
+    if (assigneeFilter === "assignedToMe" && !isAssignedToMe(request)) {
+      return false;
+    }
+
+    // Filter by search term
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
     return (
@@ -340,6 +340,16 @@ export function VerificationRequestManagement() {
                 <option value="In Progress">Đang xử lý</option>
                 <option value="Approved">Đã duyệt</option>
                 <option value="Rejected">Đã từ chối</option>
+              </select>
+            </div>
+            <div className="w-full md:w-48">
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">Tất cả yêu cầu</option>
+                <option value="assignedToMe">Được giao cho tôi</option>
               </select>
             </div>
           </div>
@@ -441,8 +451,8 @@ export function VerificationRequestManagement() {
                     </div>
 
                     {request.assignedTo && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        Được giao cho: {request.assignedTo.fullName || request.assignedTo.email}
+                      <div className={`mt-1 text-xs ${isAssignedToMe(request) ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+                        Được giao cho: {isAssignedToMe(request) ? 'Bạn' : (request.assignedTo.fullName || request.assignedTo.email)}
                       </div>
                     )}
                   </div>
@@ -467,7 +477,7 @@ export function VerificationRequestManagement() {
                         Nhận xử lý
                       </Button>
                     )}
-                    {request.status === 'In Progress' && (
+                    {request.status === 'In Progress' && isAssignedToMe(request) && (
                       <>
                         <Button
                           variant="outline"
@@ -488,6 +498,12 @@ export function VerificationRequestManagement() {
                           Từ chối
                         </Button>
                       </>
+                    )}
+                    {request.status === 'In Progress' && isAssignedToOther(request) && (
+                      <div className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200">
+                        <Lock className="w-4 h-4" />
+                        <span>Đang được xử lý bởi moderator khác</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -576,10 +592,6 @@ export function VerificationRequestManagement() {
                           : "N/A"}
                       </p>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Địa chỉ thường trú</label>
-                      <p className="text-gray-900 font-semibold">{selectedRequest.idCardInfo.address || "N/A"}</p>
-                    </div>
                   </div>
                 </div>
               ) : (
@@ -602,7 +614,7 @@ export function VerificationRequestManagement() {
                 <div className="border-b pb-4">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <FileText className="w-5 h-5" />
-                    Tài liệu đã upload
+                    Ảnh đã upload
                   </h3>
                   <div className={`grid gap-4 ${selectedRequest.documents.length === 1 ? 'grid-cols-1' : selectedRequest.documents.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                     {selectedRequest.documents.map((doc, index) => (
@@ -610,6 +622,7 @@ export function VerificationRequestManagement() {
                         <p className="text-sm font-medium text-gray-700 mb-3 text-center">
                           {doc.documentType === 'idCardFront' ? 'Mặt trước CCCD' :
                            doc.documentType === 'idCardBack' ? 'Mặt sau CCCD' : 
+                           doc.documentType === 'userPhoto' ? 'Ảnh người dùng' :
                            doc.documentType === 'selfie' ? 'Ảnh cá nhân (cũ)' : 'Tài liệu'}
                         </p>
                         <div
@@ -712,69 +725,140 @@ export function VerificationRequestManagement() {
 
       {/* Handle Dialog */}
       <Dialog open={handleDialog} onOpenChange={setHandleDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto z-[100]">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto z-[100]">
           <DialogHeader>
             <DialogTitle>
               {handleAction === 'approved' ? 'Duyệt yêu cầu xác minh' : 'Từ chối yêu cầu xác minh'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            {handleAction === 'approved' && (
-              <div className="space-y-4 border-b pb-4">
+          <div className="space-y-6">
+            {/* Thông tin từ yêu cầu xác minh */}
+            {selectedRequest && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />
-                  Thông tin căn cước công dân <span className="text-red-500">*</span>
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  Thông tin từ yêu cầu xác minh
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Số căn cước công dân <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      type="text"
-                      value={idCardInfo.idNumber}
-                      onChange={(e) => setIdCardInfo({ ...idCardInfo, idNumber: e.target.value })}
-                      placeholder="Nhập 12 chữ số"
-                      maxLength={12}
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Họ và tên <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      type="text"
-                      value={idCardInfo.fullName}
-                      onChange={(e) => setIdCardInfo({ ...idCardInfo, fullName: e.target.value })}
-                      placeholder="Nhập họ và tên"
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ngày tháng năm sinh <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      type="date"
-                      value={idCardInfo.dateOfBirth}
-                      onChange={(e) => setIdCardInfo({ ...idCardInfo, dateOfBirth: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Địa chỉ thường trú <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      type="text"
-                      value={idCardInfo.address}
-                      onChange={(e) => setIdCardInfo({ ...idCardInfo, address: e.target.value })}
-                      placeholder="Nhập địa chỉ thường trú"
-                      className="w-full"
-                    />
+                
+                {/* Thông tin người dùng */}
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Người dùng
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Họ tên:</span>{' '}
+                      <span className="font-medium">{selectedRequest.userId?.fullName || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Email:</span>{' '}
+                      <span className="font-medium">{selectedRequest.userId?.email || "N/A"}</span>
+                    </div>
+                    {selectedRequest.userId?.phone && (
+                      <div>
+                        <span className="text-gray-600">Số điện thoại:</span>{' '}
+                        <span className="font-medium">{selectedRequest.userId.phone}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Thông tin OCR từ request (nếu có) */}
+                {selectedRequest.idCardInfo ? (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                    <h4 className="text-sm font-medium text-indigo-800 mb-2 flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Thông tin OCR đã được đọc tự động
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {selectedRequest.idCardInfo.idNumber && (
+                        <div>
+                          <span className="text-indigo-700">Số CCCD:</span>{' '}
+                          <span className="font-semibold text-indigo-900">{selectedRequest.idCardInfo.idNumber}</span>
+                        </div>
+                      )}
+                      {selectedRequest.idCardInfo.fullName && (
+                        <div>
+                          <span className="text-indigo-700">Họ tên:</span>{' '}
+                          <span className="font-semibold text-indigo-900">{selectedRequest.idCardInfo.fullName}</span>
+                        </div>
+                      )}
+                      {selectedRequest.idCardInfo.dateOfBirth && (
+                        <div>
+                          <span className="text-indigo-700">Ngày sinh:</span>{' '}
+                          <span className="font-semibold text-indigo-900">
+                            {new Date(selectedRequest.idCardInfo.dateOfBirth).toLocaleDateString('vi-VN')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-sm text-orange-800 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Không có thông tin OCR. Vui lòng nhập thủ công từ ảnh CCCD.
+                    </p>
+                  </div>
+                )}
+
+                {/* Ảnh đã upload */}
+                {selectedRequest.documents && selectedRequest.documents.length > 0 && (
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Ảnh đã upload ({selectedRequest.documents.length})
+                    </h4>
+                    <div className={`grid gap-3 ${selectedRequest.documents.length === 1 ? 'grid-cols-1' : selectedRequest.documents.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                      {selectedRequest.documents.map((doc, index) => (
+                        <div key={index} className="border rounded-lg p-2 bg-gray-50">
+                          <p className="text-xs font-medium text-gray-700 mb-2 text-center">
+                            {doc.documentType === 'idCardFront' ? 'Mặt trước CCCD' :
+                             doc.documentType === 'idCardBack' ? 'Mặt sau CCCD' : 
+                             doc.documentType === 'userPhoto' ? 'Ảnh người dùng' :
+                             doc.documentType === 'selfie' ? 'Ảnh cá nhân' : 'Tài liệu'}
+                          </p>
+                          <div
+                            className="relative w-full h-32 rounded overflow-hidden cursor-pointer border-2 border-gray-200 hover:border-indigo-400 transition-all"
+                            onClick={() => setEnlargedImage(doc.fileUrl)}
+                          >
+                            <img
+                              src={doc.fileUrl}
+                              alt={doc.documentType}
+                              className="w-full h-full object-contain bg-white"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = "/file.svg";
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                              <Eye className="w-4 h-4 text-white opacity-0 hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ghi chú từ request (nếu có) */}
+                {selectedRequest.moderatorNotes && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <h4 className="text-sm font-medium text-blue-800 mb-1">Ghi chú từ hệ thống:</h4>
+                    <p className="text-sm text-blue-900">{selectedRequest.moderatorNotes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Thông báo khi duyệt mà không có thông tin OCR */}
+            {handleAction === 'approved' && selectedRequest && !selectedRequest.idCardInfo && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <strong>Cảnh báo:</strong> Yêu cầu này không có thông tin OCR. Vui lòng kiểm tra ảnh và từ chối yêu cầu nếu không thể xác minh thông tin.
+                </p>
               </div>
             )}
             {handleAction === 'rejected' && (
@@ -814,11 +898,11 @@ export function VerificationRequestManagement() {
                 isHandling || 
                 (handleAction === 'rejected' && !rejectionReason.trim()) ||
                 (handleAction === 'approved' && (
-                  !idCardInfo.idNumber.trim() ||
-                  !/^\d{12}$/.test(idCardInfo.idNumber.trim()) ||
-                  !idCardInfo.fullName.trim() ||
-                  !idCardInfo.dateOfBirth ||
-                  !idCardInfo.address.trim()
+                  !selectedRequest?.idCardInfo ||
+                  !selectedRequest.idCardInfo.idNumber?.trim() ||
+                  !/^\d{12}$/.test(selectedRequest.idCardInfo.idNumber.trim()) ||
+                  !selectedRequest.idCardInfo.fullName?.trim() ||
+                  !selectedRequest.idCardInfo.dateOfBirth
                 ))
               }
               className={handleAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}

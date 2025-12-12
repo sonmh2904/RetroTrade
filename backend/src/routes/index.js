@@ -9,6 +9,7 @@ const uploadproductRouter = require("./products/upload/upload.routes");
 
 const userRouter = require("./user/user.router")
 const blogRoutes = require("../routes/blog/post.routes");
+const homeRoutes = require("../routes/home/home.routes");
 
 const walletRoutes = require("../routes/wallet/wallet.routes");
 const messagesRouter = require("../routes/messages/messages.router");
@@ -28,7 +29,10 @@ const treeGameRouter = require("./games/tree.routes");
 const adminComplaintRouter = require("./admin/complaint.routes");
 const adminDashboardRouter = require("./admin/dashboard.routes");
 const moderatorDashboardRouter = require("./moderator/dashboard.routes");
+const ownerDashboardRouter = require("./owner/dashboard.routes");
 const termsRouter = require("./terms/terms.routes");
+const privacyRouter = require("./privacy/privacy.routes");
+const privacyTypesRouter = require("./privacy/privacy-types.routes");
 const aiRouter = require("./messages/aiChat.routes")
 module.exports = (app) => {
     const api = "/api/v1";
@@ -37,6 +41,8 @@ module.exports = (app) => {
     app.use(api + "/signature", signatureRouter);
     app.use(api + "/contract", contractRouter);
     app.use(api + "/terms", termsRouter);
+    app.use(api + "/privacy", privacyRouter);
+    app.use(api + "/privacy-types", privacyTypesRouter);
     app.use(api + "/categories", categoryRouter);
     app.use(api + "/products", productRouter);
     app.use(api + "/products/upload", uploadproductRouter);
@@ -44,6 +50,7 @@ module.exports = (app) => {
     app.use(api + "/price-units", priceUnitsRouter);
 
     app.use(api + "/post", blogRoutes);
+    app.use(api + "/home", homeRoutes);
     app.use(api + "/wallet", walletRoutes);
     app.use(api + "/messages", messagesRouter)
     app.use(api + "/ai-chat", aiRouter)
@@ -63,4 +70,5 @@ module.exports = (app) => {
     app.use(api + "/admin/complaints", adminComplaintRouter);
     app.use(api + "/admin/dashboard", adminDashboardRouter);
     app.use(api + "/moderator/dashboard", moderatorDashboardRouter);
+    app.use(api + "/owner/dashboard", ownerDashboardRouter);
 }

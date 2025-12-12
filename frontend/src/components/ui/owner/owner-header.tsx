@@ -52,7 +52,7 @@ export function OwnerHeader({ onToggleSidebar, isSidebarOpen = true }: OwnerHead
     setUserInfo(null);
     dispatch(logout());
     toast.success("Đăng xuất thành công");
-    router.push("/home");
+    router.push("/auth/login");
   };
 
   const handleGoToProfile = () => {

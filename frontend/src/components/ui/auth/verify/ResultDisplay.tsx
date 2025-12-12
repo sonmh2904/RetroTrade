@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "../../common/button";
 
 interface ResultDisplayProps {
-  result: { success: boolean; message: string; details?: string } | null;
+  result: { success: boolean; message: string; details?: string; status?: 'success' | 'warning' | 'error' } | null;
   onRestart?: () => void;
   onRetryStep?: (stepNumber: number) => void;
   failedStep?: number | null;
@@ -32,11 +32,17 @@ export default function ResultDisplay({
     );
   }
 
-  const isSuccess = result.success;
-  const IconComponent = isSuccess ? CheckCircle : XCircle;
-  const iconColor = isSuccess ? "text-green-600" : "text-red-600";
-  const bgColor = isSuccess ? "bg-green-50" : "bg-red-50";
-  const borderColor = isSuccess ? "border-green-200" : "border-red-200";
+  // Determine status: use explicit status if provided, otherwise infer from success
+  const status = result.status || (result.success ? 'success' : 'error');
+  const isSuccess = status === 'success';
+  const isWarning = status === 'warning';
+  const isError = status === 'error';
+  
+  const IconComponent = isSuccess ? CheckCircle : isWarning ? AlertCircle : XCircle;
+  const iconColor = isSuccess ? "text-green-600" : isWarning ? "text-yellow-600" : "text-red-600";
+  const bgColor = isSuccess ? "bg-green-50" : isWarning ? "bg-yellow-50" : "bg-red-50";
+  const borderColor = isSuccess ? "border-green-200" : isWarning ? "border-yellow-200" : "border-red-200";
+  const textColor = isSuccess ? "text-green-700" : isWarning ? "text-yellow-700" : "text-red-700";
 
   return (
     <div className="text-center py-6">
@@ -44,14 +50,14 @@ export default function ResultDisplay({
         <IconComponent className={`w-8 h-8 ${iconColor}`} />
       </div>
 
-      <h3 className={`text-xl font-semibold mb-2 ${isSuccess ? "text-green-700" : "text-red-700"}`}>
+      <h3 className={`text-xl font-semibold mb-2 ${textColor}`}>
         {result.message}
       </h3>
 
       {result.details && (
-        <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
+        <div className="text-sm text-gray-600 mb-4 max-w-md mx-auto whitespace-pre-line">
           {result.details}
-        </p>
+        </div>
       )}
 
       <div className="mt-6 space-y-3">
@@ -67,6 +73,20 @@ export default function ResultDisplay({
             </div>
             <p className="text-sm text-gray-600 mt-4">
               Bạn có thể sử dụng đầy đủ các tính năng của ứng dụng
+            </p>
+          </>
+        ) : isWarning ? (
+          <>
+            <div className="flex items-center justify-center gap-2 text-sm text-yellow-600">
+              <AlertCircle className="w-4 h-4" />
+              <span>Yêu cầu đang chờ xử lý</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-sm text-yellow-600">
+              <AlertCircle className="w-4 h-4" />
+              <span>Kiểm duyệt viên sẽ xem xét trong thời gian sớm nhất</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-4">
+              Bạn sẽ nhận được thông báo khi có kết quả xác minh
             </p>
           </>
         ) : (
@@ -155,16 +175,49 @@ export default function ResultDisplay({
           >
             Về trang chủ
           </Button>
+        ) : isWarning ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-2 text-sm text-yellow-600 mb-2">
+              <AlertCircle className="w-4 h-4" />
+              <span>Yêu cầu đã được chuyển sang xác minh bán tự động</span>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {onRestart && (
+                <Button
+                  onClick={onRestart}
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white"
+                >
+                  🔄 Xác minh lại
+                </Button>
+              )}
+              <Button
+                onClick={handleGoHome}
+                variant="outline"
+                className="flex-1 border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+              >
+                🏠 Về trang chủ
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-3">
-            {onRestart && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              {onRestart && (
+                <Button
+                  onClick={onRestart}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  🔄 Bắt đầu lại từ đầu
+                </Button>
+              )}
               <Button
-                onClick={onRestart}
-                className="w-full bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleGoHome}
+                variant="outline"
+                className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
               >
-                🔄 Bắt đầu lại từ đầu
+                🏠 Về trang chủ
               </Button>
-            )}
+            </div>
             <p className="text-xs text-gray-500 text-center">
               Hoặc chọn bước cụ thể để thử lại ở trên
             </p>

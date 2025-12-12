@@ -86,6 +86,8 @@ const orderSchema = new mongoose.Schema(
       enum: [
         "pending",
         "confirmed",
+        "delivery",
+        "received",
         "progress",
         "returned",
         "completed",

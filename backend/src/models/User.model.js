@@ -49,7 +49,6 @@ const userSchema = new mongoose.Schema({
         idNumber: String, // Số căn cước công dân
         fullName: String, // Họ và tên
         dateOfBirth: Date, // Ngày tháng năm sinh
-        address: String, // Địa chỉ thường trú
         extractedAt: Date, // Thời gian extract thông tin
         extractionMethod: { type: String, enum: ['ocr', 'manual'], default: 'ocr' } // Phương thức extract
     },
@@ -67,16 +66,13 @@ userSchema.index({ reputationScore: -1 });
 // Indexes for filtering
 userSchema.index({ isDeleted: 1, createdAt: -1 }); // For getAllUsers with pagination
 userSchema.index({ role: 1, isDeleted: 1, createdAt: -1 }); // For role filter
-userSchema.index({ isDeleted: 1, role: 1, createdAt: -1 }); // Alternative compound index
-userSchema.index({ email: 1 }); // For email search
+userSchema.index({ isDeleted: 1, role: 1, createdAt: -1 }); // Compound index for common queries
+// Note: email index is automatically created by unique: true on the email field
 userSchema.index({ fullName: 1 }); // For name search
 userSchema.index({ isEmailConfirmed: 1, isPhoneConfirmed: 1, isIdVerified: 1 }); // For status filter
 
 // Text index for full-text search on email, fullName, displayName
 userSchema.index({ email: 'text', fullName: 'text', displayName: 'text' });
-
-// Compound index for common queries: isDeleted + role + createdAt
-userSchema.index({ isDeleted: 1, role: 1, createdAt: -1 });
 
 userSchema.index({ phone: 1, email: 1 }, { 
     unique: true, 

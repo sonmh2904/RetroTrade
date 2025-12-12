@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import Script from 'next/script';
+import { useState } from 'react';
 import PhoneInput from "./PhoneInput";
 import OTPInput from "./OTPInput";
 import ResultDisplay from "./ResultDisplay";
-import { sendOtpFirebase, verifyOtpFirebase } from '@/services/auth/auth.api';
+import { sendOtp, verifyOtp } from '@/services/auth/verificationRequest.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../common/card';
 import { Phone } from 'lucide-react';
 
@@ -27,28 +26,47 @@ export function PhoneVerification({
   const [step, setStep] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [sessionInfo, setSessionInfo] = useState('');
   const [result, setResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [failedStep, setFailedStep] = useState<number | null>(null);
 
-  // Prepare reCAPTCHA container
-  useEffect(() => {
-    const containerId = 'recaptcha-container-phone';
-    let container = document.getElementById(containerId);
-    if (!container) {
-      container = document.createElement('div');
-      container.id = containerId;
-      document.body.appendChild(container);
-    }
-  }, []);
-
   const formatPhoneNumber = (phone: string): string => {
+    if (!phone || phone.trim() === '') {
+      throw new Error('Vui lòng nhập số điện thoại');
+    }
+
     const digits = phone.replace(/\D/g, '');
-    if (digits.startsWith('0')) return '+84' + digits.substring(1);
-    if (digits.startsWith('84')) return '+' + digits;
-    if (phone.startsWith('+')) return phone;
+    
+    if (digits.length < 9) {
+      throw new Error('Số điện thoại phải có ít nhất 9 chữ số');
+    }
+
+    if (digits.startsWith('0')) {
+      const phoneWithoutZero = digits.substring(1);
+      if (phoneWithoutZero.length < 9) {
+        throw new Error('Số điện thoại không hợp lệ');
+      }
+      return '+84' + phoneWithoutZero;
+    }
+    if (digits.startsWith('84')) {
+      const phoneWithoutCountryCode = digits.substring(2);
+      if (phoneWithoutCountryCode.length < 9) {
+        throw new Error('Số điện thoại không hợp lệ');
+      }
+      return '+' + digits;
+    }
+    if (phone.startsWith('+')) {
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        throw new Error('Số điện thoại không hợp lệ');
+      }
+      return phone;
+    }
+    
+    if (digits.length < 9) {
+      throw new Error('Số điện thoại không hợp lệ');
+    }
     return '+84' + digits;
   };
 
@@ -57,11 +75,15 @@ export function PhoneVerification({
       setIsLoading(true);
       setError('');
       setFailedStep(null);
+      
+      if (!phoneNumber || phoneNumber.trim() === '') {
+        throw new Error('Vui lòng nhập số điện thoại');
+      }
+
       const formatted = formatPhoneNumber(phoneNumber);
-      const resp = await sendOtpFirebase(formatted, undefined);
+      const resp = await sendOtp(formatted);
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.message || 'Send OTP failed');
-      setSessionInfo(data?.data?.sessionInfo || '');
       setStep(2);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Có lỗi xảy ra khi gửi OTP');
@@ -76,11 +98,11 @@ export function PhoneVerification({
       setIsLoading(true);
       setError('');
       setFailedStep(null);
-      const resp = await verifyOtpFirebase(sessionInfo, otp);
+      const formatted = formatPhoneNumber(phoneNumber);
+      const resp = await verifyOtp(formatted, otp);
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.message || 'Verify OTP failed');
       
-      // Backend automatically updates phone and isPhoneConfirmed after OTP verification
       const verifiedPhone = data?.data?.phone || formatPhoneNumber(phoneNumber);
       
       setResult({
@@ -90,7 +112,6 @@ export function PhoneVerification({
       });
       setStep(3);
       
-      // Call onSuccess callback
       if (onSuccess) {
         onSuccess(verifiedPhone);
       }
@@ -117,7 +138,6 @@ export function PhoneVerification({
     setStep(1);
     setPhoneNumber('');
     setOtp('');
-    setSessionInfo('');
     setResult(null);
     setError('');
     setFailedStep(null);
@@ -131,10 +151,6 @@ export function PhoneVerification({
 
   return (
     <div className={className}>
-      {/* Firebase compat scripts */}
-      <Script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" strategy="afterInteractive" />
-      <Script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" strategy="afterInteractive" />
-      <div id="recaptcha-container-phone" />
 
       <Card className="w-full">
         <CardHeader className="text-center">

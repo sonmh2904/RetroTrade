@@ -49,6 +49,129 @@ interface Product {
   Quantity: number;
 }
 
+// Component cho Counter Animation
+const AnimatedCounter = ({ end, duration = 2000 }: { end: number; duration?: number }) => {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let startTime: number;
+    let animationFrame: number;
+    const animate = (currentTime: number) => {
+      if (!startTime) startTime = currentTime;
+      const progress = Math.min((currentTime - startTime) / duration, 1);
+     
+      setCount(Math.floor(progress * end));
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [end, duration]);
+  return <span>{count}</span>;
+};
+
+const StatsCard = ({
+  title,
+  value,
+  icon: Icon,
+  bgColor,
+  iconColor,
+  borderColor,
+}: {
+  title: string;
+  value: number;
+  icon: LucideIcon;
+  bgColor: string;
+  iconColor: string;
+  borderColor: string;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <div
+      className={`bg-white rounded-xl shadow-sm p-6 border-2 ${borderColor} relative overflow-hidden`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="flex items-center justify-between relative z-10">
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600 font-medium uppercase tracking-wide">
+            {title}
+          </p>
+          <p className="text-3xl font-bold text-gray-900">
+            <AnimatedCounter end={value} />
+          </p>
+        </div>
+        <div
+          className={`w-16 h-16 ${bgColor} rounded-xl flex items-center justify-center`}
+        >
+          <Icon 
+            className={`${iconColor} transition-transform duration-300 ${isHovered ? 'scale-110 rotate-6' : ''}`} 
+            size={28} 
+          />
+        </div>
+      </div>
+     
+      <div className="mt-4 h-1.5 bg-gray-100 rounded-full overflow-hidden relative z-10">
+        <div
+          className={`h-full ${bgColor} rounded-full opacity-80`}
+          style={{
+            width: '100%',
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Component StatusStats
+interface Product {
+  StatusId: number;
+}
+const StatusStats = ({ products }: { products: Product[] }) => {
+  const pending = products.filter((p: Product) => p.StatusId === 1).length;
+  const approved = products.filter((p: Product) => p.StatusId === 2).length;
+  const rejected = products.filter((p: Product) => p.StatusId === 3).length;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <StatsCard
+        title="Tổng sản phẩm"
+        value={products.length}
+        icon={Package}
+        bgColor="bg-gradient-to-br from-blue-500 to-blue-700"
+        iconColor="text-white"
+        borderColor="border-blue-200"
+      />
+     
+      <StatsCard
+        title="Chờ duyệt"
+        value={pending}
+        icon={Clock}
+        bgColor="bg-gradient-to-br from-yellow-400 to-orange-500"
+        iconColor="text-white"
+        borderColor="border-yellow-200"
+      />
+     
+      <StatsCard
+        title="Đã duyệt"
+        value={approved}
+        icon={CheckCircle}
+        bgColor="bg-gradient-to-br from-green-500 to-emerald-600"
+        iconColor="text-white"
+        borderColor="border-green-200"
+      />
+     
+      <StatsCard
+        title="Bị từ chối"
+        value={rejected}
+        icon={XCircle}
+        bgColor="bg-gradient-to-br from-red-500 to-pink-600"
+        iconColor="text-white"
+        borderColor="border-red-200"
+      />
+    </div>
+  );
+};
+
 export default function OwnerPanel() {
   return (
     <OwnerLayout>
@@ -191,66 +314,6 @@ function MyProductsContent() {
     }
   };
 
-  const StatusStats = () => {
-    const pending = products.filter((p: Product) => p.StatusId === 1).length;
-    const approved = products.filter((p: Product) => p.StatusId === 2).length;
-    const rejected = products.filter((p: Product) => p.StatusId === 3).length;
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-sm p-4 border-2 border-blue-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Tổng sản phẩm</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {products.length}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Package className="text-blue-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-4 border-2 border-yellow-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Chờ duyệt</p>
-              <p className="text-2xl font-bold text-yellow-600">{pending}</p>
-            </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Clock className="text-yellow-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-4 border-2 border-green-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Đã duyệt</p>
-              <p className="text-2xl font-bold text-green-600">{approved}</p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="text-green-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-4 border-2 border-red-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Bị từ chối</p>
-              <p className="text-2xl font-bold text-red-600">{rejected}</p>
-            </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <XCircle className="text-red-600" size={24} />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const Pagination = () => {
     if (totalPages <= 1) return null;
 
@@ -373,7 +436,7 @@ function MyProductsContent() {
             </div>
       </div>
 
-      <StatusStats />
+      <StatusStats products={products} />
 
       <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
             <div className="flex flex-col md:flex-row gap-4">
@@ -418,9 +481,6 @@ function MyProductsContent() {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 Chưa có sản phẩm nào
               </h3>
-              <p className="text-gray-600 mb-6">
-                Hãy đăng sản phẩm đầu tiên của bạn!
-              </p>
               <Link
                 href="/owner/myproducts/add"
                 className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"

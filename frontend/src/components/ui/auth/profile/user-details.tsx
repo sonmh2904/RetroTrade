@@ -56,10 +56,11 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
   const [idCardImages, setIdCardImages] = useState<{
     front?: string;
     back?: string;
+    userPhoto?: string;
   }>({});
   const [loadingImages, setLoadingImages] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ url: string; label: string } | null>(null);
-  const [imageErrors, setImageErrors] = useState<{ front?: boolean; back?: boolean; modal?: boolean }>({});
+  const [imageErrors, setImageErrors] = useState<{ front?: boolean; back?: boolean; userPhoto?: boolean; modal?: boolean }>({});
 
   // Load ID card images from approved verification request
   useEffect(() => {
@@ -90,7 +91,7 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
           console.log("Documents:", approvedRequest.documents);
           
           if (approvedRequest.documents && approvedRequest.documents.length > 0) {
-            const images: { front?: string; back?: string } = {};
+            const images: { front?: string; back?: string; userPhoto?: string } = {};
             
             approvedRequest.documents.forEach((doc: { documentType: string; fileUrl: string }) => {
               console.log("Processing document:", doc.documentType, doc.fileUrl);
@@ -98,6 +99,8 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
                 images.front = doc.fileUrl;
               } else if (doc.documentType === 'idCardBack') {
                 images.back = doc.fileUrl;
+              } else if (doc.documentType === 'userPhoto') {
+                images.userPhoto = doc.fileUrl;
               }
             });
             
@@ -409,13 +412,7 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
                 </label>
                 <p className="text-gray-900">{formatDate(userProfile.idCardInfo.dateOfBirth)}</p>
               </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                  <MapPin className="w-4 h-4" />
-                  Địa chỉ thường trú
-                </label>
-                <p className="text-gray-900">{userProfile.idCardInfo.address || "Chưa có thông tin"}</p>
-              </div>
+             
               {userProfile.idCardInfo.extractedAt && (
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
@@ -448,7 +445,7 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
                     <span className="ml-2 text-gray-600">Đang tải ảnh...</span>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Mặt trước */}
                     {idCardImages.front ? (
                       <div className="space-y-2">
@@ -569,6 +566,70 @@ export function UserDetails({ userProfile }: UserDetailsProps) {
                           Mặt sau căn cước công dân
                         </label>
                         <div className="relative w-full aspect-[85.6/53.98] rounded-lg overflow-hidden border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
+                          <div className="text-center text-gray-400">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">Chưa có ảnh</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ảnh người dùng */}
+                    {idCardImages.userPhoto ? (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Ảnh người dùng
+                        </label>
+                        <div
+                          onClick={() => {
+                            if (idCardImages.userPhoto) {
+                              setSelectedImage({ url: idCardImages.userPhoto, label: "Ảnh người dùng" });
+                              setImageErrors(prev => ({ ...prev, modal: false }));
+                            }
+                          }}
+                          className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-gray-200 bg-white group hover:border-indigo-400 transition-colors cursor-pointer shadow-sm hover:shadow-lg"
+                          style={{ minHeight: '200px' }}
+                        >
+                          {!imageErrors.userPhoto ? (
+                            <Image
+                              src={idCardImages.userPhoto}
+                              alt="Ảnh người dùng"
+                              fill
+                              className="object-cover"
+                              style={{ backgroundColor: '#ffffff', zIndex: 1 }}
+                              unoptimized
+                              onError={() => {
+                                console.error("Error loading user photo:", idCardImages.userPhoto);
+                                setImageErrors(prev => ({ ...prev, userPhoto: true }));
+                              }}
+                              onLoad={() => {
+                                console.log("User photo loaded successfully:", idCardImages.userPhoto);
+                              }}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                              <div className="text-center text-gray-400">
+                                <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                                <p className="text-sm">Không thể tải ảnh</p>
+                              </div>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-transparent group-hover:from-black/20 group-hover:via-black/10 group-hover:to-black/20 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-2">
+                              <Eye className="w-6 h-6 text-white drop-shadow-lg" />
+                              <span className="text-white text-sm font-medium bg-black/70 px-3 py-1 rounded-full">
+                                Click để phóng to
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Ảnh người dùng
+                        </label>
+                        <div className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
                           <div className="text-center text-gray-400">
                             <ImageIcon className="w-8 h-8 mx-auto mb-2" />
                             <p className="text-sm">Chưa có ảnh</p>

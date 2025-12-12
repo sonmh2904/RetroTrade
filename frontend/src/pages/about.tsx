@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { AboutHero } from "@/components/ui/home/about/about-hero";
 import { AboutStory } from "@/components/ui/home/about/about-story";
+import { WhyUsSection } from "@/components/ui/home/about/why-us-section";
 import { AboutValues } from "@/components/ui/home/about/about-values";
 import { AboutStats } from "@/components/ui/home/about/about-stats";
 import { CTASection } from "@/components/ui/home/cta-section";
@@ -16,6 +17,7 @@ export default function About() {
 
       <AboutHero />
       <AboutStory />
+      <WhyUsSection />
       <AboutStats />
       <AboutValues />
       {/* <AboutTeam /> */}

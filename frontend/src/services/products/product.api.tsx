@@ -15,7 +15,9 @@ export const getProductsByCategoryId = async (
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
-    const res = await instance.get(`/products/product/category/${categoryId}${qs ? `?${qs}` : ""}`);
+    const res = await instance.get(
+      `/products/product/category/${categoryId}${qs ? `?${qs}` : ""}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -25,7 +27,11 @@ export const getProductsByCategoryId = async (
     return { data: { items: [], total: 0 } } as any;
   }
 };
-export const setDefaultAddress = (addressData: {Address: string;City: string;District: string;}) => {
+export const setDefaultAddress = (addressData: {
+  Address: string;
+  City: string;
+  District: string;
+}) => {
   return instance.post("/products/addresses/default", addressData);
 };
 export const addProduct = async (productData: any): Promise<Response> => {
@@ -51,7 +57,10 @@ export const getProductById = async (id: string): Promise<Response> => {
   return await instance.get(`/products/user/${id}`);
 };
 
-export const updateProduct = async (id: string,productData: any): Promise<Response> => {
+export const updateProduct = async (
+  id: string,
+  productData: any
+): Promise<Response> => {
   return await instance.put(`/products/user/${id}`, productData);
 };
 
@@ -61,10 +70,12 @@ export const deleteProduct = async (id: string): Promise<Response> => {
 
 //moderator
 export const getPendingProducts = async (): Promise<Response> => {
-  return await instance.get("/products/pending"); 
+  return await instance.get("/products/pending");
 };
 
-export const getPendingProductDetails = async (id: string): Promise<Response> => {
+export const getPendingProductDetails = async (
+  id: string
+): Promise<Response> => {
   return await instance.get(`/products/pending/${id}`);
 };
 
@@ -72,7 +83,10 @@ export const approveProduct = async (id: string): Promise<Response> => {
   return await instance.put(`/products/pending/${id}/approve`);
 };
 
-export const rejectProduct = async (id: string, reason?: string): Promise<Response> => {
+export const rejectProduct = async (
+  id: string,
+  reason?: string
+): Promise<Response> => {
   return await instance.put(`/products/pending/${id}/reject`, { reason });
 };
 
@@ -107,7 +121,10 @@ export const getTopProductsForHighlight = async (): Promise<Response> => {
   return await instance.get("/products/top-for-highlight");
 };
 
-export const toggleProductHighlight = async (id: string, isHighlighted?: boolean): Promise<Response> => {
+export const toggleProductHighlight = async (
+  id: string,
+  isHighlighted?: boolean
+): Promise<Response> => {
   const body = isHighlighted !== undefined ? { isHighlighted } : {};
   return await instance.put(`/products/approve/${id}/highlight`, body);
 };
@@ -128,9 +145,14 @@ export const getFavorites = async (): Promise<Response> => {
   return await instance.get("/products/favorites");
 };
 
-export const getTopViewedItemsByOwner = async (ownerId: string, limit: number = 4) => {
+export const getTopViewedItemsByOwner = async (
+  ownerId: string,
+  limit: number = 4
+) => {
   try {
-    const res = await instance.get(`/products/owner/${ownerId}/top-viewed?limit=${limit}`);
+    const res = await instance.get(
+      `/products/owner/${ownerId}/top-viewed?limit=${limit}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -153,13 +175,40 @@ export const getAllItems = async () => {
   }
 };
 
-export const getFeaturedItems = async (params?: { page?: number; limit?: number }) => {
+export const getSortedItems = async (params?: {
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}) => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.sortBy) query.set("sortBy", params.sortBy);
+    if (params?.sortOrder) query.set("sortOrder", params.sortOrder);
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/public/items/sorted${qs ? `?${qs}` : ""}`
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching sorted items:", error);
+    throw error;
+  }
+};
+
+export const getFeaturedItems = async (params?: {
+  page?: number;
+  limit?: number;
+}) => {
   try {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
-    const res = await instance.get(`/products/product/featured${qs ? `?${qs}` : ""}`);
+    const res = await instance.get(
+      `/products/product/featured${qs ? `?${qs}` : ""}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -231,7 +280,9 @@ export const getPublicStoreByUserGuid = async (
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
-    const res = await instance.get(`/products/store/${userGuid}${qs ? `?${qs}` : ""}`);
+    const res = await instance.get(
+      `/products/store/${userGuid}${qs ? `?${qs}` : ""}`
+    );
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -253,9 +304,11 @@ export const getComparableProducts = async (
     const query = new URLSearchParams();
     if (limit) query.set("limit", limit.toString());
 
-    const url = `/products/compare/${productId}/${categoryId}${query.toString() ? `?${query.toString()}` : ""}`;
-    console.log('Fetching comparable products from:', url);
-    
+    const url = `/products/compare/${productId}/${categoryId}${
+      query.toString() ? `?${query.toString()}` : ""
+    }`;
+    console.log("Fetching comparable products from:", url);
+
     const res = await instance.get(url);
 
     if (!res.ok) {
@@ -264,7 +317,7 @@ export const getComparableProducts = async (
     }
 
     const data = await res.json();
-    console.log('Comparable products response:', data);
+    console.log("Comparable products response:", data);
     return data;
   } catch (error: any) {
     console.error("Error fetching comparable products:", error);
@@ -281,15 +334,13 @@ export const getRatingsByItem = async (itemId: string) => {
       throw new Error(`HTTP ${res.status}: ${text}`);
     }
 
-    const data = await res.json(); 
+    const data = await res.json();
     return { data: Array.isArray(data) ? data : [] };
   } catch (error: any) {
     console.error(" Error fetching ratings:", error?.message || error);
     return { data: [] };
   }
 };
-
-
 
 export const createRating = async (formData: FormData) => {
   try {
@@ -304,6 +355,25 @@ export const createRating = async (formData: FormData) => {
     throw error;
   }
 };
+export const updateRating = async (id: string, formData: FormData) => {
+  return await instance.put(`/products/rating/${id}`, formData);
+};
+
+// Xóa đánh giá (soft delete)
+export const deleteRating = async (id: string, renterId: string) => {
+  try {
+    const res = await api.delete(`/products/rating/${id}`, {
+      body: JSON.stringify({ renterId }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    return data;
+  } catch (error: any) {
+    console.error("Error deleting rating:", error?.message || error);
+    throw error;
+  }
+};
+
 
 export interface OwnerRating {
   _id: string;
@@ -368,29 +438,165 @@ export const getRatingsByOwner = async (
     };
   }
 };
-// Cập nhật đánh giá
-export const updateRating = async (id: string, payload: any) => {
+
+// renter đánh giá owner
+export const getRatingShop = async (
+  ownerId: string,
+  params?: { page?: number; limit?: number }
+): Promise<OwnerRatingsResult> => {
   try {
-    const res = await api.put(`/products/rating/${id}`, payload);
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/owner/rating/${ownerId}${qs ? `?${qs}` : ""}`
+    );
+
     const data = await res.json();
-    return data;
+    const payload = data?.data || {};
+
+    return {
+      success: data?.success ?? true,
+      message: data?.message,
+      ratings: payload.ratings || [],
+      total: payload.total || 0,
+      page: payload.page || 1,
+      limit: payload.limit || 20,
+      average: payload.average || 0,
+    };
   } catch (error: any) {
-    console.error("Error updating rating:", error?.message || error);
+    console.error("Error fetching owner ratings:", error);
+    return {
+      success: false,
+      message: error?.message || "Không thể tải đánh giá",
+      ratings: [],
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+      average: 0,
+    };
+  }
+};
+
+export const createOwnerRating = async (formData: FormData) => {
+  try {
+    
+    const res = await instance.post("/products/owner/rating", formData);
+    const data = await res.json();
+     console.log("Response:", data);
+    return data;
+  } catch (error) {
+    console.error("Error creating owner rating:", error);
     throw error;
   }
 };
 
-// Xóa đánh giá (soft delete)
-export const deleteRating = async (id: string, renterId: string) => {
+export const updateOwnerRating = async (id: string, formData: FormData) => {
   try {
-    const res = await api.delete(`/products/rating/${id}`, {
-      body: JSON.stringify({ renterId }),
-      headers: { "Content-Type": "application/json" },
-    });
-    const data = await res.json();
-    return data;
-  } catch (error: any) {
-    console.error("Error deleting rating:", error?.message || error);
+    const res = await instance.put(`/products/owner/rating/${id}`, formData);
+    return await res.json();
+  } catch (error) {
+    console.error("Error updating owner rating:", error);
     throw error;
   }
 };
+
+export const deleteOwnerRating = async (id: string) => {
+  try {
+    const res = await instance.delete(`/products/owner/rating/${id}`);
+    return await res.json();
+  } catch (error) {
+    console.error("Error deleting owner rating:", error);
+    throw error;
+  }
+};
+
+// 
+export interface RenterRatingsResult {
+  success: boolean;
+  message?: string;
+  ratings: any[];
+  total: number;
+  page: number;
+  limit: number;
+  average: number;
+}
+
+// Lấy đánh giá của renter
+export const getRenterRatings = async (
+  renterId: string,
+  params?: { page?: number; limit?: number }
+): Promise<RenterRatingsResult> => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const qs = query.toString();
+    const res = await instance.get(
+      `/products/renter/rating/${renterId}${qs ? `?${qs}` : ""}`
+    );
+
+    const data = await res.json();
+    const payload = data?.data || {};
+
+    return {
+      success: data?.success ?? true,
+      message: data?.message,
+      ratings: payload.ratings || [],
+      total: payload.total || 0,
+      page: payload.page || 1,
+      limit: payload.limit || 20,
+      average: payload.average || 0,
+    };
+  } catch (error: any) {
+    console.error("Error fetching renter ratings:", error);
+    return {
+      success: false,
+      message: error?.message || "Không thể tải đánh giá",
+      ratings: [],
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+      average: 0,
+    };
+  }
+};
+
+// Tạo đánh giá renter
+export const createRenterRating = async (formData: FormData) => {
+  try {
+    const res = await instance.post("/products/renter/rating", formData);
+    const data = await res.json();
+    console.log("Response:", data);
+    return data;
+  } catch (error) {
+    console.error("Error creating renter rating:", error);
+    throw error;
+  }
+};
+
+// Cập nhật đánh giá renter
+export const updateRenterRating = async (id: string, formData: FormData) => {
+  try {
+    const res = await instance.put(`/products/renter/rating/${id}`, formData);
+    return await res.json();
+  } catch (error) {
+    console.error("Error updating renter rating:", error);
+    throw error;
+  }
+};
+
+// Xoá đánh giá renter
+export const deleteRenterRating = async (id: string) => {
+  try {
+    const res = await instance.delete(`/products/renter/rating/${id}`);
+    return await res.json();
+  } catch (error) {
+    console.error("Error deleting renter rating:", error);
+    throw error;
+  }
+};
+

@@ -20,6 +20,7 @@ import {
   BookOpen,
   Info,
   Zap,
+  ShoppingCart,
 } from "lucide-react";
 import { NotificationIcon } from "@/components/ui/common/notification-icon";
 
@@ -123,7 +124,7 @@ export function Header() {
     setUserInfo(null);
     dispatch(logout());
     toast.success("Đăng xuất thành công");
-    router.push("/");
+    router.push("/auth/login");
   };
 
   const handleGoToProfile = () => {
@@ -286,16 +287,10 @@ export function Header() {
                   onClick={() => router.push("/auth/cartitem")}
                   variant="ghost"
                   size="icon"
-                  className="relative"
+                  className="relative h-10 w-10"
                 >
-                  <div className="relative">
-                    <Image
-                      src="/market.png"
-                      alt="Cart"
-                      width={25}
-                      height={25}
-                      className="rounded-lg transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300"
-                    />
+                  <div className="relative flex items-center justify-center h-10 w-10">
+                    <ShoppingCart className="h-5 w-5 rounded-lg transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
                     {cartCount > 0 && (
                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse shadow-lg shadow-red-500/50">
                         {cartCount}

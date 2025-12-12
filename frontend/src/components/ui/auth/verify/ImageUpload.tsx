@@ -1,11 +1,13 @@
-import { Button } from "../../common/button";
+﻿import { Button } from "../../common/button";
 import { Input } from "../../common/input";
-import { useState } from "react";
-import { Upload, X, CreditCard, CheckCircle, AlertCircle, Image as ImageIcon, Shield, Edit } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Upload, X, CreditCard, CheckCircle, AlertCircle, Image as ImageIcon, Shield, Edit, User, AlertTriangle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 import { faceVerificationAPI, FaceVerificationResponse, ExtractedIdCardInfo } from "@/services/auth/faceVerification.api";
+import { verificationRequestAPI } from "@/services/auth/verificationRequest.api";
+
 
 interface ImageUploadProps {
   images: File[];
@@ -13,7 +15,6 @@ interface ImageUploadProps {
   onNext: (verificationResult?: FaceVerificationResponse) => void;
   onBack: () => void;
   isLoading?: boolean;
-  phoneNumber?: string; // Optional - not required for ID card verification
 }
 
 interface ImagePreview {
@@ -21,9 +22,9 @@ interface ImagePreview {
   preview: string;
 }
 
-export default function ImageUpload({ images, setImages, onNext, onBack, isLoading = false, phoneNumber }: ImageUploadProps) {
+export default function ImageUpload({ images, setImages, onNext, onBack, isLoading = false }: ImageUploadProps) {
   const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([]);
-  const [errors, setErrors] = useState<string[]>(['', '']);
+  const [errors, setErrors] = useState<string[]>(['', '', '']);
   const [isPrivacyAccepted, setIsPrivacyAccepted] = useState<boolean>(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
@@ -32,6 +33,36 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
   const [editingIdCardInfo, setEditingIdCardInfo] = useState<ExtractedIdCardInfo | null>(null);
   const [isEditingIdCard, setIsEditingIdCard] = useState<boolean>(false);
   const [isOcrProcessing, setIsOcrProcessing] = useState<boolean>(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState<boolean>(false);
+  const [isCheckingPending, setIsCheckingPending] = useState<boolean>(true);
+
+  // Check for pending verification request on mount
+  useEffect(() => {
+    const checkPendingRequest = async () => {
+      try {
+        setIsCheckingPending(true);
+        const response = await verificationRequestAPI.getMyVerificationRequests({ status: 'Pending' });
+        
+        if (response.data && response.data.length > 0) {
+          // Check if any request is Pending or In Progress
+          const pendingRequests = response.data.filter(
+            req => req.status === 'Pending' || req.status === 'In Progress'
+          );
+          
+          if (pendingRequests.length > 0) {
+            setHasPendingRequest(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking pending request:', error);
+        // Don't block user if check fails
+      } finally {
+        setIsCheckingPending(false);
+      }
+    };
+
+    checkPendingRequest();
+  }, []);
 
   const imageTypes = [
     { 
@@ -46,6 +77,13 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
       label: "Mặt sau CCCD", 
       description: "Ảnh mặt sau căn cước công dân",
       icon: CreditCard,
+      required: true
+    },
+    { 
+      id: 2, 
+      label: "Ảnh người dùng", 
+      description: "Ảnh chân dung của bạn",
+      icon: User,
       required: true
     }
   ];
@@ -101,8 +139,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
         const extractedInfo = ocrResult.data?.extractedIdCardInfo || {
           idNumber: null,
           fullName: null,
-          dateOfBirth: null,
-          address: null
+          dateOfBirth: null
         };
         setExtractedIdCardInfo(extractedInfo);
         setEditingIdCardInfo(extractedInfo);
@@ -170,7 +207,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
 
   const handleSubmit = async () => {
     const hasErrors = errors.some(error => error !== "");
-    const hasAllImages = images.length === 2 && images.every(img => img);
+    const hasAllImages = images.length === 3 && images.every(img => img);
     
     if (hasErrors) {
       return;
@@ -195,8 +232,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
       const emptyInfo = {
         idNumber: null,
         fullName: null,
-        dateOfBirth: null,
-        address: null
+        dateOfBirth: null
       };
       setExtractedIdCardInfo(emptyInfo);
       setEditingIdCardInfo(emptyInfo);
@@ -228,12 +264,6 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
     if (!confirmedIdCardInfo.dateOfBirth) {
       missingFields.push("Ngày tháng năm sinh");
     }
-    
-    if (!confirmedIdCardInfo.address || 
-        confirmedIdCardInfo.address.trim() === "" || 
-        confirmedIdCardInfo.address.trim().toUpperCase() === "N/A") {
-      missingFields.push("Địa chỉ thường trú");
-    }
 
     if (missingFields.length > 0) {
       toast.error(`Thiếu thông tin: ${missingFields.join(', ')}. Vui lòng điền đầy đủ.`);
@@ -253,14 +283,65 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
       setIsVerifying(true);
       setVerificationError("");
 
-      // Prepare files for verification (ID card front and ID card back)
-      const verificationFiles = [images[0], images[1]]; // Mặt trước CCCD, mặt sau CCCD
+      // Prepare files for verification (ID card front, ID card back, and user photo)
+      const verificationFiles = [images[0], images[1], images[2]]; // Mặt trước CCCD, mặt sau CCCD, ảnh người dùng
 
-      // Call verification API - this will create a verification request for moderator
-      const verificationResult = await faceVerificationAPI.verifyFaceImages(
-        verificationFiles,
-        confirmedIdCardInfo || null
-      );
+      // Validate all files exist
+      if (!verificationFiles[0] || !verificationFiles[1] || !verificationFiles[2]) {
+        setVerificationError("Vui lòng tải lên đầy đủ 3 ảnh: mặt trước CCCD, mặt sau CCCD và ảnh người dùng.");
+        setIsVerifying(false);
+        return;
+      }
+
+      console.log('Submitting verification with files:', {
+        count: verificationFiles.length,
+        files: verificationFiles.map((f, i) => ({
+          index: i,
+          name: f?.name,
+          size: f?.size,
+          type: f?.type,
+          exists: !!f
+        }))
+      });
+
+      // Always use auto verification - will automatically fallback to manual if needed
+      console.log('Calling AUTO verification API (will auto-fallback to manual if needed)...');
+
+      // Call auto verification API - backend will automatically fallback to manual if auto fails
+      let verificationResult;
+      try {
+        verificationResult = await faceVerificationAPI.verifyFaceImagesAuto(
+          verificationFiles,
+          confirmedIdCardInfo || null
+        );
+      } catch (apiError) {
+        // Handle special case: user has pending request
+        if (apiError instanceof Error && apiError.message.includes('đã có yêu cầu xác minh đang chờ')) {
+          // Return special result to show pending request message
+          verificationResult = {
+            code: 400,
+            message: apiError.message,
+            data: {
+              hasPendingRequest: true,
+              requiresModeratorReview: true
+            }
+          };
+        } else {
+          throw apiError; // Re-throw other errors
+        }
+      }
+
+      // Check if user has pending request
+      if (verificationResult.data?.hasPendingRequest) {
+        setVerificationError(
+          verificationResult.message || 
+          "Bạn đã có yêu cầu xác minh đang chờ xử lý. Vui lòng chờ kiểm duyệt viên xử lý hoặc kiểm tra lịch sử xác minh."
+        );
+        setIsVerifying(false);
+        // Still pass result to parent to show pending status
+        onNext(verificationResult);
+        return;
+      }
 
       // Check if request was auto-rejected due to OCR failure
       if (verificationResult.data?.autoRejected) {
@@ -274,6 +355,15 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
         return;
       }
 
+      // Check verification result
+      if (verificationResult.data?.autoApproved) {
+        // Auto-approved: show success message
+        console.log('Auto-verification approved!', verificationResult.data);
+      } else if (verificationResult.data?.requiresModeratorReview) {
+        // Auto verification failed, automatically fell back to manual (moderator review)
+        console.log('Auto-verification failed, automatically fell back to manual verification', verificationResult.data);
+      }
+
       // Pass the result to parent component
       onNext(verificationResult);
     } catch (error) {
@@ -284,7 +374,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
       
       if (error instanceof Error) {
         if (error.message.includes('Thiếu hình ảnh')) {
-          errorMessage = "Vui lòng tải lên đầy đủ 2 ảnh: mặt trước và mặt sau căn cước công dân.";
+          errorMessage = "Vui lòng tải lên đầy đủ 3 ảnh: mặt trước CCCD, mặt sau CCCD và ảnh người dùng.";
         } else if (error.message.includes('đã có yêu cầu')) {
           errorMessage = error.message;
         } else if (error.message.includes('Số điện thoại')) {
@@ -302,15 +392,38 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
     }
   };
 
-  const allImagesUploaded = images.length === 2 && images.every(img => img);
+  const allImagesUploaded = images.length === 3 && images.every(img => img);
 
 
   return (
     <div className="space-y-6">
-      {/* ID Card Info Review Dialog - REMOVED, now displayed inline below image */}
+      {/* Pending Request Warning */}
+      {hasPendingRequest && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-yellow-800 mb-1">Bạn đã có yêu cầu xác minh đang chờ xử lý</h4>
+              <p className="text-sm text-yellow-700">
+                Bạn không thể gửi yêu cầu xác minh mới khi đã có yêu cầu đang chờ kiểm duyệt viên xử lý. 
+                Vui lòng kiểm tra <Link href="/auth/verification-history" className="underline font-medium">lịch sử xác minh</Link> hoặc chờ kiểm duyệt viên xử lý yêu cầu hiện tại.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading state while checking pending request */}
+      {isCheckingPending && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+          <p className="text-sm text-gray-600">Đang kiểm tra yêu cầu xác minh...</p>
+        </div>
+      )}
+
+      {/* Verification Mode Selection */}
 
       {/* Guidelines Section */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+      <div className={`bg-purple-50 border border-purple-200 rounded-lg p-4 ${hasPendingRequest ? 'opacity-50 pointer-events-none' : ''}`}>
         <div className="flex items-start gap-3">
           <ImageIcon className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
           <div className="space-y-3">
@@ -376,13 +489,13 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
           Tải lên ảnh xác minh <span className="text-red-500">*</span>
         </h3>
         <p className="text-sm text-gray-600 mb-4">
-          Vui lòng tải lên đầy đủ 2 ảnh: mặt trước và mặt sau căn cước công dân để hoàn tất quá trình xác minh
+          Vui lòng tải lên đầy đủ 3 ảnh: mặt trước CCCD, mặt sau CCCD và ảnh người dùng để hoàn tất quá trình xác minh
         </p>
       </div>
 
       <div className="space-y-4">
-        {/* 2 ảnh CCCD - Side by side */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 3 ảnh: 2 ảnh CCCD + 1 ảnh người dùng */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {imageTypes.map((imageType, index) => {
             const IconComponent = imageType.icon;
             const preview = imagePreviews[index];
@@ -640,53 +753,6 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
                 );
               })()}
 
-              {/* Địa chỉ thường trú */}
-              {(() => {
-                const isFieldValid = (value: string | null | undefined): boolean => {
-                  return value !== null && 
-                         value !== undefined && 
-                         value.trim() !== "" && 
-                         value.trim().toUpperCase() !== "N/A";
-                };
-                
-                return (
-                  <div className="flex items-start justify-between pb-2">
-                    <label className={`text-sm font-semibold min-w-[200px] ${
-                      !isFieldValid(editingIdCardInfo.address) ? 'text-red-600' : 'text-gray-700'
-                    }`}>
-                      Địa chỉ thường trú <span className="text-red-500">*</span>
-                    </label>
-                    {isEditingIdCard ? (
-                      <div className="flex-1">
-                        <textarea
-                          value={editingIdCardInfo.address || ""}
-                          onChange={(e) => setEditingIdCardInfo({ ...editingIdCardInfo, address: e.target.value })}
-                          placeholder="Nhập địa chỉ thường trú"
-                          rows={5}
-                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-sm ${
-                            !isFieldValid(editingIdCardInfo.address) 
-                              ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                              : 'border-gray-300 focus:ring-indigo-500'
-                          }`}
-                        />
-                        {!isFieldValid(editingIdCardInfo.address) && (
-                          <p className="text-red-500 text-xs mt-1">Trường này là bắt buộc</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex-1">
-                        <div className={`p-3 rounded border min-h-[80px] ${
-                          isFieldValid(editingIdCardInfo.address) 
-                            ? 'bg-white border-gray-300 text-gray-900' 
-                            : 'bg-red-50 border-red-300 text-red-600 italic'
-                        }`}>
-                          {editingIdCardInfo.address || "N/A"}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           </div>
         )}
@@ -752,8 +818,8 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!allImagesUploaded || !isPrivacyAccepted || isLoading || isVerifying}
-              className="w-1/2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3"
+              disabled={hasPendingRequest || isCheckingPending || !allImagesUploaded || !isPrivacyAccepted || isLoading || isVerifying}
+              className="w-1/2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isVerifying ? (
                 <div className="flex items-center gap-2">
@@ -776,7 +842,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
         {!allImagesUploaded && (
           <div className="flex items-center justify-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
             <AlertCircle className="w-4 h-4 text-orange-600" />
-            <p className="text-orange-600 text-sm font-medium">Vui lòng tải lên đầy đủ 2 ảnh để tiếp tục</p>
+            <p className="text-orange-600 text-sm font-medium">Vui lòng tải lên đầy đủ 3 ảnh để tiếp tục</p>
           </div>
         )}
         
@@ -790,7 +856,7 @@ export default function ImageUpload({ images, setImages, onNext, onBack, isLoadi
         {allImagesUploaded && isPrivacyAccepted && (
           <div className="flex items-center justify-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
             <CheckCircle className="w-4 h-4 text-green-600" />
-            <p className="text-green-600 text-sm font-medium">Đã tải lên đầy đủ 2 ảnh và chấp nhận chia sẻ thông tin. Sẵn sàng để xác minh!</p>
+            <p className="text-green-600 text-sm font-medium">Đã tải lên đầy đủ 3 ảnh và chấp nhận chia sẻ thông tin. Sẵn sàng để xác minh!</p>
           </div>
         )}
       </div>

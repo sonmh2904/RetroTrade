@@ -23,9 +23,14 @@ module.exports.getDashboardStats = async (req, res) => {
         const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-        const [totalRevenue, previousMonthRevenue] = await Promise.all([
+        const [currentMonthRevenue, previousMonthRevenue] = await Promise.all([
             Order.aggregate([
-                { $match: { orderStatus: "completed" } },
+                { 
+                    $match: { 
+                        orderStatus: "completed",
+                        createdAt: { $gte: currentMonthStart }
+                    } 
+                },
                 { $group: { _id: null, total: { $sum: "$totalAmount" } } }
             ]),
             Order.aggregate([
@@ -39,34 +44,41 @@ module.exports.getDashboardStats = async (req, res) => {
             ])
         ]);
 
-        const revenue = totalRevenue[0]?.total || 0;
+        const revenue = currentMonthRevenue[0]?.total || 0;
         const prevRevenue = previousMonthRevenue[0]?.total || 0;
         const revenueChange = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : 0;
 
-        const [totalUsers, previousMonthUsers] = await Promise.all([
-            User.countDocuments({}),
+        const [currentMonthUsers, previousMonthUsers] = await Promise.all([
+            User.countDocuments({
+                createdAt: { $gte: currentMonthStart }
+            }),
             User.countDocuments({
                 createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
             })
         ]);
-        const usersChange = previousMonthUsers > 0 ? ((totalUsers - previousMonthUsers) / previousMonthUsers) * 100 : 0;
+        const usersChange = previousMonthUsers > 0 ? ((currentMonthUsers - previousMonthUsers) / previousMonthUsers) * 100 : 0;
 
-        const [totalOrders, previousMonthOrders] = await Promise.all([
-            Order.countDocuments({}),
+        const [currentMonthOrders, previousMonthOrders] = await Promise.all([
+            Order.countDocuments({
+                createdAt: { $gte: currentMonthStart }
+            }),
             Order.countDocuments({
                 createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
             })
         ]);
-        const ordersChange = previousMonthOrders > 0 ? ((totalOrders - previousMonthOrders) / previousMonthOrders) * 100 : 0;
+        const ordersChange = previousMonthOrders > 0 ? ((currentMonthOrders - previousMonthOrders) / previousMonthOrders) * 100 : 0;
 
-        const [totalProducts, previousMonthProducts] = await Promise.all([
-            Item.countDocuments({ IsDeleted: { $ne: true } }),
+        const [currentMonthProducts, previousMonthProducts] = await Promise.all([
             Item.countDocuments({
                 IsDeleted: { $ne: true },
-                createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
+                CreatedAt: { $gte: currentMonthStart }
+            }),
+            Item.countDocuments({
+                IsDeleted: { $ne: true },
+                CreatedAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
             })
         ]);
-        const productsChange = previousMonthProducts > 0 ? ((totalProducts - previousMonthProducts) / previousMonthProducts) * 100 : 0;
+        const productsChange = previousMonthProducts > 0 ? ((currentMonthProducts - previousMonthProducts) / previousMonthProducts) * 100 : 0;
 
         const formatRevenue = (amount) => {
             if (amount >= 1000000000) {
@@ -99,7 +111,7 @@ module.exports.getDashboardStats = async (req, res) => {
             verifiedUsers,
             activeUsers
         ] = await Promise.all([
-            Order.countDocuments({ orderStatus: { $in: ["pending", "confirmed", "progress"] } }),
+            Order.countDocuments({ orderStatus: "pending" }),
             Order.countDocuments({ orderStatus: "completed" }),
             Order.countDocuments({ orderStatus: "cancelled" }),
             Item.countDocuments({ IsDeleted: { $ne: true }, StatusId: 1 }),
@@ -126,31 +138,44 @@ module.exports.getDashboardStats = async (req, res) => {
         const viewsTotal = totalViews[0]?.total || 0;
         const walletBalanceTotal = totalWalletBalance[0]?.total || 0;
 
+        // Also get total values for display
+        const [totalRevenue, totalUsers, totalOrders, totalProducts] = await Promise.all([
+            Order.aggregate([
+                { $match: { orderStatus: "completed" } },
+                { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+            ]),
+            User.countDocuments({}),
+            Order.countDocuments({}),
+            Item.countDocuments({ IsDeleted: { $ne: true } })
+        ]);
+
+        const revenueTotal = totalRevenue[0]?.total || 0;
+
         return res.json({
             code: 200,
             message: "Lấy thống kê thành công",
             status: "success",
             data: {
                 revenue: {
-                    value: formatRevenue(revenue),
-                    rawValue: revenue,
+                    value: formatRevenue(revenueTotal), // Show total revenue
+                    rawValue: revenueTotal,
                     change: parseFloat(revenueChange.toFixed(1)),
                     changeType: revenueChange >= 0 ? "increase" : "decrease"
                 },
                 users: {
-                    value: totalUsers.toLocaleString(),
+                    value: totalUsers.toLocaleString(), // Show total users
                     rawValue: totalUsers,
                     change: parseFloat(usersChange.toFixed(1)),
                     changeType: usersChange >= 0 ? "increase" : "decrease"
                 },
                 orders: {
-                    value: totalOrders.toLocaleString(),
+                    value: totalOrders.toLocaleString(), // Show total orders
                     rawValue: totalOrders,
                     change: parseFloat(ordersChange.toFixed(1)),
                     changeType: ordersChange >= 0 ? "increase" : "decrease"
                 },
                 products: {
-                    value: totalProducts.toLocaleString(),
+                    value: totalProducts.toLocaleString(), // Show total products
                     rawValue: totalProducts,
                     change: parseFloat(productsChange.toFixed(1)),
                     changeType: productsChange >= 0 ? "increase" : "decrease"
@@ -265,7 +290,7 @@ module.exports.getRevenueStats = async (req, res) => {
                         $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
                     },
                     revenue: { $sum: "$totalAmount" },
-                    count: { $sum: 1 }
+                    orders: { $sum: 1 }
                 }
             },
             {
@@ -273,15 +298,51 @@ module.exports.getRevenueStats = async (req, res) => {
             }
         ]);
 
+        // Fill missing dates with zero counts
+        const filledStats = [];
+        const currentDate = new Date(startDate);
+        const now = new Date();
+        
+        while (currentDate <= now) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayData = revenueData.find(stat => stat._id === dateStr);
+            
+            filledStats.push({
+                date: dateStr,
+                revenue: dayData ? dayData.revenue : 0,
+                orders: dayData ? dayData.orders : 0
+            });
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Get total revenue stats
+        const totalRevenue = await Order.aggregate([
+            {
+                $match: { orderStatus: "completed" }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: "$totalAmount" },
+                    totalOrders: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const revenueStats = totalRevenue[0] || { totalRevenue: 0, totalOrders: 0 };
+
         return res.json({
             code: 200,
             message: "Lấy thống kê doanh thu thành công",
             status: "success",
-            data: revenueData.map(item => ({
-                date: item._id,
-                revenue: item.revenue,
-                orders: item.count
-            }))
+            data: {
+                timeline: filledStats,
+                totals: {
+                    total: revenueStats.totalRevenue,
+                    orders: revenueStats.totalOrders
+                }
+            }
         });
     } catch (error) {
         console.error("Error getting revenue stats:", error);
@@ -320,13 +381,36 @@ module.exports.getUserStats = async (req, res) => {
                     _id: {
                         $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
                     },
-                    count: { $sum: 1 }
+                    users: { $sum: 1 },
+                    verified: {
+                        $sum: {
+                            $cond: [{ $eq: ["$isIdVerified", true] }, 1, 0]
+                        }
+                    }
                 }
             },
             {
                 $sort: { _id: 1 }
             }
         ]);
+
+        // Fill missing dates with zero counts
+        const filledStats = [];
+        const currentDate = new Date(startDate);
+        const now = new Date();
+        
+        while (currentDate <= now) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayData = userData.find(stat => stat._id === dateStr);
+            
+            filledStats.push({
+                date: dateStr,
+                users: dayData ? dayData.users : 0,
+                verified: dayData ? dayData.verified : 0
+            });
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
 
         // Get total users by status
         const [totalUsers, activeUsers, verifiedUsers] = await Promise.all([
@@ -340,10 +424,7 @@ module.exports.getUserStats = async (req, res) => {
             message: "Lấy thống kê người dùng thành công",
             status: "success",
             data: {
-                timeline: userData.map(item => ({
-                    date: item._id,
-                    users: item.count
-                })),
+                timeline: filledStats,
                 totals: {
                     total: totalUsers,
                     active: activeUsers,
@@ -388,8 +469,53 @@ module.exports.getOrderStats = async (req, res) => {
                     _id: {
                         $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
                     },
-                    count: { $sum: 1 },
-                    totalAmount: { $sum: "$totalAmount" }
+                    orders: { $sum: 1 },
+                    totalAmount: { $sum: "$totalAmount" },
+                    pending: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "pending"] }, 1, 0]
+                        }
+                    },
+                    confirmed: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "confirmed"] }, 1, 0]
+                        }
+                    },
+                    delivery: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "delivery"] }, 1, 0]
+                        }
+                    },
+                    received: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "received"] }, 1, 0]
+                        }
+                    },
+                    progress: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "progress"] }, 1, 0]
+                        }
+                    },
+                    returned: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "returned"] }, 1, 0]
+                        }
+                    },
+                    completed: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "completed"] }, 1, 0]
+                        }
+                    },
+                    cancelled: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0]
+                        }
+                    },
+                    disputed: {
+                        $sum: {
+                            $cond: [{ $eq: ["$orderStatus", "disputed"] }, 1, 0]
+                        }
+                    }
                 }
             },
             {
@@ -397,32 +523,78 @@ module.exports.getOrderStats = async (req, res) => {
             }
         ]);
 
-        // Get orders by status
-        const ordersByStatus = await Order.aggregate([
+        // Fill missing dates with zero counts
+        const filledStats = [];
+        const currentDate = new Date(startDate);
+        const now = new Date();
+        
+        while (currentDate <= now) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayData = orderData.find(stat => stat._id === dateStr);
+            
+            filledStats.push({
+                date: dateStr,
+                orders: dayData ? dayData.orders : 0,
+                revenue: dayData ? dayData.totalAmount : 0,
+                pending: dayData ? dayData.pending : 0,
+                confirmed: dayData ? dayData.confirmed : 0,
+                delivery: dayData ? dayData.delivery : 0,
+                received: dayData ? dayData.received : 0,
+                progress: dayData ? dayData.progress : 0,
+                returned: dayData ? dayData.returned : 0,
+                completed: dayData ? dayData.completed : 0,
+                cancelled: dayData ? dayData.cancelled : 0,
+                disputed: dayData ? dayData.disputed : 0
+            });
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Get orders by status for totals with Vietnamese labels
+        const stats = {
+            pending: { count: 0, amount: 0, label: "Chờ xử lý" },
+            confirmed: { count: 0, amount: 0, label: "Đã xác nhận" },
+            delivery: { count: 0, amount: 0, label: "Đang giao hàng" },
+            received: { count: 0, amount: 0, label: "Đã nhận hàng" },
+            progress: { count: 0, amount: 0, label: "Đang thuê" },
+            returned: { count: 0, amount: 0, label: "Đã trả hàng" },
+            completed: { count: 0, amount: 0, label: "Hoàn thành" },
+            cancelled: { count: 0, amount: 0, label: "Đã hủy" },
+            disputed: { count: 0, amount: 0, label: "Tranh chấp" }
+        };
+
+        const statusCounts = await Order.aggregate([
+            {
+                $match: {}
+            },
             {
                 $group: {
                     _id: "$orderStatus",
-                    count: { $sum: 1 }
+                    count: { $sum: 1 },
+                    amount: { $sum: "$totalAmount" }
                 }
             }
         ]);
 
-        const statusMap = {};
-        ordersByStatus.forEach(item => {
-            statusMap[item._id] = item.count;
+        statusCounts.forEach(item => {
+            if (stats[item._id]) {
+                stats[item._id].count = item.count;
+                stats[item._id].amount = item.amount;
+            }
         });
+
+        const totalOrders = await Order.countDocuments({});
 
         return res.json({
             code: 200,
             message: "Lấy thống kê đơn hàng thành công",
             status: "success",
             data: {
-                timeline: orderData.map(item => ({
-                    date: item._id,
-                    orders: item.count,
-                    revenue: item.totalAmount
-                })),
-                byStatus: statusMap
+                timeline: filledStats,
+                statistics: stats,
+                pagination: {
+                    totalOrders
+                }
             }
         });
     } catch (error) {
@@ -463,7 +635,22 @@ module.exports.getProductStats = async (req, res) => {
                     _id: {
                         $dateToString: { format: "%Y-%m-%d", date: "$CreatedAt" }
                     },
-                    count: { $sum: 1 }
+                    products: { $sum: 1 },
+                    pending: {
+                        $sum: {
+                            $cond: [{ $eq: ["$StatusId", 1] }, 1, 0]
+                        }
+                    },
+                    active: {
+                        $sum: {
+                            $cond: [{ $eq: ["$StatusId", 2] }, 1, 0]
+                        }
+                    },
+                    rejected: {
+                        $sum: {
+                            $cond: [{ $eq: ["$StatusId", 3] }, 1, 0]
+                        }
+                    }
                 }
             },
             {
@@ -471,18 +658,25 @@ module.exports.getProductStats = async (req, res) => {
             }
         ]);
 
-        // Get products by status
-        const productsByStatus = await Item.aggregate([
-            {
-                $match: { IsDeleted: { $ne: true } }
-            },
-            {
-                $group: {
-                    _id: "$StatusId",
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
+        // Fill missing dates with zero counts
+        const filledStats = [];
+        const currentDate = new Date(startDate);
+        const now = new Date();
+        
+        while (currentDate <= now) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayData = productData.find(stat => stat._id === dateStr);
+            
+            filledStats.push({
+                date: dateStr,
+                products: dayData ? dayData.products : 0,
+                pending: dayData ? dayData.pending : 0,
+                active: dayData ? dayData.active : 0,
+                rejected: dayData ? dayData.rejected : 0
+            });
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
 
         // Get all products regardless of date for totals
         const [totalProducts, activeProducts, pendingProducts, rejectedProducts] = await Promise.all([
@@ -497,20 +691,13 @@ module.exports.getProductStats = async (req, res) => {
             message: "Lấy thống kê sản phẩm thành công",
             status: "success",
             data: {
-                timeline: productData.map(item => ({
-                    date: item._id,
-                    products: item.count
-                })),
+                timeline: filledStats,
                 totals: {
                     total: totalProducts,
                     active: activeProducts,
                     pending: pendingProducts,
                     rejected: rejectedProducts
-                },
-                byStatus: productsByStatus.reduce((acc, item) => {
-                    acc[item._id] = item.count;
-                    return acc;
-                }, {})
+                }
             }
         });
     } catch (error) {

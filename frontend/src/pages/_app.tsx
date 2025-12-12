@@ -20,8 +20,9 @@ function AppContent({ Component, pageProps }: AppProps) {
   useEffect(() => setMounted(true), []);
 
   const isManagementPage = router.pathname.startsWith('/admin') ||
-    router.pathname.startsWith('/moderator') ||
-    router.pathname.startsWith('/owner');
+    router.pathname.startsWith('/moderator') 
+
+  const isOwnerPage = router.pathname.startsWith("/owner");
 
   const showAdminSidebar = router.pathname.startsWith("/admin") && router.pathname !== "/admin";
 
@@ -42,7 +43,7 @@ function AppContent({ Component, pageProps }: AppProps) {
           <Component {...pageProps} />
         )}
 
-        {!isManagementPage && <Footer />}
+        {!(isManagementPage || isOwnerPage) && <Footer />}
 
         {/* Chat Button - Show on all pages */}
         <ChatFloatingButton />

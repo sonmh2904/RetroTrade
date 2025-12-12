@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/redux_store";
-import { decodeToken } from '@/utils/jwtHelper';
+import { decodeToken } from "@/utils/jwtHelper";
 import { toast } from "sonner";
 import { ModeratorSidebar } from "@/components/ui/moderator/moderator-sidebar";
 import { ModeratorHeader } from "@/components/ui/moderator/moderator-header";
@@ -20,6 +20,7 @@ import TopHighlightTable from "@/components/ui/moderator/product/top-highlight-t
 import { DisputeManagement } from "@/components/ui/moderator/dispute/dispute-management";
 import { ModeratorUserManagementTable } from "@/components/ui/moderator/user-management-table";
 import { ComplaintManagement } from "@/components/ui/moderator/complaints/complaint-management";
+import { CategoryManagementTable } from "@/components/ui/moderator/blog/category-management-table";
 
 export default function ModeratorDashboard() {
   console.log(
@@ -110,7 +111,14 @@ export default function ModeratorDashboard() {
     const tab = searchParams.get("tab");
     const blogTab = searchParams.get("blogTab");
     const productTab = searchParams.get("productTab");
-    console.log("URL query parameters - tab:", tab, "blogTab:", blogTab, "productTab:", productTab);
+    console.log(
+      "URL query parameters - tab:",
+      tab,
+      "blogTab:",
+      blogTab,
+      "productTab:",
+      productTab
+    );
 
     // If no tab parameter, default to dashboard
     if (!tab) {
@@ -150,13 +158,23 @@ export default function ModeratorDashboard() {
         | "userManagement"
         | "complaints";
       setActiveTab(validTab);
-      
+
       // Handle sub-tabs
-      if (blogTab && ["posts", "categories", "comments", "tags"].includes(blogTab)) {
-        setActiveBlogTab(blogTab as "posts" | "categories" | "comments" | "tags");
+      if (
+        blogTab &&
+        ["posts", "categories", "comments", "tags"].includes(blogTab)
+      ) {
+        setActiveBlogTab(
+          blogTab as "posts" | "categories" | "comments" | "tags"
+        );
       }
-      if (productTab && ["products", "categories", "highlights"].includes(productTab)) {
-        setActiveProductTab(productTab as "products" | "categories" | "highlights");
+      if (
+        productTab &&
+        ["products", "categories", "highlights"].includes(productTab)
+      ) {
+        setActiveProductTab(
+          productTab as "products" | "categories" | "highlights"
+        );
       }
     }
   }, [searchParams, router]);
@@ -213,11 +231,7 @@ export default function ModeratorDashboard() {
         case "posts":
           return <BlogManagementTable />;
         case "categories":
-          return (
-            <div className="text-gray-900 p-8 text-center">
-              Quản lý danh mục blog (Chưa triển khai)
-            </div>
-          );
+          return <CategoryManagementTable/>;
         case "comments":
           return <CommentManagementTable />;
         case "tags":
@@ -293,7 +307,7 @@ export default function ModeratorDashboard() {
       case "verification":
         return "Xác thực tài khoản";
       case "dispute":
-        return "Xử lý Tranh chấp Đơn hàng";
+        return "Xử lý Khiếu nại Đơn hàng";
       case "userManagement":
         return "Quản lý người dùng";
       case "complaints":
@@ -338,7 +352,7 @@ export default function ModeratorDashboard() {
       case "verification":
         return "Xác thực danh tính và thông tin người dùng";
       case "dispute":
-        return "Quản lý và giải quyết khiếu nại tranh chấp đơn hàng";
+        return "Quản lý và giải quyết khiếu nại đơn hàng";
       case "userManagement":
         return "Quản lý người dùng cần xử lý";
       case "complaints":
@@ -378,4 +392,3 @@ export default function ModeratorDashboard() {
     </div>
   );
 }
-

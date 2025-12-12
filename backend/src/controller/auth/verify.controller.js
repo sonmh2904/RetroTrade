@@ -1,9 +1,18 @@
 const User = require("../../models/User.model");
 const VerificationRequest = require("../../models/VerificationRequest.model");
-const { getAdmin } = require("../../config/firebase");
 const { uploadToCloudinary } = require('../../middleware/upload.middleware');
 const { createNotification } = require("../../middleware/createNotification");
 const { encryptObject, decryptObject } = require("../../utils/cryptoHelper");
+// Optional: face comparison (requires @vladmandic/face-api and canvas)
+let compareFaces = null;
+try {
+    const faceComparison = require("../../utils/faceComparison");
+    compareFaces = faceComparison.compareFaces;
+} catch (error) {
+    console.warn('Face comparison not available:', error.message);
+    console.warn('Auto verification will fallback to manual verification');
+}
+const { sendOtp: sendOtpTwilio, verifyOtp: verifyOtpTwilio, formatPhoneForTwilio } = require("../../utils/twilioUtils");
 
 let Tesseract;
 let tesseractLoaded = false;
@@ -334,174 +343,6 @@ const extractIdCardInfo = async (idCardImageBuffer) => {
             }
         }
 
-        let addressLineIndex = -1;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (/Nơi\s+thường\s+trú/i.test(line) || /ơi\s+thường\s+trú/i.test(line) ||
-                /Địa\s+chỉ\s+thường\s+trú/i.test(line) || /Place\s+of\s+residence/i.test(line)) {
-                addressLineIndex = i;
-                break;
-            }
-        }
-
-        if (addressLineIndex >= 0) {
-            const addressLine = lines[addressLineIndex];
-            const sameLinePatterns = [
-                /Nơi\s+thường\s+trú\s*\/\s*Place\s+of\s+residence\s*:?\s*(.+)/i,
-                /Địa\s+chỉ\s+thường\s+trú\s*\/\s*Place\s+of\s+residence\s*:?\s*(.+)/i,
-                /Nơi\s+thường\s+trú\s*:?\s*(.+)/i,
-                /Địa\s+chỉ\s+thường\s+trú\s*:?\s*(.+)/i,
-                /ơi\s+thường\s+trú\s*:?\s*(.+)/i,
-            ];
-
-            let addressFromSameLine = '';
-            for (const pattern of sameLinePatterns) {
-                const match = addressLine.match(pattern);
-                if (match && match[1]) {
-                    addressFromSameLine = match[1].trim();
-                    addressFromSameLine = addressFromSameLine.replace(/^(Địa chỉ|Địa chỉ thường trú|Nơi thường trú|Place of residence|ơi thường trú)[:\s]*/i, '');
-                    addressFromSameLine = addressFromSameLine.replace(/[.,;:]+$/, '').trim();
-                    break;
-                }
-            }
-
-            let addressLines = [];
-            if (addressFromSameLine && addressFromSameLine.length > 0) {
-                addressLines.push(addressFromSameLine);
-            }
-
-            for (let i = addressLineIndex + 1; i < lines.length; i++) {
-                const line = lines[i];
-                if (/Có\s+giá\s+trị/i.test(line) || /Date\s+of\s+expiry/i.test(line)) {
-                    break;
-                }
-                if (line.length > 0 &&
-                    !/^(Ngày|Giới|Quốc|Quê|Nơi|Địa|Số|No)/i.test(line) &&
-                    !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(line)) {
-                    addressLines.push(line);
-                }
-            }
-
-            if (addressLines.length > 0) {
-                const combinedAddress = addressLines.join(' ').trim();
-                let address = '';
-
-                const houseNumberMatch = combinedAddress.match(/^(\d{1,4})\s+([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ])/);
-                let houseNumber = '';
-                if (houseNumberMatch && houseNumberMatch[1]) {
-                    houseNumber = houseNumberMatch[1] + ' ';
-                }
-
-                address = combinedAddress.replace(/^[\d\s°°đ]{10,}/i, '');
-                address = address.replace(/^[^\wÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]+/i, '');
-                address = address.replace(/\b[a-z]\s+\d{4}\s+\d+[đ°°]+\d*/gi, '');
-                address = address.replace(/\b\d{5,}\s*[a-z]+\s*\d+[đ°°]+/gi, '');
-                address = address.replace(/\b\d+[đ°°]+\d*/gi, '');
-                address = address.replace(/[°°`…\.\.\.]+/g, ' ');
-                address = address.replace(/\s*—\s*/g, ' ');
-                address = address.replace(/\s+[A-Z]\s+/g, ' ');
-
-                if (houseNumber && !address.match(/^\d{1,4}\s/)) {
-                    address = houseNumber + address;
-                }
-
-                address = address.replace(/^(Địa chỉ|Địa chỉ thường trú|Nơi thường trú|Place of residence|ơi thường trú)[:\s]*/i, '');
-                address = address.replace(/:\s*[a-z]+$/i, '');
-                address = address.replace(/`\.\.\./g, '');
-                address = address.replace(/[°°`…]+$/g, '');
-                address = address.replace(/[.,;:]+$/, '').trim();
-                address = address.replace(/\s+/g, ' ').trim();
-                address = address.replace(/\b\d{4}\s*\d+\s*[a-z]+\s*\d+[đ°°]+/gi, '');
-                address = address.replace(/\s+/g, ' ').trim();
-
-                const words = address.split(/\s+/).filter(word => {
-                    const trimmedWord = word.trim();
-                    if (!trimmedWord || trimmedWord.length === 0) return false;
-                    if (/^\d{1,4}$/.test(trimmedWord)) return true;
-                    if (/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/.test(trimmedWord)) {
-                        if (trimmedWord.length >= 2 && /[A-Za-zÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/.test(trimmedWord)) {
-                            const letterCount = (trimmedWord.match(/[A-Za-zÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/g) || []).length;
-                            const specialCharCount = (trimmedWord.match(/[^A-Za-z0-9ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s]/g) || []).length;
-                            if (letterCount > specialCharCount && letterCount >= 2) {
-                                return true;
-                            }
-                        }
-                    }
-                    if (/^[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]{2,}$/.test(trimmedWord)) {
-                        if (trimmedWord.length >= 2 && !/^[A-Z]{1}$/.test(trimmedWord)) {
-                            return true;
-                        }
-                    }
-                    const commonPlaceWords = ['xa', 'phuong', 'quan', 'huyen', 'thi', 'xã', 'phường', 'quận', 'huyện', 'thị', 'tp', 'thanh', 'pho', 'thành', 'phố', 'hanoi', 'hà', 'nội'];
-                    if (commonPlaceWords.includes(trimmedWord.toLowerCase())) return true;
-                    return false;
-                });
-
-                const cleanedWords = words.map(word => {
-                    let cleaned = word.replace(/^[^A-Za-z0-9ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+|[^A-Za-z0-9ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+$/g, '');
-                    cleaned = cleaned.replace(/[^A-Za-z0-9ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\-]/g, '');
-                    return cleaned.trim();
-                }).filter(word => word.length > 0);
-
-                address = cleanedWords.join(' - ');
-
-                if (address.length > 10 && address.length <= 200 && /[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/.test(address)) {
-                    idCardInfo.address = address;
-                }
-            }
-        }
-
-        if (!idCardInfo.address) {
-            const addressPatterns = [
-                /Nơi\s+thường\s+trú\s*\/\s*Place\s+of\s+residence\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Có giá trị|Date of expiry|$)/i,
-                /ơi\s+thường\s+trú\s*\/\s*Place\s+of\s+residence\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Có giá trị|Date of expiry|$)/i,
-                /Địa\s+chỉ\s+thường\s+trú\s*\/\s*Place\s+of\s+residence\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Có giá trị|Date of expiry|$)/i,
-                /Nơi\s+thường\s+trú\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Có giá trị|Date of expiry|$)/i,
-                /ơi\s+thường\s+trú\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Có giá trị|Date of expiry|$)/i,
-                /Địa\s+chỉ\s+thường\s+trú\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Có giá trị|Date of expiry|$)/i,
-            ];
-
-            for (const pattern of addressPatterns) {
-                const match = text.match(pattern);
-                if (match && match[1]) {
-                    let address = match[1].trim();
-                    address = address.replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-                    address = address.replace(/^[\d\s°°đ]+/i, '');
-                    address = address.replace(/^[^\wÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]+/i, '');
-                    address = address.replace(/^(Địa chỉ|Địa chỉ thường trú|Nơi thường trú|Place of residence|ơi thường trú)[:\s]*/i, '');
-                    address = address.replace(/[.,;:]+$/, '').trim();
-                    address = address.replace(/[°°`]+$/g, '');
-                    if (address.length > 200) {
-                        address = address.substring(0, 200);
-                    }
-                    if (address.length > 10 && /[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/.test(address)) {
-                        idCardInfo.address = address;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!idCardInfo.address) {
-            const placeOfOriginPatterns = [
-                /Quê\s+quán\s*\/\s*Place\s+of\s+origin\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Nơi|Địa|Có giá trị|Date of expiry|$)/i,
-                /Quê\s+quán\s*:?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n|Nơi|Địa|Có giá trị|Date of expiry|$)/i,
-            ];
-            for (const pattern of placeOfOriginPatterns) {
-                const match = text.match(pattern);
-                if (match && match[1]) {
-                    let address = match[1].trim();
-                    address = address.replace(/\n+/g, ' ').replace(/\s+/g, ' ');
-                    address = address.replace(/^(Quê quán|Place of origin)[:\s]*/i, '');
-                    address = address.replace(/[.,;:]+$/, '').trim();
-                    if (address.length > 10 && address.length <= 200 && /[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/.test(address)) {
-                        idCardInfo.address = address;
-                        break;
-                    }
-                }
-            }
-        }
-
         if (idCardInfo.idNumber || idCardInfo.fullName || idCardInfo.dateOfBirth || idCardInfo.address) {
             return idCardInfo;
         }
@@ -513,77 +354,43 @@ const extractIdCardInfo = async (idCardImageBuffer) => {
     }
 };
 
-module.exports.sendOtpViaFirebase = async (req, res) => {
+module.exports.sendOtpViaTwilio = async (req, res) => {
     try {
-        const { phone, recaptchaToken } = req.body;
-        if (!phone) {
+        const { phone } = req.body;
+        if (!phone || phone.trim() === '') {
             return res.status(400).json({ code: 400, message: "Thiếu số điện thoại" });
         }
 
-        const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-        const usingEmulator = Boolean(emulatorHost);
-        const apiKey = usingEmulator ? "dummy" : process.env.FIREBASE_WEB_API_KEY;
+        console.log('Received phone number:', phone); // Debug log
+        const result = await sendOtpTwilio(phone);
 
-        if (!apiKey) {
-            return res.status(500).json({
-                code: 500,
-                message: "Thiếu FIREBASE_WEB_API_KEY trong môi trường. Vui lòng kiểm tra cấu hình Firebase.",
-                error: "Missing FIREBASE_WEB_API_KEY environment variable"
-            });
-        }
-
-        const baseUrl = usingEmulator
-            ? `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`
-            : `https://identitytoolkit.googleapis.com/v1`;
-
-        const payload = usingEmulator
-            ? { phoneNumber: phone }
-            : { phoneNumber: phone, recaptchaToken };
-
-        if (!usingEmulator && !recaptchaToken) {
-            return res.status(400).json({ code: 400, message: "Thiếu recaptchaToken (production)" });
-        }
-
-        const fetch = await initFetch();
-        const response = await fetch(`${baseUrl}/accounts:sendVerificationCode?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            timeout: 30000
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
+        if (!result.success) {
             return res.status(400).json({
                 code: 400,
-                message: data.error?.message || "Gửi OTP thất bại",
-                error: data
+                message: result.error || "Gửi OTP thất bại",
+                error: result.error
             });
         }
 
         return res.json({
             code: 200,
-            message: "Đã gửi OTP qua Firebase",
-            data: { sessionInfo: data.sessionInfo }
+            message: "Đã gửi OTP qua SMS",
+            data: { 
+                sid: result.sid,
+                status: result.status
+            }
         });
     } catch (error) {
         console.error('OTP sending error:', error);
         let errorMessage = "Lỗi khi gửi OTP";
         let statusCode = 500;
 
-        if (error.message.includes('fetch failed')) {
-            errorMessage = "Không thể kết nối đến dịch vụ xác thực. Vui lòng kiểm tra kết nối mạng và thử lại.";
-            statusCode = 503;
-        } else if (error.message.includes('timeout')) {
-            errorMessage = "Yêu cầu gửi OTP quá thời gian chờ. Vui lòng thử lại.";
-            statusCode = 408;
-        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            errorMessage = "Không thể kết nối đến server xác thực. Vui lòng thử lại sau.";
-            statusCode = 503;
-        } else if (error.message.includes('Invalid API key')) {
-            errorMessage = "Cấu hình API key không đúng. Vui lòng liên hệ quản trị viên.";
+        if (error.message.includes('TWILIO')) {
+            errorMessage = "Cấu hình Twilio chưa đúng. Vui lòng kiểm tra environment variables.";
             statusCode = 500;
+        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+            errorMessage = "Không thể kết nối đến dịch vụ Twilio. Vui lòng thử lại sau.";
+            statusCode = 503;
         }
 
         return res.status(statusCode).json({
@@ -594,73 +401,21 @@ module.exports.sendOtpViaFirebase = async (req, res) => {
     }
 }
 
-module.exports.verifyOtpViaFirebase = async (req, res) => {
+
+module.exports.verifyOtpViaTwilio = async (req, res) => {
     try {
-        const { sessionInfo, code } = req.body;
-        if (!sessionInfo || !code) {
-            return res.status(400).json({ code: 400, message: "Thiếu sessionInfo hoặc mã OTP" });
+        const { phone, code } = req.body;
+        if (!phone || !code) {
+            return res.status(400).json({ code: 400, message: "Thiếu số điện thoại hoặc mã OTP" });
         }
 
-        const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-        const usingEmulator = Boolean(emulatorHost);
-        const apiKey = usingEmulator ? "dummy" : process.env.FIREBASE_WEB_API_KEY;
+        const result = await verifyOtpTwilio(phone, code);
 
-        if (!apiKey) {
-            const mockUserId = `mock_user_${Date.now()}`;
-            const mockPhone = "0123456789";
-            return res.json({
-                code: 200,
-                message: "Xác minh OTP thành công (Mock Mode)",
-                data: {
-                    phone: mockPhone,
-                    userId: mockUserId,
-                    isPhoneConfirmed: true
-                },
-                warning: "Đang sử dụng mock verification cho development. Vui lòng cấu hình Firebase để sử dụng thật."
-            });
-        }
-
-        const baseUrl = usingEmulator
-            ? `http://${emulatorHost}/identitytoolkit.googleapis.com/v1`
-            : `https://identitytoolkit.googleapis.com/v1`;
-
-        const fetch = await initFetch();
-        const response = await fetch(`${baseUrl}/accounts:signInWithPhoneNumber?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sessionInfo, code })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            return res.status(400).json({ code: 400, message: data.error?.message || "Xác minh OTP thất bại", error: data });
-        }
-
-        let admin, decoded, phoneNumber;
-        try {
-            admin = getAdmin();
-            decoded = await admin.auth().verifyIdToken(data.idToken);
-            phoneNumber = decoded.phone_number;
-        } catch (adminError) {
-            console.error('Firebase Admin SDK error:', adminError);
-            return res.status(500).json({
-                code: 500,
-                message: "Lỗi xác thực Firebase Admin SDK. Vui lòng kiểm tra cấu hình Firebase.",
-                error: adminError.message
-            });
-        }
-
-        if (!phoneNumber) {
-            return res.status(400).json({
-                code: 400,
-                message: "ID token không chứa số điện thoại"
-            });
-        }
-
-        const formattedPhone = formatPhoneNumber(phoneNumber);
-        if (!validateVietnamesePhoneNumber(formattedPhone)) {
-            return res.status(400).json({
-                code: 400,
-                message: "Số điện thoại không đúng định dạng Việt Nam"
+        if (!result.success) {
+            return res.status(400).json({ 
+                code: 400, 
+                message: result.error || "Xác minh OTP thất bại",
+                error: result.error
             });
         }
 
@@ -673,7 +428,17 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
         }
 
         try {
-            // First, get the user to check current verification status
+            // Format phone to Vietnamese format (0xxx)
+            const formattedPhone = formatPhoneNumber(formatPhoneForTwilio(phone));
+            
+            if (!validateVietnamesePhoneNumber(formattedPhone)) {
+                return res.status(400).json({
+                    code: 400,
+                    message: "Số điện thoại không đúng định dạng Việt Nam"
+                });
+            }
+
+            // Get the user to check current verification status
             const currentUser = await User.findById(userId);
             if (!currentUser) {
                 return res.status(404).json({
@@ -690,142 +455,49 @@ module.exports.verifyOtpViaFirebase = async (req, res) => {
             );
 
             // Check if both phone and ID are now verified
-            // If ID was already verified, user is now fully verified
-            if (currentUser.isIdVerified) {
-                // Both phone and ID are verified - user is fully verified
-                // The flags are already set correctly, no additional action needed
+            const isFullyVerified = updatedUser.isPhoneConfirmed && updatedUser.isIdVerified;
+
+            if (isFullyVerified) {
                 console.log(`User ${userId} is now fully verified (phone and ID both verified)`);
+                
+                try {
+                    await createNotification(
+                        userId,
+                        "Tài khoản đã được xác minh đầy đủ",
+                        "Tài khoản đã được xác minh đầy đủ",
+                        `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công. Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).`,
+                        {
+                            phone: formattedPhone,
+                            type: 'full_verification_success',
+                            redirectUrl: '/auth/verification-history',
+                            isFullyVerified: true
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error("Error creating full verification notification:", notificationError);
+                }
+            } else {
+                try {
+                    await createNotification(
+                        userId,
+                        "Xác minh số điện thoại thành công",
+                        "Xác minh số điện thoại thành công",
+                        `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công.`,
+                        {
+                            phone: formattedPhone,
+                            type: 'phone_verification_success',
+                            redirectUrl: '/auth/verification-history',
+                            isFullyVerified: false
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error("Error creating phone verification notification:", notificationError);
+                }
             }
 
             return res.json({
                 code: 200,
                 message: "Xác minh số điện thoại thành công",
-                data: {
-                    phone: formattedPhone,
-                    userId: updatedUser._id,
-                    isPhoneConfirmed: updatedUser.isPhoneConfirmed,
-                    isIdVerified: updatedUser.isIdVerified,
-                    isFullyVerified: updatedUser.isPhoneConfirmed && updatedUser.isIdVerified,
-                    user: updatedUser
-                }
-            });
-        } catch (dbError) {
-            console.error('Database update error:', dbError);
-            return res.status(500).json({
-                code: 500,
-                message: "Lỗi cơ sở dữ liệu khi cập nhật số điện thoại",
-                error: dbError.message
-            });
-        }
-    } catch (error) {
-        console.error('OTP verification error:', error);
-        let errorMessage = "Lỗi khi xác minh OTP";
-        let statusCode = 500;
-
-        if (error.message.includes('fetch failed')) {
-            errorMessage = "Không thể kết nối đến dịch vụ xác thực. Vui lòng kiểm tra kết nối mạng và thử lại.";
-            statusCode = 503;
-        } else if (error.message.includes('timeout')) {
-            errorMessage = "Yêu cầu xác minh OTP quá thời gian chờ. Vui lòng thử lại.";
-            statusCode = 408;
-        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            errorMessage = "Không thể kết nối đến server xác thực. Vui lòng thử lại sau.";
-            statusCode = 503;
-        } else if (error.message.includes('Invalid API key')) {
-            errorMessage = "Cấu hình API key không đúng. Vui lòng liên hệ quản trị viên.";
-            statusCode = 500;
-        } else if (error.message.includes('Firebase Admin credentials')) {
-            errorMessage = "Cấu hình Firebase Admin SDK không đúng. Vui lòng kiểm tra environment variables.";
-            statusCode = 500;
-        } else if (error.message.includes('Database')) {
-            errorMessage = "Lỗi cơ sở dữ liệu. Vui lòng thử lại sau.";
-            statusCode = 500;
-        }
-
-        return res.status(statusCode).json({
-            code: statusCode,
-            message: errorMessage,
-            error: error.message
-        });
-    }
-}
-
-module.exports.confirmPhoneWithFirebaseIdToken = async (req, res) => {
-    try {
-        const { idToken } = req.body;
-        if (!idToken) {
-            return res.status(400).json({ code: 400, message: "Thiếu Firebase ID token" });
-        }
-
-        const admin = getAdmin();
-        const decoded = await admin.auth().verifyIdToken(idToken);
-        const phoneNumber = decoded.phone_number;
-        if (!phoneNumber) {
-            return res.status(400).json({ code: 400, message: "ID token không chứa số điện thoại" });
-        }
-
-        const formattedPhone = formatPhoneNumber(phoneNumber);
-        if (!validateVietnamesePhoneNumber(formattedPhone)) {
-            return res.status(400).json({
-                code: 400,
-                message: "Số điện thoại không đúng định dạng Việt Nam"
-            });
-        }
-
-        const userId = req.user?._id;
-        if (!userId) {
-            return res.status(401).json({
-                code: 401,
-                message: "User chưa đăng nhập. Vui lòng đăng nhập trước khi xác minh"
-            });
-        }
-
-        try {
-            // First, get the user to check current verification status
-            const currentUser = await User.findById(userId);
-            if (!currentUser) {
-                return res.status(404).json({
-                    code: 404,
-                    message: "Không tìm thấy người dùng"
-                });
-            }
-
-            // Update phone and set isPhoneConfirmed to true
-            const updatedUser = await User.findByIdAndUpdate(
-                userId,
-                { phone: formattedPhone, isPhoneConfirmed: true },
-                { new: true }
-            );
-
-            // Check if both phone and ID are now verified
-            // If ID was already verified, user is now fully verified
-            const isFullyVerified = updatedUser.isPhoneConfirmed && updatedUser.isIdVerified;
-            
-            try {
-                let notificationMessage = `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công.`;
-                if (isFullyVerified) {
-                    notificationMessage = `Số điện thoại ${formattedPhone} của bạn đã được xác minh thành công. Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân).`;
-                }
-                
-                await createNotification(
-                    userId,
-                    isFullyVerified ? "Tài khoản đã được xác minh đầy đủ" : "Xác minh số điện thoại thành công",
-                    isFullyVerified ? "Tài khoản đã được xác minh đầy đủ" : "Xác minh số điện thoại thành công",
-                    notificationMessage,
-                    {
-                        phone: formattedPhone,
-                        type: isFullyVerified ? 'full_verification_success' : 'phone_verification_success',
-                        redirectUrl: '/auth/verification-history',
-                        isFullyVerified: isFullyVerified
-                    }
-                );
-            } catch (notificationError) {
-                console.error("Error creating phone verification notification:", notificationError);
-            }
-
-            return res.json({
-                code: 200,
-                message: "Xác minh số điện thoại (Firebase) thành công",
                 data: {
                     phone: formattedPhone,
                     userId: updatedUser._id,
@@ -844,9 +516,29 @@ module.exports.confirmPhoneWithFirebaseIdToken = async (req, res) => {
             });
         }
     } catch (error) {
-        return res.status(500).json({ code: 500, message: "Xác minh Firebase ID token thất bại", error: error.message });
+        console.error('OTP verification error:', error);
+        let errorMessage = "Lỗi khi xác minh OTP";
+        let statusCode = 500;
+
+        if (error.message.includes('TWILIO')) {
+            errorMessage = "Cấu hình Twilio chưa đúng. Vui lòng kiểm tra environment variables.";
+            statusCode = 500;
+        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+            errorMessage = "Không thể kết nối đến dịch vụ Twilio. Vui lòng thử lại sau.";
+            statusCode = 503;
+        } else if (error.message.includes('Database')) {
+            errorMessage = "Lỗi cơ sở dữ liệu. Vui lòng thử lại sau.";
+            statusCode = 500;
+        }
+
+        return res.status(statusCode).json({
+            code: statusCode,
+            message: errorMessage,
+            error: error.message
+        });
     }
 }
+
 
 module.exports.previewIdCardOcr = async (req, res) => {
     try {
@@ -886,8 +578,7 @@ module.exports.previewIdCardOcr = async (req, res) => {
                 extractedIdCardInfo: extractedIdCardInfo ? {
                     idNumber: extractedIdCardInfo.idNumber || null,
                     fullName: extractedIdCardInfo.fullName || null,
-                    dateOfBirth: extractedIdCardInfo.dateOfBirth ? extractedIdCardInfo.dateOfBirth.toISOString() : null,
-                    address: extractedIdCardInfo.address || null
+                    dateOfBirth: extractedIdCardInfo.dateOfBirth ? extractedIdCardInfo.dateOfBirth.toISOString() : null
                 } : null
             }
         });
@@ -903,10 +594,10 @@ module.exports.previewIdCardOcr = async (req, res) => {
 
 module.exports.verifyFaceImages = async (req, res) => {
     try {
-        if (!req.files || req.files.length < 2) {
+        if (!req.files || req.files.length < 3) {
             return res.status(400).json({
                 code: 400,
-                message: "Vui lòng upload đủ 2 ảnh: mặt trước căn cước công dân và mặt sau căn cước công dân"
+                message: "Vui lòng upload đủ 3 ảnh: mặt trước căn cước công dân, mặt sau căn cước công dân và ảnh người dùng"
             });
         }
 
@@ -921,11 +612,12 @@ module.exports.verifyFaceImages = async (req, res) => {
         const files = req.files;
         const idCardFrontFile = files[0];
         const idCardBackFile = files[1];
+        const userPhotoFile = files[2];
 
-        if (!idCardFrontFile || !idCardBackFile) {
+        if (!idCardFrontFile || !idCardBackFile || !userPhotoFile) {
             return res.status(400).json({
                 code: 400,
-                message: "Thiếu ảnh. Vui lòng upload đủ 2 ảnh: mặt trước và mặt sau căn cước công dân"
+                message: "Thiếu ảnh. Vui lòng upload đủ 3 ảnh: mặt trước CCCD, mặt sau CCCD và ảnh người dùng"
             });
         }
 
@@ -939,8 +631,7 @@ module.exports.verifyFaceImages = async (req, res) => {
                 extractedIdCardInfo = {
                     idNumber: providedInfo.idNumber || null,
                     fullName: providedInfo.fullName || null,
-                    dateOfBirth: providedInfo.dateOfBirth || null,
-                    address: providedInfo.address || null
+                    dateOfBirth: providedInfo.dateOfBirth || null
                 };
             } catch (parseError) {
                 console.error('Error parsing idCardInfo from request:', parseError);
@@ -951,12 +642,11 @@ module.exports.verifyFaceImages = async (req, res) => {
             try {
                 const ocrResult = await extractIdCardInfo(idCardFrontFile.buffer);
                 if (ocrResult) {
-                    extractedIdCardInfo = {
-                        idNumber: extractedIdCardInfo?.idNumber || ocrResult.idNumber || null,
-                        fullName: extractedIdCardInfo?.fullName || ocrResult.fullName || null,
-                        dateOfBirth: extractedIdCardInfo?.dateOfBirth || ocrResult.dateOfBirth || null,
-                        address: extractedIdCardInfo?.address || ocrResult.address || null
-                    };
+                extractedIdCardInfo = {
+                    idNumber: extractedIdCardInfo?.idNumber || ocrResult.idNumber || null,
+                    fullName: extractedIdCardInfo?.fullName || ocrResult.fullName || null,
+                    dateOfBirth: extractedIdCardInfo?.dateOfBirth || ocrResult.dateOfBirth || null
+                };
                 }
             } catch (ocrError) {
                 console.error('Error extracting ID card info with OCR:', ocrError);
@@ -977,11 +667,24 @@ module.exports.verifyFaceImages = async (req, res) => {
 
         let uploadedFiles = [];
         try {
+            console.log('Uploading files to Cloudinary:', {
+                filesCount: files.length,
+                fileNames: files.map(f => f.originalname),
+                fileSizes: files.map(f => f.size)
+            });
+            
             uploadedFiles = await uploadToCloudinary(files, "retrotrade/verification-requests/");
-            if (!uploadedFiles || uploadedFiles.length !== 2) {
+            
+            console.log('Upload result:', {
+                uploadedCount: uploadedFiles?.length,
+                expectedCount: 3
+            });
+            
+            if (!uploadedFiles || uploadedFiles.length !== 3) {
+                console.error('Upload failed: Expected 3 files but got', uploadedFiles?.length);
                 return res.status(400).json({
                     code: 400,
-                    message: "Lỗi khi upload ảnh. Vui lòng thử lại"
+                    message: `Lỗi khi upload ảnh. Đã upload ${uploadedFiles?.length || 0}/3 ảnh. Vui lòng thử lại`
                 });
             }
         } catch (uploadError) {
@@ -993,7 +696,7 @@ module.exports.verifyFaceImages = async (req, res) => {
             });
         }
 
-        const documentTypes = ['idCardFront', 'idCardBack'];
+        const documentTypes = ['idCardFront', 'idCardBack', 'userPhoto'];
         const documents = uploadedFiles.map((file, index) => {
             return {
                 documentType: documentTypes[index] || 'document',
@@ -1005,8 +708,7 @@ module.exports.verifyFaceImages = async (req, res) => {
         const hasValidIdCardInfo = extractedIdCardInfo && (
             extractedIdCardInfo.idNumber ||
             extractedIdCardInfo.fullName ||
-            extractedIdCardInfo.dateOfBirth ||
-            extractedIdCardInfo.address
+            extractedIdCardInfo.dateOfBirth
         );
 
         const shouldAutoReject = !hasValidIdCardInfo;
@@ -1018,14 +720,20 @@ module.exports.verifyFaceImages = async (req, res) => {
                 const idCardData = {
                     idNumber: extractedIdCardInfo.idNumber || null,
                     fullName: extractedIdCardInfo.fullName || null,
-                    dateOfBirth: extractedIdCardInfo.dateOfBirth ? new Date(extractedIdCardInfo.dateOfBirth).toISOString() : null,
-                    address: extractedIdCardInfo.address || null
+                    dateOfBirth: extractedIdCardInfo.dateOfBirth ? new Date(extractedIdCardInfo.dateOfBirth).toISOString() : null
                 };
+                console.log('Encrypting idCardInfo:', {
+                    hasIdNumber: !!idCardData.idNumber,
+                    hasFullName: !!idCardData.fullName,
+                    hasDateOfBirth: !!idCardData.dateOfBirth
+                });
+                
                 const { iv, encryptedData } = encryptObject(idCardData);
                 idCardInfoEncrypted = {
                     encryptedData: Buffer.from(encryptedData, "hex"),
                     iv: iv
                 };
+                console.log('Encryption successful');
             } catch (encryptError) {
                 console.error('Error encrypting idCardInfo:', encryptError);
                 return res.status(500).json({
@@ -1049,8 +757,17 @@ module.exports.verifyFaceImages = async (req, res) => {
             handledAt: shouldAutoReject ? new Date() : null
         });
 
-        await verificationRequest.save();
-        await verificationRequest.populate('userId', 'fullName email phone');
+        try {
+            await verificationRequest.save();
+            await verificationRequest.populate('userId', 'fullName email phone');
+        } catch (saveError) {
+            console.error('Error saving verification request:', saveError);
+            return res.status(500).json({
+                code: 500,
+                message: "Lỗi khi lưu yêu cầu xác minh vào cơ sở dữ liệu",
+                error: saveError.message
+            });
+        }
 
         if (shouldAutoReject) {
             try {
@@ -1125,14 +842,12 @@ module.exports.verifyFaceImages = async (req, res) => {
                 idNumber: decryptedIdCardInfo.idNumber || null,
                 fullName: decryptedIdCardInfo.fullName || null,
                 dateOfBirth: decryptedIdCardInfo.dateOfBirth || null,
-                address: decryptedIdCardInfo.address || null,
                 extractionMethod: 'ocr_user_confirmed'
             } : null,
             extractedIdCardInfo: extractedIdCardInfo ? {
                 idNumber: extractedIdCardInfo.idNumber,
                 fullName: extractedIdCardInfo.fullName,
-                dateOfBirth: extractedIdCardInfo.dateOfBirth ? (typeof extractedIdCardInfo.dateOfBirth === 'string' ? extractedIdCardInfo.dateOfBirth : extractedIdCardInfo.dateOfBirth.toISOString()) : null,
-                address: extractedIdCardInfo.address
+                dateOfBirth: extractedIdCardInfo.dateOfBirth ? (typeof extractedIdCardInfo.dateOfBirth === 'string' ? extractedIdCardInfo.dateOfBirth : extractedIdCardInfo.dateOfBirth.toISOString()) : null
             } : null
         };
 
@@ -1158,6 +873,401 @@ module.exports.verifyFaceImages = async (req, res) => {
         return res.status(500).json({
             code: 500,
             message: "Lỗi khi tạo yêu cầu xác minh",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Auto verification with face comparison
+ * Compares face on ID card with user photo
+ * If similarity > 50%, auto-approves and updates user
+ * Otherwise, returns result for manual review
+ */
+module.exports.verifyFaceImagesAuto = async (req, res) => {
+    try {
+        if (!req.files || req.files.length < 3) {
+            return res.status(400).json({
+                code: 400,
+                message: "Vui lòng upload đủ 3 ảnh: mặt trước căn cước công dân, mặt sau căn cước công dân và ảnh người dùng"
+            });
+        }
+
+        const userId = req.user?._id;
+        if (!userId) {
+            return res.status(401).json({
+                code: 401,
+                message: "User chưa đăng nhập. Vui lòng đăng nhập trước khi xác minh"
+            });
+        }
+
+        const files = req.files;
+        const idCardFrontFile = files[0];
+        const idCardBackFile = files[1];
+        const userPhotoFile = files[2];
+
+        if (!idCardFrontFile || !idCardBackFile || !userPhotoFile) {
+            return res.status(400).json({
+                code: 400,
+                message: "Thiếu ảnh. Vui lòng upload đủ 3 ảnh: mặt trước CCCD, mặt sau CCCD và ảnh người dùng"
+            });
+        }
+
+        // Check for existing pending request
+        const existingRequest = await VerificationRequest.findOne({
+            userId: userId,
+            status: { $in: ['Pending', 'In Progress'] }
+        });
+
+        if (existingRequest) {
+            return res.status(400).json({
+                code: 400,
+                message: "Bạn đã có yêu cầu xác minh đang chờ xử lý. Vui lòng chờ moderator xử lý."
+            });
+        }
+
+        // Extract ID card info from OCR
+        let extractedIdCardInfo = null;
+        if (req.body.idCardInfo) {
+            try {
+                const providedInfo = typeof req.body.idCardInfo === 'string'
+                    ? JSON.parse(req.body.idCardInfo)
+                    : req.body.idCardInfo;
+
+                extractedIdCardInfo = {
+                    idNumber: providedInfo.idNumber || null,
+                    fullName: providedInfo.fullName || null,
+                    dateOfBirth: providedInfo.dateOfBirth || null
+                };
+            } catch (parseError) {
+                console.error('Error parsing idCardInfo from request:', parseError);
+            }
+        }
+
+        // If no info provided, extract from OCR
+        if (!extractedIdCardInfo || (!extractedIdCardInfo.idNumber && !extractedIdCardInfo.fullName)) {
+            try {
+                const ocrResult = await extractIdCardInfo(idCardFrontFile.buffer);
+                if (ocrResult) {
+                    extractedIdCardInfo = {
+                        idNumber: extractedIdCardInfo?.idNumber || ocrResult.idNumber || null,
+                        fullName: extractedIdCardInfo?.fullName || ocrResult.fullName || null,
+                        dateOfBirth: extractedIdCardInfo?.dateOfBirth || ocrResult.dateOfBirth || null
+                    };
+                }
+            } catch (ocrError) {
+                console.error('Error extracting ID card info with OCR:', ocrError);
+            }
+        }
+
+        // Validate extracted info
+        if (!extractedIdCardInfo || 
+            !extractedIdCardInfo.idNumber || 
+            !extractedIdCardInfo.fullName || 
+            !extractedIdCardInfo.dateOfBirth) {
+            return res.status(400).json({
+                code: 400,
+                message: "Không thể đọc được thông tin từ ảnh căn cước công dân. Vui lòng chụp lại ảnh rõ nét hơn hoặc nhập thủ công.",
+                data: {
+                    extractedIdCardInfo: extractedIdCardInfo,
+                    requiresManualInput: true
+                }
+            });
+        }
+
+        // Compare faces: ID card front vs user photo
+        let faceComparisonResult = null;
+        if (compareFaces) {
+            try {
+                console.log('Comparing faces...');
+                faceComparisonResult = await compareFaces(
+                    idCardFrontFile.buffer,
+                    userPhotoFile.buffer
+                );
+                console.log('Face comparison result:', faceComparisonResult);
+            } catch (faceError) {
+                console.error('Face comparison error:', faceError);
+                // Fallback: treat as if similarity is 0, will send to moderator
+                faceComparisonResult = {
+                    similarity: 0,
+                    idCardFaceDetected: false,
+                    userFaceDetected: false,
+                    error: 'Lỗi khi so sánh khuôn mặt. Vui lòng thử lại hoặc sử dụng xác minh bán tự động.'
+                };
+            }
+        } else {
+            // Face comparison not available, send to moderator
+            console.log('Face comparison not available, sending to moderator');
+            faceComparisonResult = {
+                similarity: 0,
+                idCardFaceDetected: false,
+                userFaceDetected: false,
+                error: null, // Don't show technical error to user
+                fallbackToManual: true // Flag to indicate fallback
+            };
+        }
+
+        // Upload files to Cloudinary
+        let uploadedFiles = [];
+        try {
+            uploadedFiles = await uploadToCloudinary(files, "retrotrade/verification-requests/");
+            if (!uploadedFiles || uploadedFiles.length !== 3) {
+                return res.status(400).json({
+                    code: 400,
+                    message: `Lỗi khi upload ảnh. Đã upload ${uploadedFiles?.length || 0}/3 ảnh. Vui lòng thử lại`
+                });
+            }
+        } catch (uploadError) {
+            console.error('Error uploading to Cloudinary:', uploadError);
+            return res.status(500).json({
+                code: 500,
+                message: "Lỗi khi upload ảnh lên server",
+                error: uploadError.message
+            });
+        }
+
+        const documentTypes = ['idCardFront', 'idCardBack', 'userPhoto'];
+        const documents = uploadedFiles.map((file, index) => {
+            return {
+                documentType: documentTypes[index] || 'document',
+                fileUrl: file.Url,
+                uploadedAt: new Date()
+            };
+        });
+
+        // Check if similarity > 50% for auto-approval
+        const SIMILARITY_THRESHOLD = 50;
+        const similarity = faceComparisonResult.similarity || 0;
+        const fallbackToManual = faceComparisonResult.fallbackToManual || false;
+        const canAutoApprove = !fallbackToManual && 
+                               similarity >= SIMILARITY_THRESHOLD && 
+                               faceComparisonResult.idCardFaceDetected && 
+                               faceComparisonResult.userFaceDetected;
+
+        if (canAutoApprove) {
+            // Auto-approve: Update user directly
+            try {
+                const user = await User.findById(userId);
+                if (!user) {
+                    return res.status(404).json({
+                        code: 404,
+                        message: "Không tìm thấy người dùng"
+                    });
+                }
+
+                // Encrypt and save ID card info
+                const idCardData = {
+                    idNumber: extractedIdCardInfo.idNumber.trim(),
+                    fullName: extractedIdCardInfo.fullName.trim(),
+                    dateOfBirth: new Date(extractedIdCardInfo.dateOfBirth).toISOString()
+                };
+
+                const { iv, encryptedData } = encryptObject(idCardData);
+                user.idCardInfo = null;
+                user.idCardInfoEncrypted = {
+                    encryptedData: Buffer.from(encryptedData, "hex"),
+                    iv: iv
+                };
+                user.isIdVerified = true;
+
+                // Save documents
+                if (documents && documents.length > 0) {
+                    const userDocuments = documents.map((doc, index) => {
+                        return {
+                            documentType: doc.documentType || 'document',
+                            documentNumber: `DOC-${Date.now()}-${index}`,
+                            fileUrl: doc.fileUrl,
+                            status: 'approved',
+                            submittedAt: doc.uploadedAt || new Date()
+                        };
+                    });
+                    user.documents = user.documents || [];
+                    user.documents.push(...userDocuments);
+                }
+
+                await user.save();
+
+                // Create verification request record for audit (status: Approved)
+                const verificationRequest = new VerificationRequest({
+                    userId: userId,
+                    idCardInfoEncrypted: {
+                        encryptedData: Buffer.from(encryptedData, "hex"),
+                        iv: iv
+                    },
+                    documents: documents,
+                    status: 'Approved',
+                    handledBy: null, // Auto-approved
+                    handledAt: new Date(),
+                    moderatorNotes: `Tự động duyệt: Độ tương đồng khuôn mặt ${similarity.toFixed(2)}%`
+                });
+
+                await verificationRequest.save();
+
+                // Send notification
+                const isFullyVerified = user.isPhoneConfirmed && user.isIdVerified;
+                try {
+                    await createNotification(
+                        userId,
+                        isFullyVerified ? "Tài khoản đã được xác minh đầy đủ" : "Xác minh CCCD đã được duyệt",
+                        isFullyVerified ? "Tài khoản đã được xác minh đầy đủ" : "Xác minh CCCD đã được duyệt",
+                        isFullyVerified 
+                            ? `Tài khoản của bạn đã được xác minh đầy đủ (số điện thoại và căn cước công dân). Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%`
+                            : `Yêu cầu xác minh căn cước công dân của bạn đã được duyệt tự động. Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%`,
+                        {
+                            requestId: verificationRequest._id.toString(),
+                            type: isFullyVerified ? 'full_verification_success' : 'id_card_verification_approved',
+                            redirectUrl: '/auth/profile'
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error("Error creating notification:", notificationError);
+                }
+
+                return res.json({
+                    code: 200,
+                    message: `Xác minh thành công! Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%`,
+                    data: {
+                        autoApproved: true,
+                        similarity: similarity,
+                        idCardFaceDetected: faceComparisonResult.idCardFaceDetected,
+                        userFaceDetected: faceComparisonResult.userFaceDetected,
+                        extractedIdCardInfo: extractedIdCardInfo,
+                        isFullyVerified: isFullyVerified,
+                        requestId: verificationRequest._id.toString()
+                    }
+                });
+            } catch (userUpdateError) {
+                console.error('Error auto-approving user:', userUpdateError);
+                return res.status(500).json({
+                    code: 500,
+                    message: "Lỗi khi cập nhật thông tin người dùng",
+                    error: userUpdateError.message
+                });
+            }
+        } else {
+            // Similarity < 50% or face not detected or fallback: Create pending request for moderator
+            try {
+                const idCardData = {
+                    idNumber: extractedIdCardInfo.idNumber.trim(),
+                    fullName: extractedIdCardInfo.fullName.trim(),
+                    dateOfBirth: new Date(extractedIdCardInfo.dateOfBirth).toISOString()
+                };
+
+                const { iv, encryptedData } = encryptObject(idCardData);
+
+                // Determine moderator notes based on reason
+                let moderatorNotes = '';
+                if (fallbackToManual) {
+                    moderatorNotes = 'Xác minh tự động không khả dụng, chuyển sang xác minh bán tự động';
+                } else if (faceComparisonResult.error) {
+                    moderatorNotes = `Lý do: ${faceComparisonResult.error}. Độ tương đồng: ${similarity.toFixed(2)}%`;
+                } else {
+                    moderatorNotes = `Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}% (dưới ngưỡng ${SIMILARITY_THRESHOLD}%)`;
+                }
+
+                const verificationRequest = new VerificationRequest({
+                    userId: userId,
+                    idCardInfoEncrypted: {
+                        encryptedData: Buffer.from(encryptedData, "hex"),
+                        iv: iv
+                    },
+                    documents: documents,
+                    status: 'Pending',
+                    moderatorNotes: moderatorNotes
+                });
+
+                await verificationRequest.save();
+
+                // Notify moderators
+                try {
+                    const moderators = await User.find({ role: 'moderator', isDeleted: false });
+                    for (const moderator of moderators) {
+                        await createNotification(
+                            moderator._id,
+                            "Yêu cầu xác minh CCCD mới",
+                            "Yêu cầu xác minh CCCD mới",
+                            `Có yêu cầu xác minh căn cước công dân mới từ ${req.user.fullName || req.user.email}. Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%. Vui lòng xử lý.`,
+                            {
+                                requestId: verificationRequest._id.toString(),
+                                userId: userId.toString(),
+                                type: 'id_card_verification_request'
+                            }
+                        );
+                    }
+                } catch (notificationError) {
+                    console.error("Error creating moderator notifications:", notificationError);
+                }
+
+                // Determine rejection reason (user-friendly, no technical details)
+                let rejectionReason = '';
+                let userMessage = '';
+                
+                if (fallbackToManual) {
+                    // Don't show technical error, just say we need manual verification
+                    rejectionReason = 'Không thể thực hiện so sánh khuôn mặt tự động';
+                    userMessage = 'Xác minh tự động không khả dụng. Yêu cầu đã được chuyển sang xác minh bán tự động.';
+                } else if (faceComparisonResult.error) {
+                    rejectionReason = faceComparisonResult.error;
+                    userMessage = `Xác minh tự động không thành công. Lý do: ${rejectionReason}`;
+                } else if (!faceComparisonResult.idCardFaceDetected || !faceComparisonResult.userFaceDetected) {
+                    rejectionReason = 'Không phát hiện được khuôn mặt trong ảnh';
+                    userMessage = `Xác minh tự động không thành công. Lý do: ${rejectionReason}`;
+                } else if (similarity < SIMILARITY_THRESHOLD) {
+                    rejectionReason = `Độ tương đồng khuôn mặt ${similarity.toFixed(2)}% thấp hơn ngưỡng ${SIMILARITY_THRESHOLD}%`;
+                    userMessage = `Xác minh tự động không thành công. Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%`;
+                } else {
+                    rejectionReason = 'Không đủ điều kiện để xác minh tự động';
+                    userMessage = 'Xác minh tự động không thành công';
+                }
+
+                // Notify user
+                try {
+                    await createNotification(
+                        userId,
+                        "Yêu cầu xác minh đã được chuyển sang bán tự động",
+                        "Xác minh CCCD đã được chuyển sang bán tự động",
+                        `${userMessage}. Yêu cầu đã được chuyển sang xác minh bán tự động và gửi cho moderator xử lý.`,
+                        {
+                            requestId: verificationRequest._id.toString(),
+                            type: 'id_card_verification_submitted',
+                            redirectUrl: '/auth/verification-history'
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error("Error creating user notification:", notificationError);
+                }
+
+                return res.json({
+                    code: 200,
+                    message: userMessage || `Xác minh tự động không thành công. Độ tương đồng khuôn mặt: ${similarity.toFixed(2)}%`,
+                    data: {
+                        autoApproved: false,
+                        similarity: similarity,
+                        idCardFaceDetected: faceComparisonResult.idCardFaceDetected,
+                        userFaceDetected: faceComparisonResult.userFaceDetected,
+                        extractedIdCardInfo: extractedIdCardInfo,
+                        verificationRequestSubmitted: true,
+                        requestId: verificationRequest._id.toString(),
+                        requiresModeratorReview: true,
+                        rejectionReason: rejectionReason,
+                        switchedToManualVerification: true,
+                        manualVerificationMessage: 'Yêu cầu đã được chuyển sang xác minh bán tự động và gửi cho kiểm duyệt viên xử lý.'
+                    }
+                });
+            } catch (requestError) {
+                console.error('Error creating verification request:', requestError);
+                return res.status(500).json({
+                    code: 500,
+                    message: "Lỗi khi tạo yêu cầu xác minh",
+                    error: requestError.message
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Auto verification error:', error);
+        return res.status(500).json({
+            code: 500,
+            message: "Lỗi khi xác minh tự động",
             error: error.message
         });
     }
