@@ -111,14 +111,6 @@ export default function ModeratorDashboard() {
     const tab = searchParams.get("tab");
     const blogTab = searchParams.get("blogTab");
     const productTab = searchParams.get("productTab");
-    console.log(
-      "URL query parameters - tab:",
-      tab,
-      "blogTab:",
-      blogTab,
-      "productTab:",
-      productTab
-    );
 
     // If no tab parameter, default to dashboard
     if (!tab) {
@@ -141,7 +133,6 @@ export default function ModeratorDashboard() {
         "complaints",
       ].includes(tab)
     ) {
-      console.log("Setting activeTab from URL query parameter:", tab);
       // If messages tab, navigate to messages page (separate route)
       if (tab === "messages") {
         router.push("/moderator/messages");
