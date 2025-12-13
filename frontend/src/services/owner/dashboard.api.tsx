@@ -4,6 +4,7 @@ export interface OwnerOrder {
   orderGuid: string;
   orderStatus: string;
   totalAmount: number;
+  rentalAmount: number;
   createdAt: string;
   updatedAt: string;
   user: {
@@ -49,7 +50,9 @@ export interface OwnerRevenueResponse {
   timeline: RevenueDataPoint[];
   totals: {
     totalRevenue: number;
+    rentalRevenue: number;
     totalOrders: number;
+    extensionRevenue: number;
     avgOrderValue: number;
   };
   monthlyComparison: {
