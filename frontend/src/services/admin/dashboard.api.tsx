@@ -95,10 +95,40 @@ export interface DashboardStats {
   };
 }
 
-export interface RevenueDataPoint {
+export interface AdminRevenueDataPoint {
   date: string;
   revenue: number;
+  baseRevenue: number;
+  extensionRevenue: number;
   orders: number;
+  extensions: number;
+}
+
+export interface AdminRevenueTotals {
+  total: number;
+  orders: number;
+  baseRevenue: number;
+  extensionRevenue: number;
+  extensionCount: number;
+}
+
+export interface AdminRevenueResponse {
+  timeline: AdminRevenueDataPoint[];
+  totals: AdminRevenueTotals;
+  entries: AdminRevenueEntry[];
+}
+
+export type AdminRevenueEntryType = "order" | "extension";
+
+export interface AdminRevenueEntry {
+  type: AdminRevenueEntryType;
+  date: string;
+  serviceFee: number;
+  referenceCode: string | null;
+  itemTitle: string | null;
+  extensionDuration: number | null;
+  extensionUnit: string | null;
+  orderId: string | null;
 }
 
 export interface UserDataPoint {
@@ -156,7 +186,7 @@ export const dashboardApi = {
   },
 
 
-  getRevenueStats: async (period: string = "30d"): Promise<RevenueDataPoint[]> => {
+  getRevenueStats: async (period: string = "30d"): Promise<AdminRevenueResponse> => {
     const response = await api.get(`/admin/dashboard/revenue?period=${period}`);
     const result = await response.json();
     if (result.code !== 200) {
