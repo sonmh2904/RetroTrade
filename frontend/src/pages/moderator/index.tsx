@@ -108,9 +108,10 @@ export default function ModeratorDashboard() {
 
   // Set default tab and handle URL query parameter for tab navigation
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    const blogTab = searchParams.get("blogTab");
-    const productTab = searchParams.get("productTab");
+    const tab = searchParams!.get("tab");
+    const blogTab = searchParams!.get("blogTab");
+    const productTab = searchParams!.get("productTab");
+
     console.log(
       "URL query parameters - tab:",
       tab,

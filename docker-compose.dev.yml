@@ -1,0 +1,87 @@
+# ============================================
+# Docker Compose - RetroTrade Development
+# ============================================
+# Usage: docker-compose -f docker-compose.dev.yml up
+# Features: Hot-reload, source code mounting
+# MongoDB Atlas: Dùng MONGODB_URI từ backend/.env
+# ============================================
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # Backend API Server (Development)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: retrotrade-backend-dev
+    restart: unless-stopped
+    # Sử dụng file .env có sẵn (bao gồm MONGODB_URI kết nối Atlas)
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=development
+      - FRONTEND_URL=http://localhost:3000
+    ports:
+      - "9999:9999"
+    volumes:
+      # Mount source code for hot-reload
+      - ./backend/src:/app/src:delegated
+      - ./backend/server.js:/app/server.js:delegated
+      # Don't mount node_modules
+      - /app/node_modules
+      # Mount uploads
+      - ./backend/uploads:/app/uploads
+    networks:
+      - retrotrade-dev-network
+    stdin_open: true
+    tty: true
+
+  # ==========================================
+  # Frontend Next.js App (Development)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: retrotrade-frontend-dev
+    restart: unless-stopped
+    # Sử dụng file .env có sẵn trong frontend/
+    env_file:
+      - ./frontend/.env
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:9999/api/v1
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:9999
+      - PUBLIC_API_URL=http://backend:9999/api/v1
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot-reload
+      - ./frontend/src:/app/src:delegated
+      - ./frontend/public:/app/public:delegated
+      - ./frontend/next.config.ts:/app/next.config.ts:delegated
+      - ./frontend/tsconfig.json:/app/tsconfig.json:delegated
+      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs:delegated
+      - ./frontend/components.json:/app/components.json:delegated
+    depends_on:
+      - backend
+    networks:
+      - retrotrade-dev-network
+    stdin_open: true
+    tty: true
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  retrotrade-dev-network:
+    driver: bridge
+
+

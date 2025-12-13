@@ -10,8 +10,6 @@ import {
   Package,
   Shield,
   Crown,
-  Moon,
-  Sun,
   Wallet,
   Bookmark,
   LayoutDashboard,
@@ -38,7 +36,7 @@ import {
 } from "@/components/ui/common/avatar";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "@/store/redux_store";
-import { logout, toggleDarkMode } from "@/store/auth/authReducer";
+import { logout } from "@/store/auth/authReducer";
 import { fetchCartItemCount } from "@/store/cart/cartActions";
 import { jwtDecode } from "jwt-decode";
 import { decodeToken, type DecodedToken } from "@/utils/jwtHelper";
@@ -52,7 +50,7 @@ export function Header() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  const { accessToken, isDarkMode } = useSelector(
+  const { accessToken } = useSelector(
     (state: RootState) => state.auth
   );
   const { count: cartCount } = useSelector((state: RootState) => state.cart);
@@ -97,15 +95,6 @@ export function Header() {
     }
   }, [decodedUser, accessToken, dispatch, router]);
 
-  // Apply dark mode to document
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
-
   // Scroll effect for header
   useEffect(() => {
     const handleScroll = () => {
@@ -114,10 +103,6 @@ export function Header() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const handleToggleDarkMode = () => {
-    dispatch(toggleDarkMode());
-  };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -206,16 +191,16 @@ export function Header() {
     <header
       className={`fixed top-0 left-0 right-0 z-[150] transition-all duration-300 ${
         scrolled
-          ? "bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md"
-          : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm"
-      } border-b border-gray-100 dark:border-gray-800`}
+          ? "bg-white/95 shadow-lg backdrop-blur-md"
+          : "bg-white/80 backdrop-blur-sm"
+      } border-b border-gray-100`}
     >
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo with enhanced animation */}
           <Link href="/" className="flex items-center gap-2 group">
             <div className="relative">
-              <div className="absolute inset-0 bg-indigo-500/20 dark:bg-indigo-400/20 rounded-lg blur-xl group-hover:bg-indigo-500/40 transition-all duration-300"></div>
+              <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-xl group-hover:bg-indigo-500/40 transition-all duration-300"></div>
               <Image
                 src="/retrologo.png"
                 alt="Retro Trade Logo"
@@ -225,7 +210,7 @@ export function Header() {
               />
               <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-yellow-500 opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-300" />
             </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors duration-300">
+            <span className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors duration-300">
               Retro Trade
             </span>
           </Link>
@@ -234,7 +219,7 @@ export function Header() {
           <nav className="hidden md:flex items-center gap-8">
             <Link
               href="/home"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <Home className="w-4 h-4 transform group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300" />
@@ -246,7 +231,7 @@ export function Header() {
             </Link>
             <Link
               href="/products"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <Package className="w-4 h-4 transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-300" />
@@ -258,7 +243,7 @@ export function Header() {
             </Link>
             <Link
               href="/blog"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <BookOpen className="w-4 h-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
@@ -269,7 +254,7 @@ export function Header() {
             </Link>
             <Link
               href="/about"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <Info className="w-4 h-4 transform group-hover:scale-110 group-hover:rotate-180 transition-all duration-500" />
@@ -361,19 +346,6 @@ export function Header() {
                   </div>
                   <DropdownMenuSeparator />
 
-                  {/* Dark Mode Toggle */}
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    onClick={handleToggleDarkMode}
-                  >
-                    {isDarkMode ? (
-                      <Sun className="mr-2 h-4 w-4 text-yellow-500 group-hover:rotate-180 transition-transform duration-500" />
-                    ) : (
-                      <Moon className="mr-2 h-4 w-4 text-gray-600 group-hover:rotate-180 transition-transform duration-500" />
-                    )}
-                    <span>{isDarkMode ? "Chế độ sáng" : "Chế độ tối"}</span>
-                  </DropdownMenuItem>
-
                   <DropdownMenuItem
                     className="cursor-pointer group"
                     onClick={handleGoToProfile}
@@ -429,7 +401,7 @@ export function Header() {
               <>
                 <Link
                   href="/auth/login"
-                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 relative group"
+                  className="text-gray-700 hover:text-indigo-600 transition-all duration-300 relative group"
                 >
                   <span className="relative z-10">Đăng nhập</span>
                   <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-600 to-purple-600 group-hover:w-full transition-all duration-300"></span>

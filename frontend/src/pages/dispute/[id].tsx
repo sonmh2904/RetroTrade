@@ -250,9 +250,9 @@ export default function DisputeDetailPage() {
     if (!id) return;
 
     getDisputeById(id)
-      .then((res: ApiResponse<DisputeFromAPI>) => {
+      .then((res) => {
         if (res.code === 200 && res.data) {
-          setDispute(res.data);
+          setDispute(res.data as DisputeFromAPI);
         } else {
           toast.error("Không tìm thấy Khiếu nại");
           router.replace("/order");

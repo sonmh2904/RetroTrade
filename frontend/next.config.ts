@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Enable standalone output for Docker production builds
+  output: 'standalone',
   env: {
     // Expose PUBLIC_API_URL to the browser so client code can read it
     PUBLIC_API_URL: process.env.PUBLIC_API_URL,

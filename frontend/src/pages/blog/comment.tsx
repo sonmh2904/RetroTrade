@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { toast } from "sonner";
 import { decodeToken, type DecodedToken } from '@/utils/jwtHelper';
 import type { RootState } from "@/store/redux_store";
 import {
@@ -42,7 +43,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     if (!isLoggedIn) {
-      alert("Vui lòng đăng nhập để bình luận!");
+      toast.warning("Vui lòng đăng nhập để bình luận!");
       return;
     }
 
@@ -67,7 +68,7 @@ const confirmDelete = async () => {
       setComments(comments.filter((c) => c._id !== commentToDelete));
     }
   } catch (err) {
-    alert("Xóa thất bại!");
+    toast.error("Xóa thất bại!");
   } finally {
     setIsDeleteModalOpen(false);
     setCommentToDelete(null);
