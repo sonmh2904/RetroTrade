@@ -380,6 +380,7 @@ export interface OwnerRating {
   rating: number;
   comment?: string;
   images?: string[];
+  videos?: string[];
   createdAt?: string;
   renterId?: Record<string, any>;
   itemId?: Record<string, any>;
