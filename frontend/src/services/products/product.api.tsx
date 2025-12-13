@@ -327,7 +327,7 @@ export const getComparableProducts = async (
 
 export const getRatingsByItem = async (itemId: string) => {
   try {
-    const res = await fetch(`/api/v1/products/rating/item/${itemId}`);
+    const res = await instance.get(`/products/rating/item/${itemId}`);
 
     if (!res.ok) {
       const text = await res.text();
@@ -380,6 +380,7 @@ export interface OwnerRating {
   rating: number;
   comment?: string;
   images?: string[];
+  videos?: string[];
   createdAt?: string;
   renterId?: Record<string, any>;
   itemId?: Record<string, any>;

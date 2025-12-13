@@ -19,6 +19,7 @@ import {
   addToFavorites,
   removeFromFavorites,
   getFavorites,
+  getRatingsByItem,
 } from "@/services/products/product.api";
 import {
   createConversation,
@@ -304,11 +305,8 @@ export default function ProductDetailPage() {
     const fetchRatings = async () => {
       if (!id) return;
       try {
-        const res = await fetch(`/api/v1/products/rating/item/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setRatings(Array.isArray(data) ? data : []);
-        }
+        const result = await getRatingsByItem(id);
+        setRatings(result.data || []);
       } catch (error) {
         console.error("Error fetching ratings:", error);
         setRatings([]);
