@@ -63,7 +63,45 @@ module.exports.getOrderByOwnerId = async (req, res) => {
         // Get orders with pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
-        const [orders, totalCount] = await Promise.all([
+        const timelinePipeline = [
+            { $match: matchConditions },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                    },
+                    orders: { $sum: 1 },
+                    pending: { $sum: { $cond: [{ $eq: ["$orderStatus", "pending"] }, 1, 0] } },
+                    confirmed: { $sum: { $cond: [{ $eq: ["$orderStatus", "confirmed"] }, 1, 0] } },
+                    delivery: { $sum: { $cond: [{ $eq: ["$orderStatus", "delivery"] }, 1, 0] } },
+                    received: { $sum: { $cond: [{ $eq: ["$orderStatus", "received"] }, 1, 0] } },
+                    progress: { $sum: { $cond: [{ $eq: ["$orderStatus", "progress"] }, 1, 0] } },
+                    returned: { $sum: { $cond: [{ $eq: ["$orderStatus", "returned"] }, 1, 0] } },
+                    completed: { $sum: { $cond: [{ $eq: ["$orderStatus", "completed"] }, 1, 0] } },
+                    cancelled: { $sum: { $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0] } },
+                    disputed: { $sum: { $cond: [{ $eq: ["$orderStatus", "disputed"] }, 1, 0] } },
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    date: "$_id",
+                    orders: "$orders",
+                    pending: "$pending",
+                    confirmed: "$confirmed",
+                    delivery: "$delivery",
+                    received: "$received",
+                    progress: "$progress",
+                    returned: "$returned",
+                    completed: "$completed",
+                    cancelled: "$cancelled",
+                    disputed: "$disputed"
+                }
+            },
+            { $sort: { date: 1 } }
+        ];
+
+        const [orders, totalCount, rawTimelineData] = await Promise.all([
             Order.aggregate([
                 { $match: matchConditions },
                 {
@@ -100,8 +138,36 @@ module.exports.getOrderByOwnerId = async (req, res) => {
                     }
                 }
             ]),
-            Order.countDocuments(matchConditions)
+            Order.countDocuments(matchConditions),
+            Order.aggregate(timelinePipeline)
         ]);
+
+        const timelineMap = new Map();
+        rawTimelineData.forEach(day => {
+            timelineMap.set(day.date, day);
+        });
+
+        const filledTimeline = [];
+        const timelineCursor = new Date(startDate);
+        const today = new Date();
+        while (timelineCursor <= today) {
+            const dateStr = timelineCursor.toISOString().split('T')[0];
+            const dayData = timelineMap.get(dateStr) || {
+                date: dateStr,
+                orders: 0,
+                pending: 0,
+                confirmed: 0,
+                delivery: 0,
+                received: 0,
+                progress: 0,
+                returned: 0,
+                completed: 0,
+                cancelled: 0,
+                disputed: 0
+            };
+            filledTimeline.push(dayData);
+            timelineCursor.setDate(timelineCursor.getDate() + 1);
+        }
 
         // Get order statistics by status
         const orderStats = await Order.aggregate([
@@ -157,7 +223,8 @@ module.exports.getOrderByOwnerId = async (req, res) => {
                     totalOrders: totalCount,
                     limit: parseInt(limit)
                 },
-                statistics: stats
+                statistics: stats,
+                timeline: filledTimeline
             }
         });
     } catch (error) {

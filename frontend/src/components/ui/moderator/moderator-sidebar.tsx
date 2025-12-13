@@ -144,7 +144,7 @@ export function ModeratorSidebar({
       label: "Xử lý khiếu nại",
       icon: AlertTriangle,
       path: "/moderator/dispute-management",
-      description: "Xử lý Khiếu nạivà khiếu nại",
+      description: "Xử lý Khiếu nại đơn hàng",
     },
     {
       id: "userManagement" as const,
