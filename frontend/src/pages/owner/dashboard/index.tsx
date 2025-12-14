@@ -108,12 +108,30 @@ const OwnerDashboard = () => {
           format: "currency"
         },
         {
+          id: "rentalRevenue",
+          label: "Doanh thu thuê ban đầu",
+          value: formatCurrency(revenueData.totals.rentalRevenue),
+          icon: DollarSign,
+          bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+          iconColor: "text-blue-600",
+          format: "currency"
+        },
+        {
+          id: "extensionRevenue",
+          label: "Doanh thu gia hạn",
+          value: formatCurrency(revenueData.totals.extensionRevenue ?? 0),
+          icon: TrendingUp,
+          bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+          iconColor: "text-purple-600",
+          format: "currency"
+        },
+        {
           id: "totalOrders",
           label: "Tổng đơn hàng",
           value: formatNumber(ordersData.pagination.totalOrders),
           icon: ShoppingCart,
-          bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-          iconColor: "text-blue-600",
+          bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+          iconColor: "text-amber-600",
           format: "number"
         },
         {
@@ -130,18 +148,9 @@ const OwnerDashboard = () => {
           label: "Đơn chờ xử lý",
           value: formatNumber(ordersData.statistics.pending.count),
           icon: Clock,
-          bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
-          iconColor: "text-amber-600",
+          bgColor: "bg-gradient-to-r from-orange-50 to-amber-50",
+          iconColor: "text-orange-600",
           format: "number"
-        },
-        {
-          id: "avgOrderValue",
-          label: "Giá trị trung bình",
-          value: formatCurrency(revenueData.totals.avgOrderValue),
-          icon: TrendingUp,
-          bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-          iconColor: "text-purple-600",
-          format: "currency"
         }
       ];
 

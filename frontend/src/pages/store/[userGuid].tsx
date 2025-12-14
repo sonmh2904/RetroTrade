@@ -103,6 +103,10 @@ export default function OwnerStorePage() {
   );
   const [ownerRatingStats, setOwnerRatingStats] =
     useState<OwnerRatingStats | null>(null);
+  const [shopRatingSummary, setShopRatingSummary] = useState<{
+    total: number;
+    average: number;
+  } | null>(null);
   const [storeStats, setStoreStats] = useState<{
     inStockCount: number;
     categoryCount: number;
@@ -124,6 +128,17 @@ export default function OwnerStorePage() {
     [isLoadMoreMode, products, items]
   );
   const ownerInfo = useMemo(() => owner, [owner]);
+
+  const displayedAverage = shopRatingSummary
+    ? shopRatingSummary.average.toFixed(1)
+    : ownerRatingStats
+    ? ownerRatingStats.average.toFixed(1)
+    : ownerInfo?.reputationScore != null
+    ? ownerInfo.reputationScore.toFixed(1)
+    : "5.0";
+
+  const displayedTotal =
+    shopRatingSummary?.total ?? ownerRatingStats?.total ?? 0;
 
   // Fetch store data
   const fetchStoreData = useCallback(
@@ -502,12 +517,10 @@ export default function OwnerStorePage() {
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                   <span className="font-semibold text-gray-900">
-                    {ownerRatingStats?.average?.toFixed(1) ||
-                      ownerInfo.reputationScore?.toFixed(1) ||
-                      "5.0"}
+                    {displayedAverage}
                   </span>
                   <span className="text-gray-500">
-                    ({ownerRatingStats?.total || 0})
+                    ({displayedTotal})
                   </span>
                 </div>
                 <div className="hidden md:block w-px h-4 bg-gray-300" />
@@ -551,7 +564,7 @@ export default function OwnerStorePage() {
                 <div className="text-center p-4 rounded-xl bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-100">
                   <div className="text-gray-600 text-sm">Lượt đánh giá</div>
                   <div className="text-2xl font-bold text-gray-900">
-                    {ownerRatingStats?.total ?? 0}
+                    {displayedTotal}
                   </div>
                 </div>
               </div>
@@ -870,6 +883,7 @@ export default function OwnerStorePage() {
                     ownerId={ownerInfo._id}
                     orderId={validOrderIdForRating ?? undefined}
                     hasPurchased={hasPurchasedWithThisShop}
+                    onSummaryUpdate={setShopRatingSummary}
                   />
                 </div>
               )}

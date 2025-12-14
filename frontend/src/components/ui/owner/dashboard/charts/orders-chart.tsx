@@ -66,70 +66,22 @@ export function OwnerOrdersChart() {
       try {
         const orderStatsData = await ownerDashboardApi.getOrders({ period, limit: 100 });
         setOrderStats(orderStatsData);
-        
-        // Create timeline data from orders
-        const timelineData: OrderData[] = [];
-        const dateMap = new Map();
-        
-        // Group orders by date
-        orderStatsData.orders.forEach((order: any) => {
-          const date = new Date(order.createdAt).toISOString().split('T')[0];
-          if (!dateMap.has(date)) {
-            dateMap.set(date, {
-              date,
-              orders: 0,
-              pending: 0,
-              confirmed: 0,
-              delivery: 0,
-              received: 0,
-              progress: 0,
-              returned: 0,
-              completed: 0,
-              cancelled: 0,
-              disputed: 0
-            });
-          }
-          
-          const dayData = dateMap.get(date);
-          dayData.orders++;
-          
-          switch (order.orderStatus) {
-            case 'pending':
-              dayData.pending++;
-              break;
-            case 'confirmed':
-              dayData.confirmed++;
-              break;
-            case 'delivery':
-              dayData.delivery++;
-              break;
-            case 'received':
-              dayData.received++;
-              break;
-            case 'progress':
-              dayData.progress++;
-              break;
-            case 'returned':
-              dayData.returned++;
-              break;
-            case 'completed':
-              dayData.completed++;
-              break;
-            case 'cancelled':
-              dayData.cancelled++;
-              break;
-            case 'disputed':
-              dayData.disputed++;
-              break;
-          }
-        });
-        
-        // Sort by date and convert to array
-        const sortedData = Array.from(dateMap.values()).sort((a, b) => 
-          new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-        
-        setOrderData(sortedData);
+
+        const timelineData: OrderData[] = (orderStatsData.timeline || []).map((day: OrderData) => ({
+          date: day.date,
+          orders: day.orders || 0,
+          pending: day.pending || 0,
+          confirmed: day.confirmed || 0,
+          delivery: day.delivery || 0,
+          received: day.received || 0,
+          progress: day.progress || 0,
+          returned: day.returned || 0,
+          completed: day.completed || 0,
+          cancelled: day.cancelled || 0,
+          disputed: day.disputed || 0,
+        }));
+
+        setOrderData(timelineData);
       } catch (error) {
         console.error("Error fetching order data:", error);
       }
