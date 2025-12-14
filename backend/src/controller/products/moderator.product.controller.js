@@ -275,7 +275,7 @@ const approveProduct = async (req, res) => {
             <p>Chúng tôi rất vui thông báo sản phẩm của bạn:</p>
             <h2 style="color:#00a045; margin:20px 0;">"${updatedProduct.Title}"</h2>
             <p>đã chính thức được <strong>DUYỆT</strong> và hiển thị công khai trên RetroTrade.</p>
-            <a href="https://retrotrade.vn/my-products"
+            <a href="https://retrotrade.id.vn/my-products"
    style="display:inline-block;
           background:#00c853;
           color:#000000 !important;
@@ -426,7 +426,7 @@ const rejectProduct = async (req, res) => {
             </div>
 
             <p>Bạn có thể chỉnh sửa sản phẩm và gửi duyệt lại bất cứ lúc nào.</p>
-            <a href="https://retrotrade.vn/my-products"
+            <a href="https://retrotrade.id.vn/my-products"
    style="display:inline-block;
           background:#ff5252;
           color:#ffffff !important;

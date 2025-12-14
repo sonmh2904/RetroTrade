@@ -10,7 +10,15 @@ async function generatePDF({
   returnBuffer = false,
   signatures = [],
 }) {
-  // Build HTML exact FE: <pre> content, <img absolute signatures>
+  const footerIndex = content.toLowerCase().indexOf("<table");
+  let mainContent = content;
+  let footerContent = "";
+
+  if (footerIndex !== -1) {
+    mainContent = content.substring(0, footerIndex);
+    footerContent = content.substring(footerIndex);
+  }
+
   const html = `
     <!DOCTYPE html>
     <html lang="vi">
@@ -24,13 +32,13 @@ async function generatePDF({
           word-break: break-word !important; 
           hyphens: auto !important; 
           margin: 0; 
-          padding: 50px; /* Exact FE container */
+          padding: 50px; 
           background: white; 
           color: black; 
           width: 100%; 
           min-height: 100vh; 
           overflow: visible; 
-          position: relative; /* Relative container for absolute signatures */
+          position: relative;
         }
         pre { 
           white-space: pre-wrap !important; 
@@ -39,42 +47,52 @@ async function generatePDF({
           font-family: inherit !important; 
           font-size: inherit !important; 
           line-height: inherit !important; 
-          word-break: inherit !important; 
-          hyphens: inherit !important; 
-          letter-spacing: 0.025em; /* tracking-wide */
-          page-break-inside: avoid; /* Avoid break mid-line */
+          letter-spacing: 0.025em;
+          page-break-inside: avoid;
         }
-        .signature-img { 
-          position: absolute !important; /* Absolute to body for multi-page */
-          object-fit: contain; 
-          opacity: 0.8; 
-          border: 2px solid #2563eb; /* blue-300 */
-          border-radius: 0.5rem; /* rounded */
-          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); /* shadow-lg */
-          pointer-events: none; 
-          transform: translate(-50%, -50%) !important; 
-          z-index: 20; 
-          width: 128px !important; 
-          height: 64px !important; 
-          page-break-inside: avoid; /* Keep signature intact */
+        /* Footer giống hệt FE (ảnh thứ 2 bạn gửi) */
+        table {
+          width: 100%;
+          max-width: 800px;
+          border-collapse: collapse;
+          margin-top: 150px; /* Khoảng cách lớn để xuống dòng tự nhiên */
+        }
+        td {
+          width: 50%;
+          text-align: left;
+          vertical-align: top;
+          padding: 0;
+        }
+        strong {
+          display: block;
+          margin-bottom: 10px;
+        }
+        /* Khoảng trống lớn sau "Ký tên (hoặc ký điện tử):" nhờ <br><br><br> trong content */
+        /* Chữ ký chồng lên đúng vị trí (không có khung viền trong footer HTML) */
+        .overlay-signature {
+          position: absolute;
+          object-fit: contain;
+          width: 150px; /* kích thước chữ ký giống FE */
+          height: auto;
+          pointer-events: none;
         }
         @media print { 
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .signature-img { position: absolute; } /* Absolute per page on print */
         }
         @page { size: A4; margin: 50px; }
       </style>
     </head>
     <body>
-      <pre>${escapeHtmlForPDF(content)}</pre>
+      <pre>${escapeHtmlForPDF(mainContent)}</pre>
+
+      <!-- Footer render trực tiếp → xuống dòng nhờ <br><br><br> trong content -->
+      ${footerContent}
+
+      <!-- Chồng chữ ký lên (vì không có trong footer HTML) -->
       ${signatures
         .map(
           (sig, index) => `
-        <img src="${sig.imageUrl}" alt="Signature ${
-            index + 1
-          }" class="signature-img" style="left: ${sig.positionX}%; top: ${
-            sig.positionY
-          }%;" />
+        <img src="${sig.imageUrl}" class="overlay-signature" style="left: ${sig.positionX}%; top: ${sig.positionY}%;" />
       `
         )
         .join("")}
@@ -84,15 +102,18 @@ async function generatePDF({
 
   const browser = await puppeteer.launch({
     headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--font-render-hinting=none",
+    ],
   });
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: "networkidle0" }); 
+  await page.setContent(html, { waitUntil: "networkidle0" });
 
-  // căn lề pdf chính xác , chữ ký hiện đúng trên nhiều trang
   const pdfBuffer = await page.pdf({
     format: "A4",
-    margin: { top: "50px", right: "50px", bottom: "50px", left: "50px" }, 
+    margin: { top: "50px", right: "50px", bottom: "50px", left: "50px" },
     printBackground: true,
     preferCSSPageSize: true,
     displayHeaderFooter: false,
@@ -101,13 +122,18 @@ async function generatePDF({
   await browser.close();
 
   if (returnBuffer) return pdfBuffer;
-  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
   const fileName = `${title.replace(/[^a-z0-9]/gi, "_")}_${uuidv4().slice(
     0,
     8
   )}.pdf`;
   const filePath = path.join(outputDir, fileName);
   fs.writeFileSync(filePath, pdfBuffer);
+
   return filePath;
 }
 
