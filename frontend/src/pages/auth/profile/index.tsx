@@ -17,6 +17,7 @@ import { LoyaltyManagement } from '@/components/ui/auth/profile/loyalty-manageme
 import { UserDisputes } from '@/components/ui/auth/profile/user-disputes';
 import { UserDetails } from '@/components/ui/auth/profile/user-details';
 import { ownerRequestApi } from '@/services/auth/ownerRequest.api';
+import { systemConfigApi } from '@/services/admin/systemConfig.api';
 import { Button } from '@/components/ui/common/button';
 import dynamic from 'next/dynamic';
 import RatingRenter from "@/components/ui/auth/ratingRenter";
@@ -88,6 +89,20 @@ export default function ProfilePage() {
     }
   }, [accessToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch owner upgrade fee
+  useEffect(() => {
+    const fetchFee = async () => {
+      try {
+        const fee = await systemConfigApi.getOwnerUpgradeFee();
+        setOwnerUpgradeFee(fee);
+      } catch (error) {
+        console.error('Error fetching owner upgrade fee:', error);
+        // Keep default 50000 if error
+      }
+    };
+    fetchFee();
+  }, []);
+
   const handleAvatarEditClick = useCallback(() => {
     setShowAvatarModal(true);
   }, []);
@@ -101,6 +116,9 @@ export default function ProfilePage() {
   const [ownerReason, setOwnerReason] = useState('Muốn đăng đồ cho thuê trên hệ thống');
   const [ownerInfo, setOwnerInfo] = useState('');
   const [ownerSubmitting, setOwnerSubmitting] = useState(false);
+  const [ownerUpgradeFee, setOwnerUpgradeFee] = useState<number>(50000); // Default fallback
+  const [myOwnerRequests, setMyOwnerRequests] = useState<any[]>([]);
+  const [loadingOwnerRequests, setLoadingOwnerRequests] = useState(false);
 
   const submitOwnerRequest = useCallback(async () => {
     if (!ownerReason.trim()) {
@@ -695,12 +713,12 @@ export default function ProfilePage() {
                         <div className="space-y-3 max-w-xl">
                           <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-gray-700">
                             <p className="font-semibold text-gray-900">
-                              Phí dịch vụ 50.000&nbsp;VND
+                              Phí nâng cấp chủ sở hữu {ownerUpgradeFee.toLocaleString("vi-VN")}&nbsp;VND
                             </p>
                             <p>
                               Khi gửi yêu cầu, hệ thống sẽ tự động trừ{" "}
                               <span className="font-semibold">
-                                50.000&nbsp;đ
+                                {ownerUpgradeFee.toLocaleString("vi-VN")}&nbsp;đ
                               </span>{" "}
                               từ ví RetroTrade của bạn. Vui lòng đảm bảo số dư
                               đủ và nạp thêm nếu cần.
@@ -721,7 +739,7 @@ export default function ProfilePage() {
                               value={ownerReason}
                               onChange={(e) => setOwnerReason(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                              placeholder="Vì sao bạn muốn trở thành Owner?"
+                              placeholder="Vì sao bạn muốn trở thành chủ sở hữu?"
                             />
                           </div>
                           <div>
@@ -744,9 +762,61 @@ export default function ProfilePage() {
                             >
                               {ownerSubmitting
                                 ? "Đang xử lý..."
-                                : "Thanh toán 50.000đ & gửi yêu cầu"}
+                                : `Thanh toán ${ownerUpgradeFee.toLocaleString("vi-VN")}đ & gửi yêu cầu`}
                             </button>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Danh sách yêu cầu đã gửi */}
+                      {myOwnerRequests.length > 0 && (
+                        <div className="mt-6 space-y-3">
+                          <h3 className="text-md font-semibold text-gray-900">Yêu cầu đã gửi</h3>
+                          {loadingOwnerRequests ? (
+                            <p className="text-sm text-gray-500">Đang tải...</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {myOwnerRequests.map((req: any) => (
+                                <div
+                                  key={req._id}
+                                  onClick={() => router.push(`/auth/owner-requests/${req._id}`)}
+                                  className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-gray-900">{req.reason}</p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {new Date(req.CreatedAt).toLocaleDateString("vi-VN")}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {req.status === "pending" && (
+                                        <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">
+                                          Chờ duyệt
+                                        </span>
+                                      )}
+                                      {req.status === "approved" && (
+                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
+                                          Đã duyệt
+                                        </span>
+                                      )}
+                                      {req.status === "rejected" && (
+                                        <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">
+                                          Đã từ chối
+                                        </span>
+                                      )}
+                                      {req.status === "cancelled" && (
+                                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
+                                          Đã hủy
+                                        </span>
+                                      )}
+                                      <span className="text-gray-400">→</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </>

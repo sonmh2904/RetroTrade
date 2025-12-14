@@ -35,6 +35,16 @@ export function RegisterForm() {
       toast.error('Vui lòng nhập đầy đủ thông tin')
       return
     }
+    // Validate fullName: không được bắt đầu hoặc kết thúc bằng khoảng trắng
+    const trimmedFullName = fullName.trim()
+    if (fullName !== trimmedFullName) {
+      toast.error('Họ tên không được bắt đầu hoặc kết thúc bằng khoảng trắng')
+      return
+    }
+    if (trimmedFullName.length === 0) {
+      toast.error('Họ tên không được để trống')
+      return
+    }
     const validation = validatePassword(password)
     if (!validation.isValid) {
       toast.error(validation.message || 'Mật khẩu không hợp lệ')
@@ -53,17 +63,13 @@ export function RegisterForm() {
     toast.info('Đang xử lý...')
     
     try {
-      const response = await register(email, password, fullName)
+      // Trim fullName before sending to backend
+      const response = await register(email, password, trimmedFullName)
       const result = await response.json()
       
       if (result.code === 200) {
         toast.success("Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.")
-        // Redirect to OTP verification page (registration mode)
-        console.log("Redirecting to OTP page with email:", email)
         const otpUrl = `/auth/register/otp?email=${encodeURIComponent(email)}&mode=register`
-        console.log("OTP URL:", otpUrl)
-        
-        // Use setTimeout to ensure toast is shown before redirect
         setTimeout(() => {
           router.push(otpUrl)
         }, 1000)

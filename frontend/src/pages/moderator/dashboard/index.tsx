@@ -29,7 +29,7 @@ import {
 
 export default function ModeratorDashboard() {
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "requests" | "verification" | "productManagement" | "blog" | "messages" | "dispute" | "userManagement" | "complaints"
+    "dashboard" | "requests" | "verification" | "productManagement" | "blog" | "messages" | "dispute" | "userManagement" | "complaints" | "moderation"
   >("dashboard");
   const [activeBlogTab, setActiveBlogTab] = useState<
     "posts" | "categories" | "comments" | "tags"
