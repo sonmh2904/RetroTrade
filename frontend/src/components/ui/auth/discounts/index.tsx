@@ -446,7 +446,7 @@ export default function MyDiscountsPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 gap-6 mb-6">
                 {filteredItems.map((d) => {
                   const now = new Date();
                   const start = new Date(d.startAt);
@@ -457,130 +457,135 @@ export default function MyDiscountsPage() {
                   const isExpired = false; // Backend chỉ trả về discount đang active
                   const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                   const isExpiring = diffDays > 0 && diffDays <= 7;
-                  const usageBadge = d.usageLimit ? `${d.usedCount || 0}/${d.usageLimit}` : "∞";
                   const isSpecial = d.isSpecial === true;
+                  const hasUsageLimit = d.usageLimit && d.usageLimit > 0;
 
                   return (
                     <Card
                       key={d._id}
                       className={cn(
-                        "group hover:shadow-lg transition-all duration-300 overflow-hidden",
-                        isActiveWindow 
-                          ? "border-2 border-emerald-200" 
-                          : isUpcoming 
-                          ? "border-2 border-blue-200 opacity-90" 
-                          : "border border-gray-200 opacity-75"
+                        "group hover:shadow-2xl transition-all duration-300 overflow-hidden border-0",
+                        "bg-gradient-to-br from-orange-100/80 via-orange-50/60 to-pink-50/80",
+                        "hover:from-orange-200/90 hover:via-orange-100/70 hover:to-pink-100/90",
+                        "backdrop-blur-md bg-white/40"
                       )}
                     >
-                      <div className="flex">
-                        {/* Discount Value Strip */}
-                        <div
-                          className={cn(
-                            "w-24 flex flex-col items-center justify-center p-4 border-r",
-                            d.type === "percent"
-                              ? "bg-gradient-to-br from-orange-500 to-orange-600"
-                              : "bg-gradient-to-br from-blue-500 to-blue-600"
-                          )}
-                        >
-                          <div className="text-2xl font-extrabold text-white mb-1">
-                            {d.type === "percent" ? `${d.value}%` : `${d.value.toLocaleString("vi-VN")}`}
-                          </div>
-                          <div className="text-[10px] text-white/90 font-medium uppercase">
-                            {d.type === "percent" ? "Giảm" : "₫ giảm"}
-                          </div>
-                          <Badge
-                            variant="secondary"
-                            className="mt-2 bg-white/20 text-white border-white/30 text-[9px] px-1.5 py-0.5"
-                          >
-                            Công khai
-                          </Badge>
-                        </div>
-
-                        {/* Main Content */}
-                        <div className="flex-1 p-5">
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <Tag className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                <span className="font-bold text-gray-900 text-lg">{d.code}</span>
-                                {isUpcoming && (
-                                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 text-[10px]">
-                                    <Calendar className="w-3 h-3 mr-1" />
-                                    Sắp tới
-                                  </Badge>
-                                )}
-                                {isExpired && (
-                                  <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200 text-[10px]">
-                                    <X className="w-3 h-3 mr-1" />
-                                    Đã hết hạn
-                                  </Badge>
-                                )}
-                                {isActiveWindow && !isExpiring && (
-                                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]">
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                    Đang hiệu lực
-                                  </Badge>
-                                )}
-                                {isExpiring && (
-                                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200 text-[10px]">
-                                    <Clock className="w-3 h-3 mr-1" />
-                                    Sắp hết hạn
-                                  </Badge>
-                                )}
-                                {isSpecial ? (
-                                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 text-[10px]">
-                                    Đặc biệt
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]">
-                                    Công khai
-                                  </Badge>
-                                )}
+                      <CardContent className="p-0 relative">
+                        {/* Glassmorphism background overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-200/20 via-orange-100/10 to-pink-100/20 group-hover:from-orange-300/30 group-hover:via-orange-200/20 group-hover:to-pink-200/30 backdrop-blur-sm pointer-events-none transition-all duration-300" />
+                        
+                        <div className="relative p-4">
+                          {/* Top section with special badge and discount value */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              {isSpecial && (
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/30 backdrop-blur-sm border border-white/40">
+                                  <Gift className="w-3 h-3 text-orange-700" />
+                                  <span className="text-[10px] font-semibold text-orange-800">ĐẶC BIỆT</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Discount value badge in corner */}
+                            <div className="relative">
+                              <div className={cn(
+                                "absolute -top-1.5 -right-1.5 w-14 h-14 rounded-lg transform rotate-12",
+                                "bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg",
+                                "flex flex-col items-center justify-center text-white"
+                              )}>
+                                <div className="text-lg font-extrabold">
+                                  {d.type === "percent" ? `${d.value}%` : `${Math.floor(d.value / 1000)}K`}
+                                </div>
+                                <div className="text-[7px] font-medium">GIẢM</div>
                               </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                                <Calendar className="w-3.5 h-3.5" />
-                                <span className="text-xs">
-                                  {start.toLocaleDateString("vi-VN")} - {end.toLocaleDateString("vi-VN")}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-600 mb-2">
-                                {d.minOrderAmount ? (
-                                  <>
-                                    Đơn tối thiểu: <span className="font-semibold">{d.minOrderAmount.toLocaleString("vi-VN")}₫</span>
-                                  </>
-                                ) : (
-                                  "Không yêu cầu đơn tối thiểu"
-                                )}
-                              </p>
-                              {d.usageLimit && (
-                                <div className="mt-2">
-                                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                                    <span>Đã sử dụng</span>
-                                    <span className="font-semibold">{usageBadge}</span>
-                                  </div>
-                                  <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                                    <div
-                                      className={cn(
-                                        "h-full rounded-full transition-all",
-                                        d.type === "percent" ? "bg-orange-500" : "bg-blue-500"
-                                      )}
-                                      style={{
-                                        width: `${Math.min(100, Math.round(((d.usedCount || 0) / d.usageLimit) * 100))}%`,
-                                      }}
-                                    />
-                                  </div>
+                              {isSpecial && (
+                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-br from-orange-400 to-pink-400 rounded-full flex items-center justify-center shadow-md">
+                                  <Sparkles className="w-2.5 h-2.5 text-white" />
                                 </div>
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-4">
+
+                          {/* Discount code */}
+                          <div className="mb-3">
+                            <span className="text-2xl font-extrabold text-orange-800/90 tracking-wide">
+                              {d.code}
+                            </span>
+                          </div>
+
+                          {/* Status and info */}
+                          <div className="space-y-2 mb-3">
+                            {/* Expiring badge */}
+                            {isExpiring && (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-yellow-100/80 border border-yellow-200/50 backdrop-blur-sm">
+                                <Clock className="w-3 h-3 text-yellow-700" />
+                                <span className="text-[10px] font-medium text-yellow-800">
+                                  Sắp hết hạn ({diffDays} ngày)
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Public badge */}
+                            {!isSpecial && (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-100/80 border border-gray-200/50 backdrop-blur-sm ml-2">
+                                <span className="text-[10px] font-medium text-gray-700">Công khai</span>
+                              </div>
+                            )}
+
+                            {/* Date range */}
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Calendar className="w-3.5 h-3.5 text-orange-600" />
+                              <span className="text-[11px] font-medium">
+                                {start.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })} - {end.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                              </span>
+                            </div>
+
+                            {/* Minimum order */}
+                            {d.minOrderAmount ? (
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <div className="w-3.5 h-3.5 flex items-center justify-center">
+                                  <div className="w-2.5 h-2.5 border-2 border-orange-600 rounded" />
+                                </div>
+                                <span className="text-[11px]">
+                                  Đơn tối thiểu: <span className="font-bold text-orange-700">{d.minOrderAmount.toLocaleString("vi-VN")}₫</span>
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-gray-600">
+                                Áp dụng cho mọi đơn hàng
+                              </div>
+                            )}
+
+                            {/* Usage limit - chỉ hiển thị khi có giới hạn và hiển thị số lượt còn lại */}
+                            {hasUsageLimit && d.usageLimit && (
+                              <div className="pt-2 border-t border-orange-200/50">
+                                <div className="flex items-center justify-between text-[11px] text-gray-700 mb-1.5">
+                                  <span className="font-medium">Còn lại</span>
+                                  <span className="font-bold text-orange-800">
+                                    {d.usageLimit - (d.usedCount || 0)} lượt
+                                  </span>
+                                </div>
+                                <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden backdrop-blur-sm border border-orange-200/30">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-orange-400 via-orange-500 to-pink-500"
+                                    style={{
+                                      width: `${Math.min(100, Math.round(((d.usedCount || 0) / d.usageLimit) * 100))}%`,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-orange-200/50">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleCopy(d.code)}
-                              className="flex-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                              className="flex-1 bg-white/40 hover:bg-white/60 border border-white/50 backdrop-blur-sm text-gray-700"
                             >
-                              <Copy className="w-3.5 h-3.5 mr-1.5" />
+                              <Copy className="w-4 h-4 mr-2" />
                               Sao chép
                             </Button>
                             <Button
@@ -591,18 +596,18 @@ export default function MyDiscountsPage() {
                                 router.push("/products");
                               }}
                               className={cn(
-                                "flex-1",
+                                "flex-1 font-semibold text-white",
                                 isActiveWindow
-                                  ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                                  ? "bg-gradient-to-r from-orange-500 via-orange-600 to-pink-500 hover:from-orange-600 hover:via-orange-700 hover:to-pink-600 shadow-lg"
                                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
                               )}
                             >
-                              <ArrowRight className="w-3.5 h-3.5 mr-1.5" />
                               Dùng ngay
+                              <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                           </div>
                         </div>
-                      </div>
+                      </CardContent>
                     </Card>
                   );
                 })}
