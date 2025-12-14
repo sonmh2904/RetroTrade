@@ -1,6 +1,7 @@
 const Order = require("../../models/Order/Order.model");
 const Item = require("../../models/Product/Item.model");
 const User = require("../../models/User.model");
+const ExtensionRequest = require("../../models/Order/ExtensionRequest.model");
 const Complaint = require("../../models/Complaint.model");
 const Report = require("../../models/Order/Reports.model");
 const Rating = require("../../models/Order/Rating.model");
@@ -11,6 +12,182 @@ const Categories = require("../../models/Product/Categories.model");
 const Wallet = require("../../models/Wallet.model");
 const WalletTransaction = require("../../models/WalletTransaction.model");
 const mongoose = require("mongoose");
+
+const serviceFeeExpression = { $ifNull: ["$serviceFee", 0] };
+const extensionMatchStage = {
+    paymentStatus: "paid",
+    status: "approved"
+};
+const MAX_REVENUE_ENTRIES = 300;
+
+const buildOrderRevenuePipeline = (startDate = null, endDate = null) => {
+    const matchStage = {
+        orderStatus: "completed"
+    };
+
+    if (startDate || endDate) {
+        matchStage.createdAt = {};
+        if (startDate) matchStage.createdAt.$gte = startDate;
+        if (endDate) matchStage.createdAt.$lte = endDate;
+    }
+
+    return [
+        { $match: matchStage },
+        {
+            $group: {
+                _id: null,
+                total: { $sum: serviceFeeExpression },
+                totalCount: { $sum: 1 }
+            }
+        }
+    ];
+};
+
+const buildExtensionRevenuePipeline = (startDate = null, endDate = null) => {
+    const pipeline = [
+        { $match: extensionMatchStage },
+        {
+            $addFields: {
+                effectiveDate: {
+                    $ifNull: [
+                        "$paidAt",
+                        {
+                            $ifNull: ["$updatedAt", "$createdAt"]
+                        }
+                    ]
+                }
+            }
+        },
+        { $match: { effectiveDate: { $ne: null } } }
+    ];
+
+    if (startDate || endDate) {
+        const dateFilter = {};
+        if (startDate) dateFilter.$gte = startDate;
+        if (endDate) dateFilter.$lte = endDate;
+        pipeline.push({ $match: { effectiveDate: dateFilter } });
+    }
+
+    pipeline.push({
+        $group: {
+            _id: null,
+            total: { $sum: serviceFeeExpression },
+            totalCount: { $sum: 1 }
+        }
+    });
+
+    return pipeline;
+};
+
+const buildExtensionTimelinePipeline = (startDate) => [
+    { $match: extensionMatchStage },
+    {
+        $addFields: {
+            effectiveDate: {
+                $ifNull: [
+                    "$paidAt",
+                    {
+                        $ifNull: ["$updatedAt", "$createdAt"]
+                    }
+                ]
+            }
+        }
+    },
+    { $match: { effectiveDate: { $ne: null } } },
+    { $match: { effectiveDate: { $gte: startDate } } },
+    {
+        $group: {
+            _id: {
+                $dateToString: { format: "%Y-%m-%d", date: "$effectiveDate" }
+            },
+            revenue: { $sum: serviceFeeExpression },
+            extensions: { $sum: 1 }
+        }
+    },
+    { $sort: { _id: 1 } }
+];
+
+const buildOrderRevenueEntriesPipeline = (startDate = null, endDate = null) => {
+    const matchStage = {
+        orderStatus: "completed"
+    };
+
+    if (startDate || endDate) {
+        matchStage.createdAt = {};
+        if (startDate) matchStage.createdAt.$gte = startDate;
+        if (endDate) matchStage.createdAt.$lte = endDate;
+    }
+
+    return [
+        { $match: matchStage },
+        {
+            $project: {
+                _id: 0,
+                orderId: "$_id",
+                type: { $literal: "order" },
+                referenceCode: "$orderGuid",
+                itemTitle: "$itemSnapshot.title",
+                serviceFee: serviceFeeExpression,
+                date: "$createdAt"
+            }
+        },
+        { $sort: { date: -1 } }
+    ];
+};
+
+const buildExtensionRevenueEntriesPipeline = (startDate = null, endDate = null) => {
+    const pipeline = [
+        { $match: extensionMatchStage },
+        {
+            $addFields: {
+                effectiveDate: {
+                    $ifNull: [
+                        "$paidAt",
+                        {
+                            $ifNull: ["$updatedAt", "$createdAt"]
+                        }
+                    ]
+                }
+            }
+        },
+        { $match: { effectiveDate: { $ne: null } } }
+    ];
+
+    if (startDate || endDate) {
+        const dateFilter = {};
+        if (startDate) dateFilter.$gte = startDate;
+        if (endDate) dateFilter.$lte = endDate;
+        pipeline.push({ $match: { effectiveDate: dateFilter } });
+    }
+
+    pipeline.push(
+        {
+            $lookup: {
+                from: "orders",
+                localField: "orderId",
+                foreignField: "_id",
+                as: "order"
+            }
+        },
+        { $unwind: { path: "$order", preserveNullAndEmptyArrays: true } },
+        {
+            $project: {
+                _id: 0,
+                orderId: "$orderId",
+                type: { $literal: "extension" },
+                referenceCode: { $ifNull: ["$order.orderGuid", null] },
+                itemTitle: { $ifNull: ["$order.itemSnapshot.title", null] },
+                serviceFee: serviceFeeExpression,
+                date: "$effectiveDate",
+                extensionDuration: "$extensionDuration",
+                extensionUnit: "$extensionUnit"
+            }
+        },
+        { $sort: { date: -1 } }
+    );
+
+    return pipeline;
+};
 
 /**
  * Get dashboard statistics (revenue, users, orders, products)
@@ -23,29 +200,23 @@ module.exports.getDashboardStats = async (req, res) => {
         const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-        const [currentMonthRevenue, previousMonthRevenue] = await Promise.all([
-            Order.aggregate([
-                { 
-                    $match: { 
-                        orderStatus: "completed",
-                        createdAt: { $gte: currentMonthStart }
-                    } 
-                },
-                { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-            ]),
-            Order.aggregate([
-                { 
-                    $match: { 
-                        orderStatus: "completed",
-                        createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd }
-                    } 
-                },
-                { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-            ])
+        const [currentOrderAgg, currentExtensionAgg] = await Promise.all([
+            Order.aggregate(buildOrderRevenuePipeline(currentMonthStart)),
+            ExtensionRequest.aggregate(buildExtensionRevenuePipeline(currentMonthStart))
         ]);
 
-        const revenue = currentMonthRevenue[0]?.total || 0;
-        const prevRevenue = previousMonthRevenue[0]?.total || 0;
+        const [previousOrderAgg, previousExtensionAgg] = await Promise.all([
+            Order.aggregate(buildOrderRevenuePipeline(previousMonthStart, previousMonthEnd)),
+            ExtensionRequest.aggregate(buildExtensionRevenuePipeline(previousMonthStart, previousMonthEnd))
+        ]);
+
+        const currentOrderRevenue = currentOrderAgg[0]?.total || 0;
+        const currentExtensionRevenue = currentExtensionAgg[0]?.total || 0;
+        const prevOrderRevenue = previousOrderAgg[0]?.total || 0;
+        const prevExtensionRevenue = previousExtensionAgg[0]?.total || 0;
+
+        const revenue = currentOrderRevenue + currentExtensionRevenue;
+        const prevRevenue = prevOrderRevenue + prevExtensionRevenue;
         const revenueChange = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : 0;
 
         const [currentMonthUsers, previousMonthUsers] = await Promise.all([
@@ -139,17 +310,15 @@ module.exports.getDashboardStats = async (req, res) => {
         const walletBalanceTotal = totalWalletBalance[0]?.total || 0;
 
         // Also get total values for display
-        const [totalRevenue, totalUsers, totalOrders, totalProducts] = await Promise.all([
-            Order.aggregate([
-                { $match: { orderStatus: "completed" } },
-                { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-            ]),
+        const [orderTotalsAgg, extensionTotalsAgg, totalUsers, totalOrders, totalProducts] = await Promise.all([
+            Order.aggregate(buildOrderRevenuePipeline()),
+            ExtensionRequest.aggregate(buildExtensionRevenuePipeline()),
             User.countDocuments({}),
             Order.countDocuments({}),
             Item.countDocuments({ IsDeleted: { $ne: true } })
         ]);
 
-        const revenueTotal = totalRevenue[0]?.total || 0;
+        const revenueTotal = (orderTotalsAgg[0]?.total || 0) + (extensionTotalsAgg[0]?.total || 0);
 
         return res.json({
             code: 200,
@@ -277,7 +446,7 @@ module.exports.getRevenueStats = async (req, res) => {
         startDate.setDate(startDate.getDate() - days);
         startDate.setHours(0, 0, 0, 0);
 
-        const revenueData = await Order.aggregate([
+        const orderTimeline = await Order.aggregate([
             {
                 $match: {
                     orderStatus: "completed",
@@ -289,7 +458,7 @@ module.exports.getRevenueStats = async (req, res) => {
                     _id: {
                         $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
                     },
-                    revenue: { $sum: "$totalAmount" },
+                    revenue: { $sum: serviceFeeExpression },
                     orders: { $sum: 1 }
                 }
             },
@@ -298,39 +467,94 @@ module.exports.getRevenueStats = async (req, res) => {
             }
         ]);
 
+        const extensionTimeline = await ExtensionRequest.aggregate(
+            buildExtensionTimelinePipeline(startDate)
+        );
+
+        const timelineMap = new Map();
+
+        orderTimeline.forEach(day => {
+            timelineMap.set(day._id, {
+                date: day._id,
+                revenue: day.revenue,
+                baseRevenue: day.revenue,
+                extensionRevenue: 0,
+                orders: day.orders,
+                extensions: 0
+            });
+        });
+
+        extensionTimeline.forEach(day => {
+            const existing = timelineMap.get(day._id) || {
+                date: day._id,
+                revenue: 0,
+                baseRevenue: 0,
+                extensionRevenue: 0,
+                orders: 0,
+                extensions: 0
+            };
+
+            existing.revenue += day.revenue;
+            existing.extensionRevenue += day.revenue;
+            existing.extensions += day.extensions || 0;
+
+            timelineMap.set(day._id, existing);
+        });
+
         // Fill missing dates with zero counts
         const filledStats = [];
         const currentDate = new Date(startDate);
-        const now = new Date();
+        const endDate = new Date();
         
-        while (currentDate <= now) {
+        while (currentDate <= endDate) {
             const dateStr = currentDate.toISOString().split('T')[0];
-            const dayData = revenueData.find(stat => stat._id === dateStr);
-            
+            const dayData = timelineMap.get(dateStr);
             filledStats.push({
                 date: dateStr,
                 revenue: dayData ? dayData.revenue : 0,
-                orders: dayData ? dayData.orders : 0
+                baseRevenue: dayData ? dayData.baseRevenue : 0,
+                extensionRevenue: dayData ? dayData.extensionRevenue : 0,
+                orders: dayData ? dayData.orders : 0,
+                extensions: dayData ? dayData.extensions : 0
             });
             
             currentDate.setDate(currentDate.getDate() + 1);
         }
 
         // Get total revenue stats
-        const totalRevenue = await Order.aggregate([
-            {
-                $match: { orderStatus: "completed" }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: "$totalAmount" },
-                    totalOrders: { $sum: 1 }
-                }
-            }
+        const [orderTotalsAgg, extensionTotalsAgg] = await Promise.all([
+            Order.aggregate(buildOrderRevenuePipeline()),
+            ExtensionRequest.aggregate(buildExtensionRevenuePipeline())
         ]);
 
-        const revenueStats = totalRevenue[0] || { totalRevenue: 0, totalOrders: 0 };
+        const baseTotals = orderTotalsAgg[0] || { total: 0, totalCount: 0 };
+        const extensionTotals = extensionTotalsAgg[0] || { total: 0, totalCount: 0 };
+
+        // Collect detailed revenue entries within period
+        const [orderEntriesRaw, extensionEntriesRaw] = await Promise.all([
+            Order.aggregate([
+                ...buildOrderRevenueEntriesPipeline(startDate, endDate),
+                { $limit: MAX_REVENUE_ENTRIES }
+            ]),
+            ExtensionRequest.aggregate([
+                ...buildExtensionRevenueEntriesPipeline(startDate, endDate),
+                { $limit: MAX_REVENUE_ENTRIES }
+            ])
+        ]);
+
+        const combinedEntries = [...orderEntriesRaw, ...extensionEntriesRaw]
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, MAX_REVENUE_ENTRIES)
+            .map(entry => ({
+                type: entry.type,
+                date: entry.date instanceof Date ? entry.date.toISOString() : entry.date,
+                serviceFee: entry.serviceFee || 0,
+                referenceCode: entry.referenceCode || null,
+                itemTitle: entry.itemTitle || null,
+                extensionDuration: entry.extensionDuration || null,
+                extensionUnit: entry.extensionUnit || null,
+                orderId: entry.orderId ? entry.orderId.toString() : null
+            }));
 
         return res.json({
             code: 200,
@@ -339,9 +563,13 @@ module.exports.getRevenueStats = async (req, res) => {
             data: {
                 timeline: filledStats,
                 totals: {
-                    total: revenueStats.totalRevenue,
-                    orders: revenueStats.totalOrders
-                }
+                    total: baseTotals.total + extensionTotals.total,
+                    orders: baseTotals.totalCount || 0,
+                    baseRevenue: baseTotals.total || 0,
+                    extensionRevenue: extensionTotals.total || 0,
+                    extensionCount: extensionTotals.totalCount || 0
+                },
+                entries: combinedEntries
             }
         });
     } catch (error) {

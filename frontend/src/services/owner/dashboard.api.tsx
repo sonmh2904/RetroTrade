@@ -4,6 +4,7 @@ export interface OwnerOrder {
   orderGuid: string;
   orderStatus: string;
   totalAmount: number;
+  rentalAmount: number;
   createdAt: string;
   updatedAt: string;
   user: {
@@ -37,6 +38,19 @@ export interface OwnerOrderResponse {
     completed: { count: number; amount: number };
     cancelled: { count: number; amount: number };
   };
+  timeline: {
+    date: string;
+    orders: number;
+    pending: number;
+    confirmed: number;
+    delivery: number;
+    received: number;
+    progress: number;
+    returned: number;
+    completed: number;
+    cancelled: number;
+    disputed: number;
+  }[];
 }
 
 export interface RevenueDataPoint {
@@ -49,7 +63,9 @@ export interface OwnerRevenueResponse {
   timeline: RevenueDataPoint[];
   totals: {
     totalRevenue: number;
+    rentalRevenue: number;
     totalOrders: number;
+    extensionRevenue: number;
     avgOrderValue: number;
   };
   monthlyComparison: {
@@ -78,8 +94,10 @@ export const ownerDashboardApi = {
     limit?: number;
   }): Promise<OwnerOrderResponse> => {
     const queryParams = new URLSearchParams();
-    if (params?.period) queryParams.append('period', params.period);
+    const periodValue = params?.period ?? '30d';
+    queryParams.append('period', periodValue);
     if (params?.status) queryParams.append('status', params.status);
+
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
 

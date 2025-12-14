@@ -251,18 +251,29 @@ export const OwnerRatingsSection: React.FC<OwnerRatingsSectionProps> = ({ ownerI
               </span>
             </div>
             {rating.comment && <p className="text-gray-700 mt-3 whitespace-pre-line">{rating.comment}</p>}
-            {Array.isArray(rating.images) && rating.images.length > 0 && (
+            {(Array.isArray(rating.images) && rating.images.length > 0) ||
+            (Array.isArray(rating.videos) && rating.videos.length > 0) ? (
               <div className="flex gap-2 mt-3 flex-wrap">
-                {rating.images.map((img: string, idx: number) => (
-                  <img
-                    key={`${rating._id}-img-${idx}`}
-                    src={img}
-                    alt="rating"
-                    className="w-20 h-20 object-cover rounded-lg"
-                  />
-                ))}
+                {Array.isArray(rating.images) &&
+                  rating.images.map((img: string, idx: number) => (
+                    <img
+                      key={`${rating._id}-img-${idx}`}
+                      src={img}
+                      alt="rating"
+                      className="w-24 h-24 object-cover rounded-lg"
+                    />
+                  ))}
+                {Array.isArray(rating.videos) &&
+                  rating.videos.map((video: string, idx: number) => (
+                    <video
+                      key={`${rating._id}-video-${idx}`}
+                      src={video}
+                      controls
+                      className="w-24 h-24 rounded-lg object-cover"
+                    />
+                  ))}
               </div>
-            )}
+            ) : null}
           </div>
         ))}
       </div>
