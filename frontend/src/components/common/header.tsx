@@ -489,7 +489,7 @@ export function Header() {
             </Link>
           </nav>
         </div>
-      )}g
+      )}
 
       <style jsx global>{`
         @keyframes shimmer {
