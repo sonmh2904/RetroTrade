@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema({
     isIdVerified: { type: Boolean, default: false },
     reputationScore: { type: Number, default: 0, min: 0, max: 5 },
     points: { type: Number, default: 0 },
+    commentBannedUntil: { type: Date, default: null }, // Thời gian hết hạn cấm bình luận
     background: { type: String, enum: ['village', 'zen', 'modern'], default: 'village' },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false },

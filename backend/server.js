@@ -64,6 +64,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
 const { autoUpdateServiceFeeStatus } = require("./src/controller/serviceFee/serviceFeeAutoUpdate.controller");
+const { unbanExpiredCommentBans } = require("./src/cronJobs/unbanJob");
 
 // cập nhật lúc 0h mỗi ngày
 cron.schedule('0 0 * * *', updateTrendingItems);
@@ -74,6 +75,15 @@ cron.schedule('0 * * * *', async () => {
     await autoUpdateServiceFeeStatus();
   } catch (error) {
     console.error("Lỗi cron job cập nhật serviceFee:", error);
+  }
+});
+
+// Tự động unban comment bans đã hết hạn mỗi 10 phút
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    await unbanExpiredCommentBans();
+  } catch (error) {
+    console.error("Lỗi cron job unban comments:", error);
   }
 });
 
