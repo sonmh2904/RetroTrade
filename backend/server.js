@@ -106,7 +106,12 @@ router(app);
 
 // DB connect
 connectDB()
-  .then(() => console.log(" MongoDB connected"))
+  .then(async () => {
+    console.log(" MongoDB connected");
+    // Seed system configs
+    const { seedDefaultConfigs } = require("./src/controller/admin/systemConfig.controller");
+    await seedDefaultConfigs();
+  })
   .catch((err) => console.log(err));
 
 // Use server.listen instead of app.listen for socket.io

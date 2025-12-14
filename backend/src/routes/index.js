@@ -34,6 +34,8 @@ const termsRouter = require("./terms/terms.routes");
 const privacyRouter = require("./privacy/privacy.routes");
 const privacyTypesRouter = require("./privacy/privacy-types.routes");
 const aiRouter = require("./messages/aiChat.routes")
+const systemConfigRouter = require("./admin/systemConfig.routes");
+
 module.exports = (app) => {
     const api = "/api/v1";
     app.use(api + "/auth", userAuthRouter);
@@ -71,4 +73,5 @@ module.exports = (app) => {
     app.use(api + "/admin/dashboard", adminDashboardRouter);
     app.use(api + "/moderator/dashboard", moderatorDashboardRouter);
     app.use(api + "/owner/dashboard", ownerDashboardRouter);
+    app.use(api + "/system-config", systemConfigRouter);
 }

@@ -29,6 +29,13 @@ const ownerRequestSchema = new mongoose.Schema(
     reviewedAt: {
       type: Date,
     },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    assignedAt: {
+      type: Date,
+    },
     rejectionReason: {
       type: String,
       maxlength: 500,

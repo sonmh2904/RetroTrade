@@ -4,10 +4,11 @@ const User = require("../../models/User.model");
 const AuditLog = require("../../models/AuditLog.model");
 const Wallet = require("../../models/Wallet.model");
 const WalletTransaction = require("../../models/WalletTransaction.model");
+const SystemConfig = require("../../models/SystemConfig.model");
 const { createNotification } = require("../../middleware/createNotification");
 const { sendEmail } = require("../../utils/sendEmail");
 
-const OWNER_REQUEST_SERVICE_FEE = 50000;
+const DEFAULT_OWNER_UPGRADE_FEE = 50000;
 
 
 module.exports.createOwnerRequest = async (req, res) => {
@@ -69,6 +70,9 @@ module.exports.createOwnerRequest = async (req, res) => {
       });
     }
 
+    // Lấy phí từ config
+    const OWNER_UPGRADE_FEE = await SystemConfig.getOwnerUpgradeFee() || DEFAULT_OWNER_UPGRADE_FEE;
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -82,12 +86,12 @@ module.exports.createOwnerRequest = async (req, res) => {
         userWallet = userWallet[0];
       }
 
-      if ((userWallet.balance || 0) < OWNER_REQUEST_SERVICE_FEE) {
+      if ((userWallet.balance || 0) < OWNER_UPGRADE_FEE) {
         await session.abortTransaction();
         session.endSession();
         return res.json({
           code: 400,
-          message: `Số dư ví không đủ để thanh toán phí dịch vụ ${OWNER_REQUEST_SERVICE_FEE.toLocaleString(
+          message: `Số dư ví không đủ để thanh toán phí nâng cấp chủ sở hữu ${OWNER_UPGRADE_FEE.toLocaleString(
             "vi-VN"
           )} VND. Vui lòng nạp thêm tiền vào ví.`,
         });
@@ -109,10 +113,10 @@ module.exports.createOwnerRequest = async (req, res) => {
         adminWallet = adminWallet[0];
       }
 
-      userWallet.balance -= OWNER_REQUEST_SERVICE_FEE;
+      userWallet.balance -= OWNER_UPGRADE_FEE;
       await userWallet.save({ session });
 
-      adminWallet.balance += OWNER_REQUEST_SERVICE_FEE;
+      adminWallet.balance += OWNER_UPGRADE_FEE;
       await adminWallet.save({ session });
 
       const orderCode = `OWNER_REQ_${Date.now()}`;
@@ -121,10 +125,10 @@ module.exports.createOwnerRequest = async (req, res) => {
           {
             walletId: userWallet._id,
             orderCode,
-            typeId: "OWNER_REQUEST_FEE",
-            amount: -OWNER_REQUEST_SERVICE_FEE,
+            typeId: "OWNER_UPGRADE_FEE",
+            amount: -OWNER_UPGRADE_FEE,
             balanceAfter: userWallet.balance,
-            note: "Phí dịch vụ nâng cấp Owner",
+            note: "Phí nâng cấp lên chủ sở hữu",
             status: "completed",
             createdAt: new Date(),
           },
@@ -137,10 +141,10 @@ module.exports.createOwnerRequest = async (req, res) => {
           {
             walletId: adminWallet._id,
             orderCode: `${orderCode}_SYS`,
-            typeId: "OWNER_REQUEST_FEE_RECEIVE",
-            amount: OWNER_REQUEST_SERVICE_FEE,
+            typeId: "OWNER_UPGRADE_FEE_RECEIVE",
+            amount: OWNER_UPGRADE_FEE,
             balanceAfter: adminWallet.balance,
-            note: `Nhận phí dịch vụ Owner từ ${currentUser.email || currentUser._id}`,
+            note: `Nhận phí nâng cấp chủ sở hữu từ ${currentUser.email || currentUser._id}`,
             status: "completed",
             createdAt: new Date(),
           },
@@ -155,7 +159,7 @@ module.exports.createOwnerRequest = async (req, res) => {
             status: "pending",
             reason,
             additionalInfo,
-            serviceFeeAmount: OWNER_REQUEST_SERVICE_FEE,
+            serviceFeeAmount: OWNER_UPGRADE_FEE,
             serviceFeeTransaction: userTx._id,
             serviceFeePaidAt: new Date(),
           },
@@ -178,11 +182,11 @@ module.exports.createOwnerRequest = async (req, res) => {
       // Notify user
       await createNotification(
         userId,
-        "Owner Request",
+        "Yêu cầu cấp quyền chủ sở hữu",
         "Yêu cầu cấp quyền cho thuê đã được gửi",
-        `Yêu cầu cấp quyền cho thuê của bạn đã được gửi thành công. Đã trừ ${OWNER_REQUEST_SERVICE_FEE.toLocaleString(
+        `Yêu cầu cấp quyền cho thuê của bạn đã được gửi thành công. Đã trừ ${OWNER_UPGRADE_FEE.toLocaleString(
           "vi-VN"
-        )} VND phí dịch vụ. Vui lòng chờ người quản lý xét duyệt.`,
+        )} VND phí nâng cấp. Vui lòng chờ người quản lý xét duyệt.`,
         { requestId: ownerRequest._id }
       );
 
@@ -191,9 +195,9 @@ module.exports.createOwnerRequest = async (req, res) => {
       for (const moderator of moderators) {
         await createNotification(
           moderator._id,
-          "Owner Request",
-          "Yêu cầu cấp quyền Owner mới",
-          `Người dùng ${currentUser.fullName || currentUser.email} đã yêu cầu cấp quyền Owner.`,
+          "Yêu cầu cấp quyền chủ sở hữu",
+          "Yêu cầu cấp quyền chủ sở hữu mới",
+          `Người dùng ${currentUser.fullName || currentUser.email} đã yêu cầu cấp quyền chủ sở hữu.`,
           { requestId: ownerRequest._id, userId: userId }
         );
       }
@@ -209,12 +213,11 @@ module.exports.createOwnerRequest = async (req, res) => {
           <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p><strong>Lý do yêu cầu:</strong></p>
             <p>${reason}</p>
-            ${
-              additionalInfo
+            ${additionalInfo
                 ? `<p><strong>Thông tin thêm:</strong></p><p>${additionalInfo}</p>`
                 : ""
             }
-            <p><strong>Phí dịch vụ đã thanh toán:</strong> ${OWNER_REQUEST_SERVICE_FEE.toLocaleString(
+            <p><strong>Phí nâng cấp chủ sở hữu đã thanh toán:</strong> ${OWNER_UPGRADE_FEE.toLocaleString(
               "vi-VN"
             )} VND</p>
           </div>
@@ -268,6 +271,7 @@ module.exports.getAllOwnerRequests = async (req, res) => {
       OwnerRequest.find(query)
         .populate("user", "email fullName avatarUrl role phone documents")
         .populate("reviewedBy", "email fullName")
+        .populate("assignedBy", "email fullName")
         .sort({ CreatedAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -354,6 +358,163 @@ module.exports.getOwnerRequestById = async (req, res) => {
 };
 
 /**
+ * Assign owner request (moderator nhận xử lý)
+ */
+module.exports.assignOwnerRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await OwnerRequest.findById(id).populate("user", "fullName email");
+
+    if (!request) {
+      return res.json({
+        code: 404,
+        message: "Không tìm thấy yêu cầu",
+      });
+    }
+
+    if (request.status !== "pending") {
+      return res.json({
+        code: 400,
+        message: `Không thể nhận yêu cầu này. Trạng thái hiện tại: ${request.status}`,
+      });
+    }
+
+    if (request.assignedBy) {
+      const assignedModerator = await User.findById(request.assignedBy).select("fullName email");
+      const assignedName = assignedModerator?.fullName || assignedModerator?.email || "Moderator";
+      return res.json({
+        code: 400,
+        message: `Yêu cầu này đã được ${assignedName} nhận xử lý.`,
+      });
+    }
+
+    request.assignedBy = req.user._id;
+    request.assignedAt = new Date();
+    await request.save();
+
+    const moderator = await User.findById(req.user._id).select("fullName email");
+    const moderatorName = moderator?.fullName || moderator?.email || "Moderator";
+
+    // Thông báo cho tất cả moderators khác
+    const moderators = await User.find({
+      role: "moderator",
+      _id: { $ne: req.user._id },
+    }).select("_id");
+
+    for (const mod of moderators) {
+      await createNotification(
+        mod._id,
+        "Yêu cầu cấp quyền chủ sở hữu đã được nhận",
+        "Yêu cầu cấp quyền chủ sở hữu đã được nhận xử lý",
+        `${moderatorName} đã nhận xử lý yêu cầu cấp quyền chủ sở hữu từ ${typeof request.user === 'object' ? (request.user.fullName || request.user.email) : 'Người dùng'}.`,
+        {
+          requestId: request._id,
+          assignedBy: req.user._id,
+        }
+      );
+    }
+
+    const updatedRequest = await OwnerRequest.findById(id)
+      .populate("user", "email fullName avatarUrl role")
+      .populate("assignedBy", "email fullName");
+
+    return res.json({
+      code: 200,
+      message: "Đã nhận yêu cầu thành công",
+      data: updatedRequest,
+    });
+  } catch (error) {
+    console.error("Error assigning request:", error);
+    return res.json({
+      code: 500,
+      message: "Lỗi server khi nhận yêu cầu",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Unassign owner request (moderator trả lại)
+ */
+module.exports.unassignOwnerRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const request = await OwnerRequest.findById(id).populate("user", "fullName email").populate("assignedBy", "fullName email");
+
+    if (!request) {
+      return res.json({
+        code: 404,
+        message: "Không tìm thấy yêu cầu",
+      });
+    }
+
+    if (!request.assignedBy) {
+      return res.json({
+        code: 400,
+        message: "Yêu cầu này chưa được moderator nào nhận.",
+      });
+    }
+
+    const assignedByValue = request.assignedBy._id || request.assignedBy;
+    if (assignedByValue.toString() !== req.user._id.toString()) {
+      return res.json({
+        code: 403,
+        message: "Bạn không có quyền trả lại yêu cầu này. Chỉ moderator đã nhận mới có thể trả lại.",
+      });
+    }
+
+    if (request.status !== "pending") {
+      return res.json({
+        code: 400,
+        message: `Không thể trả lại yêu cầu này. Trạng thái hiện tại: ${request.status}`,
+      });
+    }
+
+    const previousModeratorId = assignedByValue;
+    const previousModeratorName = typeof request.assignedBy === 'object' 
+      ? (request.assignedBy.fullName || request.assignedBy.email) 
+      : "Moderator";
+
+    request.assignedBy = null;
+    request.assignedAt = null;
+    await request.save();
+
+    // Thông báo cho tất cả moderators
+    const moderators = await User.find({ role: "moderator" }).select("_id");
+    for (const mod of moderators) {
+      await createNotification(
+        mod._id,
+        "Yêu cầu cấp quyền chủ sở hữu đã được trả lại",
+        "Yêu cầu cấp quyền chủ sở hữu đã được trả lại",
+        `${previousModeratorName} đã trả lại yêu cầu cấp quyền chủ sở hữu từ ${typeof request.user === 'object' ? (request.user.fullName || request.user.email) : 'Người dùng'}${reason ? `. Lý do: ${reason}` : ""}. Yêu cầu hiện có thể được nhận xử lý.`,
+        {
+          requestId: request._id,
+          previousAssignedBy: previousModeratorId,
+        }
+      );
+    }
+
+    const updatedRequest = await OwnerRequest.findById(id)
+      .populate("user", "email fullName avatarUrl role")
+      .populate("assignedBy", "email fullName");
+
+    return res.json({
+      code: 200,
+      message: "Đã trả lại yêu cầu thành công. Yêu cầu hiện có thể được moderator khác nhận xử lý.",
+      data: updatedRequest,
+    });
+  } catch (error) {
+    console.error("Error unassigning request:", error);
+    return res.json({
+      code: 500,
+      message: "Lỗi server khi trả lại yêu cầu",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Approve owner request
  */
 module.exports.approveOwnerRequest = async (req, res) => {
@@ -374,6 +535,25 @@ module.exports.approveOwnerRequest = async (req, res) => {
       return res.json({
         code: 400,
         message: "Yêu cầu đã được xử lý",
+      });
+    }
+
+    // Kiểm tra đã được assign chưa
+    if (!request.assignedBy) {
+      return res.json({
+        code: 400,
+        message: "Yêu cầu này chưa được moderator nào nhận. Vui lòng nhận yêu cầu trước khi duyệt.",
+      });
+    }
+
+    // Chỉ moderator đã nhận mới được duyệt
+    const assignedByValue = request.assignedBy._id || request.assignedBy;
+    if (assignedByValue.toString() !== reviewerId.toString()) {
+      const assignedModerator = await User.findById(assignedByValue).select("fullName email");
+      const assignedName = assignedModerator?.fullName || assignedModerator?.email || "Moderator";
+      return res.json({
+        code: 403,
+        message: `Bạn không có quyền duyệt yêu cầu này. Yêu cầu đã được ${assignedName} nhận xử lý.`,
       });
     }
 
@@ -401,9 +581,9 @@ module.exports.approveOwnerRequest = async (req, res) => {
     // Notify user
     await createNotification(
       request.user._id,
-      "Owner Request Approved",
-      "Yêu cầu cấp quyền Owner đã được duyệt",
-      `Yêu cầu cấp quyền Owner của bạn đã được duyệt thành công. Bạn giờ đã có thể đăng sản phẩm cho thuê.`,
+      "Yêu cầu cấp quyền chủ sở hữu đã được duyệt",
+      "Yêu cầu cấp quyền chủ sở hữu đã được duyệt",
+      `Yêu cầu cấp quyền chủ sở hữu của bạn đã được duyệt thành công. Bạn giờ đã có thể đăng sản phẩm cho thuê.`,
       { requestId: request._id }
     );
 
@@ -416,7 +596,7 @@ module.exports.approveOwnerRequest = async (req, res) => {
           <p>Xin chào <strong>${request.user.fullName || request.user.email}</strong>,</p>
           <p>Yêu cầu cấp quyền cho thuê của bạn đã được duyệt thành công.</p>
           <div style="background-color: #e8f5e9; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0;">
-            <p><strong>✓ Tài khoản của bạn đã được nâng cấp thành Owner</strong></p>
+            <p><strong>✓ Tài khoản của bạn đã được nâng cấp thành chủ sở hữu</strong></p>
             <p>Bạn giờ đã có thể đăng sản phẩm cho thuê trên hệ thống RetroTrade.</p>
           </div>
           ${notes ? `<p><strong>Ghi chú từ người quản lý:</strong></p><p>${notes}</p>` : ''}
@@ -480,44 +660,174 @@ module.exports.rejectOwnerRequest = async (req, res) => {
       });
     }
 
+    // Kiểm tra đã được assign chưa
+    if (!request.assignedBy) {
+      return res.json({
+        code: 400,
+        message: "Yêu cầu này chưa được moderator nào nhận. Vui lòng nhận yêu cầu trước khi từ chối.",
+      });
+    }
+
+    // Chỉ moderator đã nhận mới được từ chối
+    const assignedByValue = request.assignedBy._id || request.assignedBy;
+    if (assignedByValue.toString() !== reviewerId.toString()) {
+      const assignedModerator = await User.findById(assignedByValue).select("fullName email");
+      const assignedName = assignedModerator?.fullName || assignedModerator?.email || "Moderator";
+      return res.json({
+        code: 403,
+        message: `Bạn không có quyền từ chối yêu cầu này. Yêu cầu đã được ${assignedName} nhận xử lý.`,
+      });
+    }
+
+    // Đảm bảo user được populate
+    if (!request.user || (typeof request.user === 'object' && !request.user._id)) {
+      await request.populate("user");
+    }
+
+    const userId = typeof request.user === 'object' ? request.user._id : request.user;
+    if (!userId) {
+      return res.json({
+        code: 400,
+        message: "Không tìm thấy thông tin người dùng",
+      });
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Hoàn tiền nếu đã thanh toán
+      if (request.serviceFeeAmount > 0 && request.serviceFeeTransaction) {
+        const refundAmount = request.serviceFeeAmount;
+
+        // Lấy ví user và admin
+        let userWallet = await Wallet.findOne({ userId }).session(session);
+        if (!userWallet) {
+          const [created] = await Wallet.create(
+            [{ userId, currency: "VND", balance: 0 }],
+            { session }
+          );
+          userWallet = created;
+        }
+
+        const adminUser = await User.findOne({ role: "admin" }).session(session);
+        if (!adminUser) throw new Error("Không tìm thấy admin");
+
+        let adminWallet = await Wallet.findOne({ userId: adminUser._id }).session(session);
+        if (!adminWallet) {
+          const [created] = await Wallet.create(
+            [{ userId: adminUser._id, currency: "VND", balance: 0 }],
+            { session }
+          );
+          adminWallet = created;
+        }
+
+        // Kiểm tra admin có đủ tiền để hoàn
+        if (adminWallet.balance < refundAmount) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.json({
+            code: 500,
+            message: "Ví admin không đủ để hoàn tiền. Vui lòng liên hệ kỹ thuật.",
+          });
+        }
+
+        // Hoàn tiền
+        adminWallet.balance -= refundAmount;
+        userWallet.balance += refundAmount;
+        await adminWallet.save({ session });
+        await userWallet.save({ session });
+
+        // Tạo transaction hoàn tiền
+        const orderCode = `OWNER_REJECT_REFUND_${Date.now()}`;
+        await WalletTransaction.create(
+          [
+            {
+              walletId: userWallet._id,
+              orderCode,
+              typeId: "OWNER_UPGRADE_FEE_REFUND",
+              amount: refundAmount,
+              balanceAfter: userWallet.balance,
+              note: `Hoàn tiền phí nâng cấp chủ sở hữu (yêu cầu bị từ chối)`,
+              status: "completed",
+              createdAt: new Date(),
+            },
+            {
+              walletId: adminWallet._id,
+              orderCode: `${orderCode}_SYS`,
+              typeId: "OWNER_UPGRADE_FEE_REFUND_PAY",
+              amount: -refundAmount,
+              balanceAfter: adminWallet.balance,
+              note: `Hoàn tiền phí nâng cấp chủ sở hữu cho ${typeof request.user === 'object' ? (request.user.email || request.user._id) : userId}`,
+              status: "completed",
+              createdAt: new Date(),
+            },
+          ],
+          { session, ordered: true }
+        );
+    }
+
     // Update request status
     request.status = "rejected";
     request.reviewedBy = reviewerId;
     request.reviewedAt = new Date();
     request.rejectionReason = rejectionReason;
     if (notes) request.notes = notes;
-    await request.save();
+      await request.save({ session });
 
-    // Create audit log for rejection
+      await session.commitTransaction();
+      session.endSession();
+    } catch (refundError) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error("Error in rejectOwnerRequest transaction:", refundError);
+      return res.json({
+        code: 500,
+        message: "Từ chối yêu cầu thất bại",
+        error: refundError.message,
+      });
+    }
     await AuditLog.create({
       TableName: "OwnerRequest",
       PrimaryKeyValue: request._id.toString(),
       Operation: "UPDATE",
       ChangedByUserId: reviewerId,
-      ChangeSummary: `Moderator rejected owner request for user ${request.user.email || request.user._id}. Reason: ${rejectionReason}`,
+      ChangeSummary: `Moderator rejected owner request for user ${typeof request.user === 'object' ? (request.user.email || request.user._id) : userId}. Reason: ${rejectionReason}`,
     });
 
     // Notify user
+    const refundMessage = request.serviceFeeAmount > 0
+      ? ` Đã hoàn ${request.serviceFeeAmount.toLocaleString("vi-VN")} VND phí nâng cấp về ví của bạn.`
+      : "";
+
     await createNotification(
-      request.user._id,
-      "Owner Request Rejected",
-      "Yêu cầu cấp quyền Owner bị từ chối",
-      `Yêu cầu cấp quyền Owner của bạn đã bị từ chối. Lý do: ${rejectionReason}`,
+      userId,
+      "Yêu cầu cấp quyền chủ sở hữu bị từ chối",
+      "Yêu cầu cấp quyền chủ sở hữu bị từ chối",
+      `Yêu cầu cấp quyền chủ sở hữu của bạn đã bị từ chối. Lý do: ${rejectionReason}.${refundMessage}`,
       { requestId: request._id }
     );
 
     // Send email to user
     try {
       const emailSubject = "Yêu cầu cấp quyền cho thuê bị từ chối";
+      const userName = typeof request.user === 'object' ? (request.user.fullName || request.user.email) : 'Người dùng';
+      const userEmail = typeof request.user === 'object' ? request.user.email : null;
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #f44336;">Yêu cầu của bạn đã bị từ chối</h2>
-          <p>Xin chào <strong>${request.user.fullName || request.user.email}</strong>,</p>
+          <p>Xin chào <strong>${userName}</strong>,</p>
           <p>Rất tiếc, yêu cầu cấp quyền cho thuê của bạn đã bị từ chối.</p>
           <div style="background-color: #ffebee; border-left: 4px solid #f44336; padding: 15px; margin: 20px 0;">
             <p><strong>Lý do từ chối:</strong></p>
             <p>${rejectionReason}</p>
             ${notes ? `<p><strong>Ghi chú thêm:</strong></p><p>${notes}</p>` : ''}
+            ${request.serviceFeeAmount > 0 ? `
+              <div style="background-color: #e8f5e9; border-left: 4px solid #4CAF50; padding: 10px; margin-top: 15px;">
+                <p><strong>✓ Đã hoàn tiền:</strong></p>
+                <p>Phí nâng cấp ${request.serviceFeeAmount.toLocaleString("vi-VN")} VND đã được hoàn về ví RetroTrade của bạn.</p>
+              </div>
+            ` : ''}
           </div>
           <p>Bạn có thể:</p>
           <ul style="line-height: 1.8;">
@@ -525,14 +835,16 @@ module.exports.rejectOwnerRequest = async (req, res) => {
             <li>Đảm bảo đã hoàn tất tất cả thông tin xác minh danh tính</li>
             <li>Gửi lại yêu cầu mới sau khi đã khắc phục các vấn đề</li>
           </ul>
-          <p><a href="http://localhost:3000/auth/profile" style="background-color: #2196F3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px;">Xem hồ sơ của tôi</a></p>
+          <p> style="background-color: #2196F3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px;">Xem hồ sơ của tôi</a></p>
           <p>Nếu bạn có câu hỏi, vui lòng liên hệ với chúng tôi.</p>
           <p>Trân trọng,<br>Đội ngũ RetroTrade</p>
         </div>
       `;
-      await sendEmail(request.user.email, emailSubject, emailHtml);
+      if (userEmail) {
+        await sendEmail(userEmail, emailSubject, emailHtml);
+      }
     } catch (emailError) {
-      console.error("Error sending email:", emailError);
+      console.error("Error sending rejection email (non-critical):", emailError.message || emailError);
     }
 
     // Reload request with populated fields
@@ -600,7 +912,7 @@ module.exports.cancelOwnerRequest = async (req, res) => {
     // Notify user
     await createNotification(
       userId,
-      "Owner Request Cancelled",
+      "Yêu cầu cấp quyền chủ sở hữu đã được hủy",
       "Yêu cầu cấp quyền cho thuê đã được hủy",
       `Yêu cầu cấp quyền cho thuê của bạn đã được hủy thành công.`,
       { requestId: request._id }

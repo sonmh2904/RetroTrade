@@ -53,14 +53,44 @@ export function ProfileHeader({ userProfile }: ProfileHeaderProps) {
 
   const handleSave = async () => {
     try {
-      const payload: Record<string, unknown> = { fullName, displayName, bio }
-      const res = await updateUserProfile(payload)
-      const json: ProfileApiResponse = await res.json()
-      if (json.code === 200) toast.success(json.message || "Cập nhật hồ sơ thành công")
-      else toast.error(json.message || "Không thể cập nhật hồ sơ")
+      // Validate fullName: không được bắt đầu hoặc kết thúc bằng khoảng trắng
+      if (fullName) {
+        const trimmedFullName = fullName.trim();
+        if (fullName !== trimmedFullName) {
+          toast.error('Họ tên không được bắt đầu hoặc kết thúc bằng khoảng trắng');
+          return;
+        }
+        if (trimmedFullName.length === 0) {
+          toast.error('Họ tên không được để trống');
+          return;
+        }
+      }
+
+      // Validate displayName: không được bắt đầu hoặc kết thúc bằng khoảng trắng
+      if (displayName) {
+        const trimmedDisplayName = displayName.trim();
+        if (displayName !== trimmedDisplayName) {
+          toast.error('Tên hiển thị không được bắt đầu hoặc kết thúc bằng khoảng trắng');
+          return;
+        }
+        if (trimmedDisplayName.length === 0) {
+          toast.error('Tên hiển thị không được để trống');
+          return;
+        }
+      }
+
+      const payload: Record<string, unknown> = { 
+        fullName: fullName?.trim(), 
+        displayName: displayName?.trim(), 
+        bio 
+      };
+      const res = await updateUserProfile(payload);
+      const json: ProfileApiResponse = await res.json();
+      if (json.code === 200) toast.success(json.message || "Cập nhật hồ sơ thành công");
+      else toast.error(json.message || "Không thể cập nhật hồ sơ");
     } catch (e) {
-      const err = e as Error
-      toast.error(err.message || "Lỗi khi cập nhật hồ sơ")
+      const err = e as Error;
+      toast.error(err.message || "Lỗi khi cập nhật hồ sơ");
     }
   }
   return (
