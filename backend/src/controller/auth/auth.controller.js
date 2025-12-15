@@ -56,7 +56,7 @@ module.exports.login = async (req, res) => {
                     user._id,
                     "Auth",
                     "Xác thực tài khoản chưa hoàn tất",
-                    "Bạn cần xác thực đầy đủ Email, số điện thoại và giấy tờ tùy thân để đăng nhập.",
+                    "Bạn cần xác thực đầy đủ Email, số điện thoại và giấy tờ tùy thân để sử dụng các chức năng khác của hệ thống.",
                     { isEmailConfirmed: user.isEmailConfirmed, isPhoneConfirmed: user.isPhoneConfirmed, isIdVerified: user.isIdVerified }
                 );
             } catch (notificationError) {
