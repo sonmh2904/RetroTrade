@@ -166,7 +166,7 @@ export function Header() {
             onClick={handleGoToModeratorPanel}
           >
             <Shield className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
-            <span>Trang quản lý Moderator</span>
+            <span>Trang quản lý Quản trị viên</span>
           </DropdownMenuItem>
         );
         break;
