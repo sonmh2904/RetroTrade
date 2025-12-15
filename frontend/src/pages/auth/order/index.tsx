@@ -546,6 +546,36 @@ export default function Checkout() {
     []
   );
 
+  // Tự động tính lại public discount amount khi rentalTotal thay đổi
+  useEffect(() => {
+    if (publicDiscount && selectedCartItems.length > 0) {
+      const newAmount = calculateDiscountAmount(
+        publicDiscount.type,
+        publicDiscount.value,
+        rentalTotal,
+        publicDiscount.maxDiscountAmount
+      );
+      setPublicDiscountAmount(newAmount);
+    }
+  }, [rentalTotal, publicDiscount, selectedCartItems.length, calculateDiscountAmount]);
+
+  // Tự động tính lại private discount amount khi rentalTotal hoặc publicDiscountAmount thay đổi
+  useEffect(() => {
+    if (privateDiscount && selectedCartItems.length > 0) {
+      const baseAmountAfterPublic = Math.max(
+        0,
+        rentalTotal - publicDiscountAmount
+      );
+      const newAmount = calculateDiscountAmount(
+        privateDiscount.type,
+        privateDiscount.value,
+        baseAmountAfterPublic,
+        privateDiscount.maxDiscountAmount
+      );
+      setPrivateDiscountAmount(newAmount);
+    }
+  }, [rentalTotal, publicDiscountAmount, privateDiscount, selectedCartItems.length, calculateDiscountAmount]);
+
   // Handle discount code
   const handleApplyDiscount = async (code?: string) => {
     const codeToApply = code || discountCode.trim();
