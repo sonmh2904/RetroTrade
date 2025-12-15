@@ -2582,14 +2582,7 @@ const updateRentalDates = useCallback(
                           </span>
                         </div>
                       )}
-                      <div className="flex justify-between items-center py-2 border-b border-white/20">
-                        <span className="text-emerald-50 font-semibold">
-                          Tổng giảm giá
-                        </span>
-                        <span className="font-semibold text-emerald-100">
-                          -{totalDiscountAmount.toLocaleString("vi-VN")}₫
-                        </span>
-                      </div>
+                      
                     </div>
                   )}
 
