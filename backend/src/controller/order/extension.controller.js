@@ -3,6 +3,7 @@ const { Types } = mongoose;
 const Order = require("../../models/Order/Order.model");
 const ExtensionRequest = require("../../models/Order/ExtensionRequest.model");
 const Item = require("../../models/Product/Item.model");
+const Wallet = require("../../models/Wallet.model");
 const { calculateTotals } = require("../order/calculateRental");
 const { createNotification } = require("../../middleware/createNotification");
 const { logOrderAudit } = require("../../middleware/auditLog.service");
@@ -216,6 +217,27 @@ module.exports = {
         0,
         calc.rentalAmount + calc.serviceFee - totalDiscountAmount
       );
+
+      // Kiểm tra số dư ví trước khi tạo yêu cầu
+      const userWallet = await Wallet.findOne({ userId: renterId }).session(
+        session
+      );
+      if (!userWallet || !userWallet._id) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ error: "Ví của bạn không tồn tại" });
+      }
+
+      if (userWallet.balance < finalExtensionFee) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          error: "Số dư ví không đủ để tạo yêu cầu gia hạn",
+          balance: userWallet.balance,
+          required: finalExtensionFee,
+          shortage: finalExtensionFee - userWallet.balance,
+        });
+      }
 
       // Không cho tạo mới nếu đã có yêu cầu đang chờ
       const pendingRequest = await ExtensionRequest.findOne({
