@@ -181,10 +181,10 @@ export function OwnerRevenueChart() {
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-200">
               <div className="flex items-center justify-between mb-2">
                 <TrendingUp className="w-5 h-5 text-purple-600" />
-                <span className="text-xs text-purple-600">Giá trị trung bình</span>
+                <span className="text-xs text-purple-600">Tổng gia hạn</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{formatCurrency(revenueStats.totals.avgOrderValue)}</div>
-              <div className="text-sm text-gray-600">Giá trị trung bình mỗi đơn</div>
+              <div className="text-2xl font-bold text-gray-900">{formatCurrency(revenueStats.totals.extensionRevenue ?? 0)}</div>
+              <div className="text-sm text-gray-600">Tổng phí gia hạn đã thu</div>
             </div>
           </div>
         )}

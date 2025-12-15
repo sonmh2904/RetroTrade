@@ -50,7 +50,6 @@ const EmptyState = ({ message }) => (
   <section className="relative bg-white py-20">
     <div className="absolute inset-0 bg-gradient-to-b from-white via-white to-gray-50" />
     <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 text-center text-gray-600">
-      <h2 className="text-3xl font-semibold text-gray-900 md:text-4xl">Chuyện gì đang xảy ra vậy?</h2>
       <p>{message}</p>
     </div>
   </section>

@@ -1,0 +1,50 @@
+# ============================================
+# Root .dockerignore - RetroTrade
+# ============================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.editorconfig
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Documentation
+README.md
+LICENSE
+docs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker files in root (avoid confusion)
+docker-compose*.yml
+Dockerfile
+
+# Node modules (each service has its own)
+**/node_modules
+
+# Build outputs
+**/.next
+**/out
+**/dist
+**/build
+
+# Test files
+**/__tests__
+**/coverage
+**/*.test.*
+**/*.spec.*
+

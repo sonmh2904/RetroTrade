@@ -81,10 +81,46 @@ module.exports.updateProfile = async (req, res) => {
                 message: "Không tìm thấy người dùng"
             });
         }
+
+        // Validate fullName: không được bắt đầu hoặc kết thúc bằng khoảng trắng
+        let trimmedFullName = fullName;
+        if (fullName !== undefined && fullName !== null) {
+            trimmedFullName = fullName.trim();
+            if (fullName !== trimmedFullName) {
+                return res.json({
+                    code: 400,
+                    message: "Họ tên không được bắt đầu hoặc kết thúc bằng khoảng trắng"
+                });
+            }
+            if (trimmedFullName.length === 0) {
+                return res.json({
+                    code: 400,
+                    message: "Họ tên không được để trống"
+                });
+            }
+        }
+
+        // Validate displayName: không được bắt đầu hoặc kết thúc bằng khoảng trắng
+        let trimmedDisplayName = displayName;
+        if (displayName !== undefined && displayName !== null) {
+            trimmedDisplayName = displayName.trim();
+            if (displayName !== trimmedDisplayName) {
+                return res.json({
+                    code: 400,
+                    message: "Tên hiển thị không được bắt đầu hoặc kết thúc bằng khoảng trắng"
+                });
+            }
+            if (trimmedDisplayName.length === 0) {
+                return res.json({
+                    code: 400,
+                    message: "Tên hiển thị không được để trống"
+                });
+            }
+        }
         
         // Check if there are any changes
-        const hasChanges = (fullName && fullName !== currentUser.fullName) ||
-                          (displayName && displayName !== currentUser.displayName) ||
+        const hasChanges = (trimmedFullName && trimmedFullName !== currentUser.fullName) ||
+                          (trimmedDisplayName && trimmedDisplayName !== currentUser.displayName) ||
                           (bio !== undefined && bio !== currentUser.bio);
         
         // Only update if there are actual changes
@@ -96,10 +132,15 @@ module.exports.updateProfile = async (req, res) => {
             });
         }
         
-        // Update user with new data
+        // Update user with new data (use trimmed values)
+        const updateData = {};
+        if (trimmedFullName) updateData.fullName = trimmedFullName;
+        if (trimmedDisplayName) updateData.displayName = trimmedDisplayName;
+        if (bio !== undefined) updateData.bio = bio;
+
         const updatedUser = await User.findOneAndUpdate(
             { email: email }, 
-            { fullName, displayName, bio }, 
+            updateData, 
             { new: true }
         ).lean();
         

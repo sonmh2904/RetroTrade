@@ -75,6 +75,20 @@ export default function ResultDisplay({
               Bạn có thể sử dụng đầy đủ các tính năng của ứng dụng
             </p>
           </>
+        ) : isWarning ? (
+          <>
+            <div className="flex items-center justify-center gap-2 text-sm text-yellow-600">
+              <AlertCircle className="w-4 h-4" />
+              <span>Yêu cầu đang chờ xử lý</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-sm text-yellow-600">
+              <AlertCircle className="w-4 h-4" />
+              <span>Kiểm duyệt viên sẽ xem xét trong thời gian sớm nhất</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-4">
+              Bạn sẽ nhận được thông báo khi có kết quả xác minh
+            </p>
+          </>
         ) : (
           <>
             <div className="flex items-center justify-center gap-2 text-sm text-red-600">

@@ -77,9 +77,29 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           const productId = (meta.productId || meta.itemId) as string;
           return `/products/details?id=${productId}`;
         }
+
+        // Owner request related notifications
+        if (meta.requestId && (
+          notification.notificationType?.includes('chủ sở hữu') ||
+          notification.notificationType?.includes('Owner') ||
+          notification.title?.includes('chủ sở hữu') ||
+          notification.title?.includes('Owner') ||
+          meta.ownerRequestId
+        )) {
+          // For moderators, go to moderator owner requests page
+          if (user?.role === "moderator") {
+            return '/moderator?tab=owner-requests';
+          }
+          // For users, go to detail page if requestId is available
+          if (meta.requestId) {
+            return `/auth/owner-requests/${meta.requestId}`;
+          }
+          // Fallback to profile ownership tab
+          return '/auth/profile?menu=ownership';
+        }
       }
 
-      // Verification related notifications
+      // Verification related notifications (only if not owner request)
       if (meta?.requestId) {
         return '/auth/verification-history';
       }
@@ -125,6 +145,22 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           return "/owner/myproducts";
         case "Loyalty":
           return "/auth/profile?menu=loyalty";
+        // Owner request notifications
+        case "Yêu cầu cấp quyền chủ sở hữu":
+        case "Yêu cầu cấp quyền chủ sở hữu đã được duyệt":
+        case "Yêu cầu cấp quyền chủ sở hữu bị từ chối":
+        case "Yêu cầu cấp quyền chủ sở hữu đã được nhận":
+        case "Yêu cầu cấp quyền chủ sở hữu đã được trả lại":
+        case "Yêu cầu cấp quyền chủ sở hữu đã được hủy":
+        case "Owner Request":
+        case "Owner Request Assigned":
+        case "Owner Request Approved":
+        case "Owner Request Rejected":
+        case "Owner Request Cancelled":
+          if (user?.role === "moderator") {
+            return '/moderator?tab=owner-requests';
+          }
+          return '/auth/profile?menu=ownership';
         default:
           return `/auth/notifications/${notification._id}`;
       }

@@ -150,14 +150,3 @@ export const verifyOtp = async (phone: string, code: string): Promise<Response> 
     return await api.post("/auth/phone/verify-otp", { phone, code });
 };
 
-export const sendOtpFirebase = async (phone: string, recaptchaToken?: string): Promise<Response> => {
-    return await api.post("/auth/phone/send-otp-firebase", { phone, recaptchaToken });
-};
-
-export const verifyOtpFirebase = async (sessionInfo: string, code: string): Promise<Response> => {
-    return await api.post("/auth/phone/verify-otp-firebase", { sessionInfo, code });
-};
-
-export const confirmPhoneFirebase = async (idToken: string): Promise<Response> => {
-    return await api.post("/auth/phone/confirm-firebase", { idToken });
-};

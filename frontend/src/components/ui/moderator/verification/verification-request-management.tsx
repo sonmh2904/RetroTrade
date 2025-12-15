@@ -57,8 +57,10 @@ export function VerificationRequestManagement() {
   useEffect(() => {
     if (accessToken) {
       const decoded = decodeToken(accessToken);
-      if (decoded?.userId) {
-        setCurrentUserId(decoded.userId);
+      // Hỗ trợ cả userId và _id trong token
+      const id = decoded?.userId || decoded?._id;
+      if (id) {
+        setCurrentUserId(id);
       }
     }
   }, [accessToken]);

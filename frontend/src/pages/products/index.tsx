@@ -200,40 +200,42 @@ const toIdString = (v: unknown): string => {
   }
 };
 const normalizeItems = (rawItems: RawProductItem[]): Product[] => {
-  return rawItems.map((item) => ({
-    _id: toIdString(item._id),
-    title: item.Title || "",
-    shortDescription: item.ShortDescription || "",
-    thumbnail: item.Images?.[0]?.Url || "/placeholder.jpg",
-    basePrice: item.BasePrice || 0,
-    currency: item.Currency || "VND",
-    depositAmount: item.DepositAmount || 0,
-    createdAt: item.CreatedAt || "",
-    availableQuantity: item.AvailableQuantity || 0,
-    quantity: item.Quantity || 0,
-    viewCount: item.ViewCount || 0,
-    rentCount: item.RentCount || 0,
-    favoriteCount: item.FavoriteCount || 0,
-    category: item.Category
-      ? { _id: toIdString(item.Category._id), name: item.Category.name || "" }
-      : undefined,
-    condition: item.Condition
-      ? { ConditionName: item.Condition.ConditionName || "" }
-      : undefined,
-    priceUnit: item.PriceUnit
-      ? { UnitName: item.PriceUnit.UnitName || "" }
-      : undefined,
-    tags: Array.isArray(item.Tags)
-      ? (item.Tags.map((t: RawTag) => {
-        const id = toIdString(t.TagId || t.Tag?._id || t._id || t.id);
-        const name = t.Tag?.name || t.TagName || t.Name || t.name || "";
-        if (!id || !name) return null;
-        return { _id: id, name };
-      }).filter(Boolean) as { _id: string; name: string }[])
-      : [],
-    city: item.City,
-    district: item.District,
-  }));
+  return rawItems
+    .map((item) => ({
+      _id: toIdString(item._id),
+      title: item.Title || "",
+      shortDescription: item.ShortDescription || "",
+      thumbnail: item.Images?.[0]?.Url || "/placeholder.jpg",
+      basePrice: item.BasePrice || 0,
+      currency: item.Currency || "VND",
+      depositAmount: item.DepositAmount || 0,
+      createdAt: item.CreatedAt || "",
+      availableQuantity: item.AvailableQuantity || 0,
+      quantity: item.Quantity || 0,
+      viewCount: item.ViewCount || 0,
+      rentCount: item.RentCount || 0,
+      favoriteCount: item.FavoriteCount || 0,
+      category: item.Category
+        ? { _id: toIdString(item.Category._id), name: item.Category.name || "" }
+        : undefined,
+      condition: item.Condition
+        ? { ConditionName: item.Condition.ConditionName || "" }
+        : undefined,
+      priceUnit: item.PriceUnit
+        ? { UnitName: item.PriceUnit.UnitName || "" }
+        : undefined,
+      tags: Array.isArray(item.Tags)
+        ? (item.Tags.map((t: RawTag) => {
+            const id = toIdString(t.TagId || t.Tag?._id || t._id || t.id);
+            const name = t.Tag?.name || t.TagName || t.Name || t.name || "";
+            if (!id || !name) return null;
+            return { _id: id, name };
+          }).filter(Boolean) as { _id: string; name: string }[])
+        : [],
+      city: item.City,
+      district: item.District,
+    }))
+    .filter((item) => item.availableQuantity > 0);
 };
 const formatPrice = (price: number, currency: string) => {
   if (currency === "VND") {

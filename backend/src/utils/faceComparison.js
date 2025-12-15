@@ -8,8 +8,11 @@ try {
         faceapi = require('@vladmandic/face-api');
         console.log('Face-api package loaded successfully');
     } catch (faceApiError) {
-        console.warn('Face-api package not found. Auto verification will fallback to manual verification.');
-        console.warn('To enable auto verification, run: npm install @vladmandic/face-api');
+        // Face-api là optional, không cần warning mỗi lần khởi động
+        // Chỉ log trong development mode nếu cần debug
+        if (process.env.NODE_ENV === 'development') {
+            console.log('Face-api package not found. Auto verification will fallback to manual verification.');
+        }
         faceapi = null;
     }
     
@@ -27,8 +30,10 @@ try {
                 console.log('Canvas configured for face-api');
             }
         } catch (canvasError) {
-            console.warn('Canvas package not found. Face comparison may not work properly.');
-            console.warn('To enable face comparison, install Visual Studio Build Tools and run: npm install canvas');
+            // Canvas là optional, chỉ log trong development mode
+            if (process.env.NODE_ENV === 'development') {
+                console.log('Canvas package not found. Face comparison may not work properly.');
+            }
             // Still allow face-api to load, but it may not work without canvas
         }
     }
@@ -144,7 +149,7 @@ async function compareFaces(image1Buffer, image2Buffer) {
     try {
         // Check if face-api is available before attempting to load models
         if (!faceapi) {
-            console.warn('Face-api package not available, returning fallback result');
+            // Face-api không có sẵn, trả về kết quả fallback (không log warning)
             return {
                 similarity: 0,
                 idCardFaceDetected: false,

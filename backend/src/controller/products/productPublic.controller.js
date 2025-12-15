@@ -36,7 +36,11 @@ function shouldIncrementView(itemId, req) {
 const listAllItems = async (req, res) => {
   let success = false;
   try {
-    const items = await Item.find({ StatusId: 2, IsDeleted: false })
+    const items = await Item.find({
+      StatusId: 2,
+      IsDeleted: false,
+      AvailableQuantity: { $gt: 0 },
+    })
       .sort({ CreatedAt: -1 })
       .lean();
 

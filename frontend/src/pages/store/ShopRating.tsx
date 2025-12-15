@@ -36,10 +36,16 @@ interface JwtPayload {
   avatarUrl?: string;
 }
 
+interface RatingSummary {
+  total: number;
+  average: number;
+}
+
 interface Props {
   ownerId: string;
   orderId?: string; // ← đổi thành optional
   hasPurchased?: boolean; // ← thêm flag để biết user đã từng mua chưa
+  onSummaryUpdate?: (summary: RatingSummary) => void;
 }
 
 
@@ -47,6 +53,7 @@ const ShopRating: React.FC<Props> = ({
   ownerId,
   orderId,
   hasPurchased = false,
+  onSummaryUpdate,
 }) => {
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
   const [currentUser, setCurrentUser] = useState<JwtPayload | null>(null);
@@ -127,10 +134,30 @@ const hasRatedThisOrder = useMemo(() => {
     return counts;
   }, [ratings]);
 
-  const average =
-    ratings.length > 0
-      ? (ratings.reduce((a, r) => a + r.rating, 0) / ratings.length).toFixed(1)
-      : "0.0";
+  const ratingSummary = useMemo(() => {
+    const total = ratings.length;
+    if (!total) {
+      return { total: 0, averageText: "0.0", averageValue: 0 };
+    }
+
+    const averageRaw = ratings.reduce((a, r) => a + r.rating, 0) / total;
+    const averageText = averageRaw.toFixed(1);
+    return {
+      total,
+      averageText,
+      averageValue: Number(averageText),
+    };
+  }, [ratings]);
+
+  const average = ratingSummary.averageText;
+
+  useEffect(() => {
+    if (!onSummaryUpdate) return;
+    onSummaryUpdate({
+      total: ratingSummary.total,
+      average: ratingSummary.averageValue,
+    });
+  }, [ratingSummary, onSummaryUpdate]);
 
   // Form actions
   const handleEdit = (r: OwnerRating) => {

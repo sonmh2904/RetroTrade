@@ -209,7 +209,6 @@ export default function VerificationForm({
                                     onNext={handleImageNext}
                                     onBack={handleBack}
                                     isLoading={isLoading}
-                                    phoneNumber={phoneNumber}
                                 />
                             )}
                             {step === 4 && (

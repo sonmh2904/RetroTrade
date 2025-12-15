@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ModeratorSidebar } from "@/components/ui/moderator/moderator-sidebar";
 import { ModeratorHeader } from "@/components/ui/moderator/moderator-header";
 import { ModeratorStats } from "@/components/ui/moderator/moderator-stats";
-import { UserManagementTable } from "@/components/ui/moderator/user-management-table";
-import { RequestManagementTable } from "@/components/ui/moderator/request-management-table";
+import { ModeratorUserManagementTable as UserManagementTable } from "@/components/ui/moderator/user-management-table";
+import { RequestManagementTable } from "@/components/ui/moderator/ownerRequest/request-managemment-table";
 import { VerificationQueue } from "@/components/ui/moderator/verify/verification-queue";
 import { BlogManagementTable } from "@/components/ui/moderator/blog/blog-management-table";
 import { CategoryManagementTable } from "@/components/ui/moderator/blog/category-management-table";
 import { CommentManagementTable } from "@/components/ui/moderator/blog/comment-management-table";
+import { getAllUsers } from "@/services/auth/user.api";
 import {
   Card,
   CardContent,
@@ -28,7 +29,7 @@ import {
 
 export default function ModeratorDashboard() {
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "users" | "requests" | "verification" | "blog"
+    "dashboard" | "requests" | "verification" | "productManagement" | "blog" | "messages" | "dispute" | "userManagement" | "complaints" | "moderation"
   >("dashboard");
   const [activeBlogTab, setActiveBlogTab] = useState<
     "posts" | "categories" | "comments" | "tags"
@@ -58,7 +59,7 @@ export default function ModeratorDashboard() {
     switch (activeTab) {
       case "dashboard":
         return <DashboardOverview />;
-      case "users":
+      case "userManagement":
         return <UserManagementTable />;
       case "requests":
         return <RequestManagementTable />;
@@ -86,7 +87,7 @@ export default function ModeratorDashboard() {
     switch (activeTab) {
       case "dashboard":
         return "Dashboard Tổng quan";
-      case "users":
+      case "userManagement":
         return "Quản lý người dùng";
       case "requests":
         return "Yêu cầu kiểm duyệt";
@@ -114,7 +115,7 @@ export default function ModeratorDashboard() {
     switch (activeTab) {
       case "dashboard":
         return "Tổng quan về hoạt động và thống kê hệ thống";
-      case "users":
+      case "userManagement":
         return "Theo dõi và quản lý tài khoản người dùng trong hệ thống";
       case "requests":
         return "Duyệt và phê duyệt các yêu cầu từ người dùng";

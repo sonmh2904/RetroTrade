@@ -8,13 +8,14 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      process.env.FRONTEND_URL || "http://localhost:3000",
+      process.env.FRONTEND_URL || "https://retrotrade.id.vn",
+      "https://retrotrade.vercel.app",
       "http://localhost:3000",
-      "http://127.0.0.1:3000"
+      "http://127.0.0.1:3000",
     ],
     methods: ["GET", "POST"],
-    credentials: true
-  }
+    credentials: true,
+  },
 });
 
 const connectDB = require("./src/config/db");
@@ -39,7 +40,8 @@ setIO(io);
 
 const corsOptions = {
   origin: [
-    process.env.FRONTEND_URL || "http://localhost:3000",
+    process.env.FRONTEND_URL || "https://retrotrade.id.vn",
+    "https://retrotrade.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000"
   ],
@@ -64,6 +66,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
 const { autoUpdateServiceFeeStatus } = require("./src/controller/serviceFee/serviceFeeAutoUpdate.controller");
+const { unbanExpiredCommentBans } = require("./src/cronJobs/unbanJob");
 
 // cập nhật lúc 0h mỗi ngày
 cron.schedule('0 0 * * *', updateTrendingItems);
@@ -74,6 +77,15 @@ cron.schedule('0 * * * *', async () => {
     await autoUpdateServiceFeeStatus();
   } catch (error) {
     console.error("Lỗi cron job cập nhật serviceFee:", error);
+  }
+});
+
+// Tự động unban comment bans đã hết hạn mỗi 10 phút
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    await unbanExpiredCommentBans();
+  } catch (error) {
+    console.error("Lỗi cron job unban comments:", error);
   }
 });
 
@@ -106,7 +118,12 @@ router(app);
 
 // DB connect
 connectDB()
-  .then(() => console.log(" MongoDB connected"))
+  .then(async () => {
+    console.log(" MongoDB connected");
+    // Seed system configs
+    const { seedDefaultConfigs } = require("./src/controller/admin/systemConfig.controller");
+    await seedDefaultConfigs();
+  })
   .catch((err) => console.log(err));
 
 // Use server.listen instead of app.listen for socket.io

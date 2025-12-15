@@ -6,6 +6,7 @@ export interface DecodedToken {
   avatarUrl?: string;
   fullName?: string;
   _id?: string;
+  userId?: string; // Thêm userId để hỗ trợ cả 2 format
   role?: string;
   exp: number;
   iat: number;

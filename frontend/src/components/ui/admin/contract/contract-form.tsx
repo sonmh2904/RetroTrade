@@ -145,10 +145,7 @@ export function ContractTemplateForm({
   };
   const combinedContent = `${formData.headerContent}\n\n${formData.bodyContent}\n\n${formData.footerContent}`;
 
-  const footerPlaceholder = `                                                                                                    
-ĐẠI DIỆN BÊN CHO THUÊ (BÊN A)                                                                 ĐẠI DIỆN BÊN THUÊ (BÊN B)
-Họ và tên: {ownerName}                                                                                      Họ và tên: {renterName}   `;
-
+  const footerPlaceholder = ``;
   const handlePreviewClick = () => {
     if (
       !formData.headerContent.trim() ||
@@ -547,12 +544,11 @@ Họ và tên: {ownerName}                                                      
               lang="vi"
               style={{ maxWidth: "800px", margin: "0 auto" }}
             >
-              <pre
-                className="prose prose-lg max-w-none whitespace-pre-wrap font-serif leading-relaxed text-base tracking-wide"
+              <div
+                className="prose prose-lg max-w-none font-serif leading-relaxed text-base tracking-wide"
                 style={unifiedStyle}
-              >
-                {combinedContent}
-              </pre>
+                dangerouslySetInnerHTML={{ __html: combinedContent }}
+              />
             </div>
             <div className="flex gap-3 justify-end">
               <button
