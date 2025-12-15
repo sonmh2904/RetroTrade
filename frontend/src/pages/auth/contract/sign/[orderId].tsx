@@ -140,7 +140,7 @@ export default function SignContractPage() {
   const [draggingSigId, setDraggingSigId] = useState<string | null>(null);
   const [savingNewSignature, setSavingNewSignature] = useState<boolean>(false);
   const contractRef = useRef<HTMLDivElement>(null);
-  const proseRef = useRef<HTMLPreElement | null>(null);
+const proseRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<string | null>(null);
 
   const unifiedStyle = {
@@ -767,13 +767,12 @@ export default function SignContractPage() {
               style={{ maxWidth: "800px", margin: "0 auto" }} // Khớp width và center với form
               lang="vi"
             >
-              <pre
+              <div
                 ref={proseRef}
-                className="prose prose-lg max-w-none h-full overflow-y-auto relative pointer-events-none whitespace-pre-wrap font-serif leading-relaxed text-base tracking-wide"
-                style={unifiedStyle} // Áp dụng full unifiedStyle để khớp 100% (bao gồm letterSpacing cho align cột)
-              >
-                {contractData.content || ""}
-              </pre>
+                className="prose prose-lg max-w-none h-full overflow-y-auto relative pointer-events-none font-serif leading-relaxed text-base tracking-wide"
+                style={unifiedStyle}
+                dangerouslySetInnerHTML={{ __html: contractData.content || "" }}
+              />
               {contractData.signatures.map(
                 (sig) =>
                   sig.signatureId?.signatureImagePath && (
@@ -970,12 +969,11 @@ export default function SignContractPage() {
                 lang="vi"
                 style={{ maxWidth: "800px", margin: "0 auto" }} // Khớp width với form để align chính xác
               >
-                <pre
-                  className="prose prose-lg max-w-none whitespace-pre-wrap font-serif leading-relaxed text-base tracking-wide"
-                  style={unifiedStyle} // Áp dụng full unifiedStyle để khớp 100% (bao gồm letterSpacing cho align cột)
-                >
-                  {previewContent}
-                </pre>
+                <div
+                  className="prose prose-lg max-w-none whitespace-normal font-serif leading-relaxed text-base tracking-wide"
+                  style={unifiedStyle}
+                  dangerouslySetInnerHTML={{ __html: previewContent }}
+                />
               </div>
 
               {isOwnerOfOrder ? ( // Code chỉ có Owner mới được tạo mẫu hợp đồng
