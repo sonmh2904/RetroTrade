@@ -12,37 +12,17 @@ import {
   Package,
   MessageCircle,
   AlertTriangle,
-  // Users, // Tạm thời comment
+  Users,
   Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/common/button";
 import { useState, useEffect } from "react";
 
 interface ModeratorSidebarProps {
-  activeTab:
-    | "dashboard"
-    | "requests"
-    | "verification"
-    | "productManagement"
-    | "blog"
-    | "messages"
-    | "dispute"
-    // | "userManagement" // Tạm thời comment
-    | "complaints";
+  activeTab: string;
   activeProductTab?: "products" | "categories" | "highlights";
   activeBlogTab?: "posts" | "categories" | "comments" | "tags";
-  onTabChange?: (
-    tab:
-      | "dashboard"
-      | "requests"
-      | "verification"
-      | "productManagement"
-      | "blog"
-      | "messages"
-      | "dispute"
-      // | "userManagement" // Tạm thời comment
-      | "complaints"
-  ) => void;
+  onTabChange?: (tab: any) => void;
   onProductTabChange?: (tab: "products" | "categories" | "highlights") => void;
   onBlogTabChange?: (tab: "posts" | "categories" | "comments" | "tags") => void;
 }
@@ -110,7 +90,14 @@ export function ModeratorSidebar({
     }
   };
 
-  const menuItems = [
+  const menuItems: Array<{
+    id: "dashboard" | "messages" | "requests" | "verification" | "dispute" | "userManagement" | "complaints" | "productManagement" | "blog" | "moderation";
+    label: string;
+    icon: React.ElementType;
+    path?: string;
+    description: string;
+    hasSubmenu?: boolean;
+  }> = [
     {
       id: "dashboard" as const,
       label: "Dashboard",
@@ -144,21 +131,28 @@ export function ModeratorSidebar({
       label: "Xử lý khiếu nại",
       icon: AlertTriangle,
       path: "/moderator/dispute-management",
-      description: "Xử lý Khiếu nạivà khiếu nại",
+      description: "Xử lý Khiếu nại đơn hàng",
     },
-    // {
-    //   id: "userManagement" as const,
-    //   label: "Quản lý người dùng",
-    //   icon: Users,
-    //   path: "/moderator/user-management",
-    //   description: "Khóa và mở khóa tài khoản",
-    // }, // Tạm thời comment
+    {
+      id: "userManagement" as const,
+      label: "Quản lý người dùng",
+      icon: Users,
+      path: "/moderator/user-management",
+      description: "Khóa và mở khóa tài khoản",
+    },
     {
       id: "complaints" as const,
       label: "Khiếu nại tài khoản",
       icon: Ban,
       path: "/moderator/complaints",
       description: "Xử lý khiếu nại khóa/mở khóa",
+    },
+    {
+      id: "moderation" as const,
+      label: "Kiểm duyệt nội dung",
+      icon: Shield,
+      path: "/moderator/content-moderation",
+      description: "AI kiểm duyệt bình luận",
     },
     {
       id: "productManagement" as const,
@@ -227,16 +221,7 @@ export function ModeratorSidebar({
   ];
 
   const handleTabChange = (
-    tab:
-      | "dashboard"
-      | "requests"
-      | "verification"
-      | "productManagement"
-      | "blog"
-      | "messages"
-      | "dispute"
-      // | "userManagement" // Tạm thời comment
-      | "complaints"
+    tab: string
   ) => {
     if (onTabChange) {
       onTabChange(tab);
@@ -410,16 +395,16 @@ export function ModeratorSidebar({
                           setIsProductDropdownOpen(!isProductDropdownOpen);
                         } else if (isProduct) {
                           setIsProductDropdownOpen(true);
-                          handleTabChange(item.id);
+                          handleTabChange(item.id as string);
                         }
                         if (isBlog && activeTab === "blog") {
                           setIsBlogDropdownOpen(!isBlogDropdownOpen);
                         } else if (isBlog) {
                           setIsBlogDropdownOpen(true);
-                          handleTabChange(item.id);
+                          handleTabChange(item.id as string);
                         }
                       } else {
-                        handleTabChange(item.id);
+                        handleTabChange(item.id as string);
                       }
                     }}
                     title={isCollapsed ? item.label : undefined}

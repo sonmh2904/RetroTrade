@@ -11,7 +11,8 @@ import { verificationRequestAPI } from '@/services/auth/verificationRequest.api'
 type AccountVerificationProps = { className?: string };
 
 export function AccountVerification({ className }: AccountVerificationProps) {
-  const [step, setStep] = useState(1); // Bắt đầu từ step 1 (PhoneVerification)
+  // Bắt đầu từ step 1 (PhoneVerification) - xác minh số điện thoại trước, rồi mới xác minh CCCD
+  const [step, setStep] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [result, setResult] = useState<{ success: boolean; message: string; details?: string; status?: 'success' | 'warning' | 'error' } | null>(null);
@@ -139,27 +140,30 @@ export function AccountVerification({ className }: AccountVerificationProps) {
             details: detailsMessage
           });
         }
-        // Manual verification: sent to moderator
+        // Manual verification: sent to moderator - KHÔNG phải thành công, chỉ là đang chờ xử lý
         else if (verificationRequestSubmitted || requestId) {
           setResult({
-            success: true,
-            message: 'Yêu cầu xác minh đã được gửi thành công',
-            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công. Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất. Bạn sẽ nhận được thông báo khi có kết quả.'
+            success: false,
+            status: 'warning',
+            message: 'Yêu cầu xác minh đã được gửi',
+            details: 'Yêu cầu xác minh danh tính của bạn đã được gửi thành công và đang chờ kiểm duyệt viên xử lý. Bạn sẽ nhận được thông báo khi có kết quả.'
           });
         } else if (extractedIdCardInfo && 
           extractedIdCardInfo.idNumber && 
           extractedIdCardInfo.fullName && 
           extractedIdCardInfo.dateOfBirth) {
           setResult({
-            success: true,
+            success: false,
+            status: 'warning',
             message: 'Yêu cầu xác minh đã được gửi',
-            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất.'
+            details: 'Yêu cầu xác minh đã được gửi với thông tin căn cước công dân đã được đọc tự động. Đang chờ kiểm duyệt viên xử lý.'
           });
         } else {
           setResult({
-            success: true,
+            success: false,
+            status: 'warning',
             message: 'Yêu cầu xác minh đã được gửi',
-            details: 'Yêu cầu xác minh đã được gửi thành công. Kiểm duyệt viên sẽ xử lý trong thời gian sớm nhất.'
+            details: 'Yêu cầu xác minh đã được gửi thành công. Đang chờ kiểm duyệt viên xử lý.'
           });
         }
       } else {
@@ -175,9 +179,9 @@ export function AccountVerification({ className }: AccountVerificationProps) {
     }
   };
 
-  const handleBack = () => setStep((s) => Math.max(1, s - 1));
+  const handleBack = () => setStep((s) => Math.max(1, s - 1)); // Quay về step trước, tối thiểu là step 1
   const handleRestart = () => {
-    setStep(1); // Bắt đầu lại từ step 1 (PhoneVerification)
+    setStep(1); // Bắt đầu lại từ step 1 (xác minh số điện thoại)
     setPhoneNumber('');
     setImages([]);
     setResult(null);
@@ -214,6 +218,7 @@ export function AccountVerification({ className }: AccountVerificationProps) {
           </div>
         )}
 
+        {/* Step 1: Xác minh số điện thoại */}
         {step === 1 && (
           <PhoneVerification 
             onSuccess={handlePhoneVerified}
@@ -222,6 +227,7 @@ export function AccountVerification({ className }: AccountVerificationProps) {
           />
         )}
 
+        {/* Step 2: Xác minh CCCD (sau khi đã xác minh số điện thoại) */}
         {step === 2 && (
           <ImageUpload
             images={images}
@@ -232,6 +238,7 @@ export function AccountVerification({ className }: AccountVerificationProps) {
           />
         )}
 
+        {/* Step 3: Hiển thị kết quả */}
         {step === 3 && (
           <ResultDisplay
             result={result}

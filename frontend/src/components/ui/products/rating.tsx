@@ -23,12 +23,19 @@ const renderStars = (rating: number, size: number = 24) => {
   return (
     <div className="flex items-center gap-0.5">
       {[...Array(fullStars)].map((_, i) => (
-        <Star key={`full-${i}`} size={size} className="text-yellow-400 fill-yellow-400" />
+        <Star
+          key={`full-${i}`}
+          size={size}
+          className="text-yellow-400 fill-yellow-400"
+        />
       ))}
       {decimalPart > 0 && (
         <div className="relative">
           <Star size={size} className="text-gray-300" />
-          <div className="absolute inset-0 overflow-hidden" style={{ width: `${decimalPart * 100}%` }}>
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={{ width: `${decimalPart * 100}%` }}
+          >
             <Star size={size} className="text-yellow-400 fill-yellow-400" />
           </div>
         </div>
@@ -155,34 +162,72 @@ const RatingSection: React.FC<Props> = ({ itemId }) => {
   }, [currentUser]);
 
   // Kiểm tra người dùng có được đánh giá không
-  const canReview = useMemo(() => {
-    if (!currentUser) return false;
-    const eligibleOrder = orders.find(
-      (o) =>
-        o.itemId === itemId &&
-        o.orderStatus.toLowerCase() === "completed" &&
-        o.renterId._id === currentUser._id
-    );
-    if (!eligibleOrder) return false;
+ const canReview = useMemo(() => {
+   if (!currentUser) return false;
 
-    const hasRated = ratings.some(
-      (r) => r.itemId === itemId && r.renterId._id === currentUser._id
-    );
-    return !hasRated;
-  }, [orders, ratings, itemId, currentUser]);
+   const completedOrders = orders.filter(
+     (o) =>
+       o.itemId === itemId &&
+       o.orderStatus.toLowerCase() === "completed" &&
+       o.renterId?._id === currentUser?._id
+   );
 
-  const reviewableOrderId = useMemo(() => {
-    if (!currentUser) return null;
-    const order = orders.find(
-      (o) =>
-        o.itemId === itemId &&
-        o.orderStatus.toLowerCase() === "completed" &&
-        o.renterId._id === currentUser._id
-    );
-    return order?._id || null;
-  }, [orders, itemId, currentUser]);
+   if (completedOrders.length === 0) return false;
 
-  // Filter theo sao
+const hasUnratedOrder = completedOrders.some((o) => {
+  return !ratings.some((r: any) => {
+    const rid = typeof r.orderId === "string" ? r.orderId : r.orderId?._id;
+
+    return rid === o._id;
+  });
+});
+
+   return hasUnratedOrder;
+ }, [orders, ratings, itemId, currentUser]);
+
+
+const reviewableOrderId = useMemo(() => {
+  if (!currentUser) return null;
+
+  const completedOrders = orders.filter(
+    (o) =>
+      o.itemId === itemId &&
+      o.orderStatus.toLowerCase() === "completed" &&
+      o.renterId?._id === currentUser?._id
+  );
+
+  const target = completedOrders.find(
+    (o) =>
+      !ratings.some((r: any) => {
+        const rid = typeof r.orderId === "string" ? r.orderId : r.orderId?._id;
+
+        return rid === o._id;
+      })
+  );
+
+  return target?._id || null;
+}, [orders, ratings, itemId, currentUser]);
+
+
+
+console.log("canReview:", canReview);
+console.log("reviewableOrderId:", reviewableOrderId);
+console.log("orders:", orders);
+console.log("ratings:", ratings);  // Filter theo sao
+const completedOrders = orders.filter(
+  (o) =>
+    o.itemId === itemId &&
+    o.orderStatus?.toLowerCase() === "completed" &&
+    o.renterId?._id === currentUser?._id
+);
+
+console.log("Completed Orders of THIS PRODUCT:", completedOrders);
+
+console.log(
+  "Orders without rating:",
+  completedOrders.filter((o) => !ratings.some((r) => r.orderId === o._id))
+);
+
   const handleFilter = (star: number | null) => {
     setFilterStar(star);
     if (star === null) {
@@ -205,7 +250,6 @@ const RatingSection: React.FC<Props> = ({ itemId }) => {
     setKeptOldVideo(r.videos?.[0] || null);
 
     setActiveDropdown(null);
-
   };
 
   // Reset form
@@ -220,64 +264,62 @@ const RatingSection: React.FC<Props> = ({ itemId }) => {
   };
 
   // Submit (tạo hoặc cập nhật)
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!currentUser || !comment.trim()) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !comment.trim()) return;
 
-  if (!canReview && !editingRatingId) {
-    toast.error("Bạn không đủ điều kiện để đánh giá.");
-    return;
-  }
-
-  try {
-    setLoading(true);
-    const formData = new FormData();
-
-    // Thông tin cơ bản
-    if (!editingRatingId && reviewableOrderId) {
-      formData.append("orderId", reviewableOrderId);
+    if (!canReview && !editingRatingId) {
+      toast.error("Bạn không đủ điều kiện để đánh giá.");
+      return;
     }
-    formData.append("itemId", itemId);
-    formData.append("renterId", currentUser._id);
-    formData.append("rating", rating.toString());
-    formData.append("comment", comment.trim());
 
+    try {
+      setLoading(true);
+      const formData = new FormData();
 
-
-    // THÊM 4 DÒNG MỚI SAU ĐÂY (chỉ gửi ảnh/video cũ KHI ĐANG SỬA)
-    if (editingRatingId) {
-      keptOldImages.forEach((url) => formData.append("images", url));
-      if (keptOldVideo && !newVideo) {
-        formData.append("videos", keptOldVideo);
+      // Thông tin cơ bản
+      if (!editingRatingId && reviewableOrderId) {
+        formData.append("orderId", reviewableOrderId);
       }
+      formData.append("itemId", itemId);
+      formData.append("renterId", currentUser._id);
+      formData.append("rating", rating.toString());
+      formData.append("comment", comment.trim());
+
+      // THÊM 4 DÒNG MỚI SAU ĐÂY (chỉ gửi ảnh/video cũ KHI ĐANG SỬA)
+      if (editingRatingId) {
+        keptOldImages.forEach((url) => formData.append("images", url));
+        if (keptOldVideo && !newVideo) {
+          formData.append("videos", keptOldVideo);
+        }
+      }
+
+      // === ẢNH MỚI (giữ nguyên) ===
+      newImages.slice(0, 5).forEach((file) => formData.append("images", file));
+
+      // === VIDEO MỚI (giữ nguyên) ===
+      if (newVideo) {
+        formData.append("videos", newVideo);
+      }
+
+      // Gửi request (giữ nguyên)
+      if (editingRatingId) {
+        await updateRating(editingRatingId, formData);
+        toast.success("Cập nhật đánh giá thành công!");
+      } else {
+        await createRating(formData);
+        toast.success("Đánh giá thành công!");
+      }
+
+      await fetchRatings();
+      resetForm();
+    } catch (err: any) {
+      console.error("Submit rating error:", err);
+      toast.error(err?.message || "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setLoading(false);
     }
-
-    // === ẢNH MỚI (giữ nguyên) ===
-    newImages.slice(0, 5).forEach((file) => formData.append("images", file));
-
-    // === VIDEO MỚI (giữ nguyên) ===
-    if (newVideo) {
-      formData.append("videos", newVideo);
-    }
-
-    // Gửi request (giữ nguyên)
-    if (editingRatingId) {
-      await updateRating(editingRatingId, formData);
-      toast.success("Cập nhật đánh giá thành công!");
-    } else {
-      await createRating(formData);
-      toast.success("Đánh giá thành công!");
-    }
-
-    await fetchRatings();
-    resetForm();
-  } catch (err: any) {
-    console.error("Submit rating error:", err);
-    toast.error(err?.message || "Có lỗi xảy ra, vui lòng thử lại");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Xóa đánh giá
   const handleDeleteRating = async (id: string) => {

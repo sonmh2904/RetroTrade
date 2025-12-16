@@ -10,8 +10,6 @@ import {
   Package,
   Shield,
   Crown,
-  Moon,
-  Sun,
   Wallet,
   Bookmark,
   LayoutDashboard,
@@ -21,6 +19,8 @@ import {
   Info,
   Zap,
   ShoppingCart,
+  Menu,
+  X,
 } from "lucide-react";
 import { NotificationIcon } from "@/components/ui/common/notification-icon";
 
@@ -38,10 +38,10 @@ import {
 } from "@/components/ui/common/avatar";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "@/store/redux_store";
-import { logout, toggleDarkMode } from "@/store/auth/authReducer";
+import { logout } from "@/store/auth/authReducer";
 import { fetchCartItemCount } from "@/store/cart/cartActions";
 import { jwtDecode } from "jwt-decode";
-import { decodeToken, type DecodedToken } from "@/utils/jwtHelper";
+import { type DecodedToken } from "@/utils/jwtHelper";
 import { toast } from "sonner";
 import Image from "next/image";
 
@@ -49,15 +49,13 @@ export function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState<DecodedToken | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  const { accessToken, isDarkMode } = useSelector(
-    (state: RootState) => state.auth
-  );
+  const { accessToken } = useSelector((state: RootState) => state.auth);
   const { count: cartCount } = useSelector((state: RootState) => state.cart);
 
-  // Decode JWT token để lấy thông tin user
   const decodedUser = React.useMemo(() => {
     if (typeof accessToken === "string" && accessToken.trim()) {
       try {
@@ -69,25 +67,17 @@ export function Header() {
       }
     }
     return null;
-
-    return decodeToken(accessToken);
   }, [accessToken]);
 
   useEffect(() => {
     if (decodedUser) {
       setIsLoggedIn(true);
       setUserInfo(decodedUser);
-
-      // Fetch cart count when user is logged in
       fetchCartItemCount()(dispatch);
-      // Chuyển hướng dựa trên role
-      const currentPath = router.pathname;
-      // Redirect logic dựa trên role
-      if (currentPath === "/") {
+      if (router.pathname === "/") {
         router.push("/home");
       }
     } else {
-      // Token không hợp lệ hoặc hết hạn
       if (accessToken) {
         dispatch(logout());
         toast.error("Phiên đăng nhập đã hết hạn");
@@ -97,16 +87,6 @@ export function Header() {
     }
   }, [decodedUser, accessToken, dispatch, router]);
 
-  // Apply dark mode to document
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
-
-  // Scroll effect for header
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -115,45 +95,50 @@ export function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleToggleDarkMode = () => {
-    dispatch(toggleDarkMode());
-  };
-
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserInfo(null);
     dispatch(logout());
     toast.success("Đăng xuất thành công");
     router.push("/auth/login");
+    setMobileMenuOpen(false);
   };
 
   const handleGoToProfile = () => {
     router.push("/auth/profile");
+    setMobileMenuOpen(false);
   };
 
   const handleGoToMyOrders = () => {
-    if (router.pathname !== "/auth/my-orders" && router.asPath !== "/auth/my-orders") {
+    if (
+      router.pathname !== "/auth/my-orders" &&
+      router.asPath !== "/auth/my-orders"
+    ) {
       router.push("/auth/my-orders");
     }
+    setMobileMenuOpen(false);
   };
 
   const handleGoToAdminPanel = () => {
     router.push("/admin");
+    setMobileMenuOpen(false);
   };
 
   const handleGoToModeratorPanel = () => {
     router.push("/moderator");
+    setMobileMenuOpen(false);
   };
 
   const handleGoToOwnerPanel = () => {
     router.push("/owner");
+    setMobileMenuOpen(false);
   };
 
   const handleGoToMyfavirite = () => {
     router.push("/products/myfavorite");
+    setMobileMenuOpen(false);
   };
 
-  // Render menu items dựa trên role
   const renderRoleSpecificMenuItems = () => {
     if (!userInfo?.role) return null;
 
@@ -181,7 +166,7 @@ export function Header() {
             onClick={handleGoToModeratorPanel}
           >
             <Shield className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
-            <span>Trang quản lý Moderator</span>
+            <span>Bảng điều khiển Moderator</span>
           </DropdownMenuItem>
         );
         break;
@@ -206,35 +191,50 @@ export function Header() {
     <header
       className={`fixed top-0 left-0 right-0 z-[150] transition-all duration-300 ${
         scrolled
-          ? "bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur-md"
-          : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm"
-      } border-b border-gray-100 dark:border-gray-800`}
+          ? "bg-white/95 shadow-lg backdrop-blur-md"
+          : "bg-white/80 backdrop-blur-sm"
+      } border-b border-gray-100`}
     >
       <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo with enhanced animation */}
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative">
-              <div className="absolute inset-0 bg-indigo-500/20 dark:bg-indigo-400/20 rounded-lg blur-xl group-hover:bg-indigo-500/40 transition-all duration-300"></div>
-              <Image
-                src="/retrologo.png"
-                alt="Retro Trade Logo"
-                width={60}
-                height={60}
-                className="rounded-lg relative z-10 transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300"
-              />
-              <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-yellow-500 opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-300" />
-            </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors duration-300">
-              Retro Trade
-            </span>
-          </Link>
+        <div className="flex items-center justify-between relative">
+          {/* Logo + Hamburger (mobile) - logo luôn bên trái */}
+          <div className="flex items-center gap-4">
+            {/* Hamburger chỉ hiện trên mobile */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-gray-100 z-50"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
 
-          {/* Navigation with enhanced hover effects and icons */}
-          <nav className="hidden md:flex items-center gap-8">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2 group z-10">
+              <div className="relative">
+                <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-xl group-hover:bg-indigo-500/40 transition-all duration-300"></div>
+                <Image
+                  src="/retrologo.png"
+                  alt="Retro Trade Logo"
+                  width={60}
+                  height={60}
+                  className="rounded-lg relative z-10 transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300"
+                />
+                <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-yellow-500 opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-300" />
+              </div>
+              <span className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors duration-300">
+                Retro Trade
+              </span>
+            </Link>
+          </div>
+
+          {/* Navigation desktop - giữ nguyên */}
+          <nav className="hidden md:flex items-center gap-8 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <Link
               href="/home"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <Home className="w-4 h-4 transform group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300" />
@@ -246,7 +246,7 @@ export function Header() {
             </Link>
             <Link
               href="/products"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <Package className="w-4 h-4 transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-300" />
@@ -258,7 +258,7 @@ export function Header() {
             </Link>
             <Link
               href="/blog"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <BookOpen className="w-4 h-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300" />
@@ -269,7 +269,7 @@ export function Header() {
             </Link>
             <Link
               href="/about"
-              className="relative text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 group flex items-center gap-2"
+              className="relative text-gray-700 hover:text-indigo-600 transition-all duration-300 group flex items-center gap-2"
             >
               <div className="relative">
                 <Info className="w-4 h-4 transform group-hover:scale-110 group-hover:rotate-180 transition-all duration-500" />
@@ -280,7 +280,8 @@ export function Header() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-4 z-[100]">
+          {/* Phần phải: auth / icons - luôn hiển thị */}
+          <div className="flex items-center gap-4 z-10">
             {isLoggedIn && (
               <>
                 <Button
@@ -300,7 +301,6 @@ export function Header() {
                   <div className="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/10 rounded-full transition-colors duration-300"></div>
                 </Button>
 
-                {/* Notification with animation */}
                 <div className="relative">
                   <NotificationIcon />
                 </div>
@@ -326,6 +326,7 @@ export function Header() {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
+                {/* Dropdown content giữ nguyên hoàn toàn như code gốc */}
                 <DropdownMenuContent
                   className="w-56 z-[200] animate-in fade-in-0 zoom-in-95 slide-in-from-top-2"
                   align="end"
@@ -361,19 +362,6 @@ export function Header() {
                   </div>
                   <DropdownMenuSeparator />
 
-                  {/* Dark Mode Toggle */}
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    onClick={handleToggleDarkMode}
-                  >
-                    {isDarkMode ? (
-                      <Sun className="mr-2 h-4 w-4 text-yellow-500 group-hover:rotate-180 transition-transform duration-500" />
-                    ) : (
-                      <Moon className="mr-2 h-4 w-4 text-gray-600 group-hover:rotate-180 transition-transform duration-500" />
-                    )}
-                    <span>{isDarkMode ? "Chế độ sáng" : "Chế độ tối"}</span>
-                  </DropdownMenuItem>
-
                   <DropdownMenuItem
                     className="cursor-pointer group"
                     onClick={handleGoToProfile}
@@ -390,7 +378,6 @@ export function Header() {
                     <span>Danh sách yêu thích</span>
                   </DropdownMenuItem>
 
-
                   <DropdownMenuItem
                     className="cursor-pointer group"
                     onClick={handleGoToMyOrders}
@@ -399,10 +386,8 @@ export function Header() {
                     <span>Lịch sử đơn hàng</span>
                   </DropdownMenuItem>
 
-                 
-                 
-                  {(userInfo?.role === "renter" || userInfo?.role === "owner") && (
-
+                  {(userInfo?.role === "renter" ||
+                    userInfo?.role === "owner") && (
                     <DropdownMenuItem
                       className="cursor-pointer group"
                       onClick={() => router.push("/wallet")}
@@ -412,7 +397,6 @@ export function Header() {
                     </DropdownMenuItem>
                   )}
 
-                  {/* Render role-specific menu items */}
                   {renderRoleSpecificMenuItems()}
 
                   <DropdownMenuSeparator />
@@ -427,14 +411,15 @@ export function Header() {
               </DropdownMenu>
             ) : (
               <>
+                {/* Desktop version */}
                 <Link
                   href="/auth/login"
-                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300 relative group"
+                  className="text-gray-700 hover:text-indigo-600 transition-all duration-300 relative group hidden md:block"
                 >
                   <span className="relative z-10">Đăng nhập</span>
                   <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-600 to-purple-600 group-hover:w-full transition-all duration-300"></span>
                 </Link>
-                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white relative overflow-hidden group shadow-lg hover:shadow-indigo-500/50 transition-all duration-300">
+                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white relative overflow-hidden group shadow-lg hover:shadow-indigo-500/50 transition-all duration-300 hidden md:flex">
                   <span className="absolute inset-0 bg-gradient-to-r from-purple-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                   <Link
                     href="/auth/register"
@@ -444,13 +429,68 @@ export function Header() {
                     Đăng ký
                   </Link>
                 </Button>
+
+                {/* Mobile version - nhỏ gọn, luôn hiển thị */}
+                <div className="flex md:hidden items-center gap-3">
+                  <Link
+                    href="/auth/login"
+                    className="text-sm font-medium text-gray-700 hover:text-indigo-600"
+                  >
+                    Đăng nhập
+                  </Link>
+                  <Button
+                    size="sm"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    Đăng ký
+                  </Button>
+                </div>
               </>
             )}
           </div>
         </div>
       </div>
 
-      {/* Add custom styles for animations */}
+      {/* Mobile menu dọc */}
+      {mobileMenuOpen && (
+        <div className="absolute top-full left-0 right-0 bg-white shadow-lg border-t border-gray-200 z-[140]">
+          <nav className="flex flex-col py-4">
+            <Link
+              href="/home"
+              className="px-6 py-3 text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Home className="w-5 h-5" />
+              Trang chủ
+            </Link>
+            <Link
+              href="/products"
+              className="px-6 py-3 text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Package className="w-5 h-5" />
+              Sản phẩm
+            </Link>
+            <Link
+              href="/blog"
+              className="px-6 py-3 text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <BookOpen className="w-5 h-5" />
+              Blog
+            </Link>
+            <Link
+              href="/about"
+              className="px-6 py-3 text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Info className="w-5 h-5" />
+              Giới thiệu & Liên hệ
+            </Link>
+          </nav>
+        </div>
+      )}
+
       <style jsx global>{`
         @keyframes shimmer {
           0% {

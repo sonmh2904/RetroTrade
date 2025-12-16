@@ -56,7 +56,7 @@ module.exports.login = async (req, res) => {
                     user._id,
                     "Auth",
                     "Xác thực tài khoản chưa hoàn tất",
-                    "Bạn cần xác thực đầy đủ Email, số điện thoại và giấy tờ tùy thân để đăng nhập.",
+                    "Bạn cần xác thực đầy đủ Email, số điện thoại và giấy tờ tùy thân để sử dụng các chức năng khác của hệ thống.",
                     { isEmailConfirmed: user.isEmailConfirmed, isPhoneConfirmed: user.isPhoneConfirmed, isIdVerified: user.isIdVerified }
                 );
             } catch (notificationError) {
@@ -123,12 +123,14 @@ module.exports.login = async (req, res) => {
 module.exports.loginWithGoogle = async (req, res) => {
     try {
         const { email, avatarUrl, fullName } = req.body;
+        // Trim fullName to remove leading/trailing spaces
+        const trimmedFullName = fullName ? fullName.trim() : "";
         let existingUser = await User.findOne({ email: email });
         if (!existingUser) {
             const newUser = await User.create({
                 email: email,
                 avatarUrl: avatarUrl,
-                fullName: fullName,
+                fullName: trimmedFullName || "Người dùng",
                 isEmailConfirmed: true,
                 passwordHash: "",
                 passwordSalt: ""
@@ -298,12 +300,14 @@ module.exports.handleFacebookCallback = async (req, res) => {
 module.exports.loginWithFacebook = async (req, res) => {
     try {
         const { email, avatarUrl, fullName } = req.body;
+        // Trim fullName to remove leading/trailing spaces
+        const trimmedFullName = fullName ? fullName.trim() : "";
         let existingUser = await User.findOne({ email: email });
         if (!existingUser) {
             const newUser = await User.create({
                 email: email,
                 avatarUrl: avatarUrl,
-                fullName: fullName,
+                fullName: trimmedFullName || "Người dùng",
                 isEmailConfirmed: true,
                 passwordHash: "",
                 passwordSalt: ""
@@ -359,6 +363,21 @@ module.exports.register = async (req, res) => {
             });
         }
 
+        // Validate fullName: không được bắt đầu hoặc kết thúc bằng khoảng trắng
+        const trimmedFullName = fullName.trim();
+        if (fullName !== trimmedFullName) {
+            return res.json({
+                code: 400,
+                message: "Họ tên không được bắt đầu hoặc kết thúc bằng khoảng trắng"
+            });
+        }
+        if (trimmedFullName.length === 0) {
+            return res.json({
+                code: 400,
+                message: "Họ tên không được để trống"
+            });
+        }
+
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.json({
@@ -369,7 +388,7 @@ module.exports.register = async (req, res) => {
 
         const passwordSalt = generateSalt(16);
         const passwordHash = await hashPasswordWithSalt(password, passwordSalt);
-        const user = await User.create({ email, passwordHash, passwordSalt, fullName });
+        const user = await User.create({ email, passwordHash, passwordSalt, fullName: trimmedFullName });
 
         const sanitized = user.toObject();
         delete sanitized.passwordHash;

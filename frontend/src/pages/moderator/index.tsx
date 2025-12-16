@@ -18,9 +18,10 @@ import ProductCategoryManager from "@/components/ui/moderator/categories/categor
 import ProductManagement from "@/components/ui/moderator/product/product-management";
 import TopHighlightTable from "@/components/ui/moderator/product/top-highlight-table";
 import { DisputeManagement } from "@/components/ui/moderator/dispute/dispute-management";
-// import { ModeratorUserManagementTable } from "@/components/ui/moderator/user-management-table";
+import { ModeratorUserManagementTable } from "@/components/ui/moderator/user-management-table";
 import { ComplaintManagement } from "@/components/ui/moderator/complaints/complaint-management";
 import { CategoryManagementTable } from "@/components/ui/moderator/blog/category-management-table";
+import ContentModerationPage from "./content-moderation";
 
 export default function ModeratorDashboard() {
   console.log(
@@ -39,8 +40,9 @@ export default function ModeratorDashboard() {
     | "productManagement"
     | "messages"
     | "dispute"
-    // | "userManagement" // Tạm thời comment
+    | "userManagement"
     | "complaints"
+    | "moderation"
   >("dashboard");
   const [activeBlogTab, setActiveBlogTab] = useState<
     "posts" | "categories" | "comments" | "tags"
@@ -60,8 +62,9 @@ export default function ModeratorDashboard() {
       | "productManagement"
       | "messages"
       | "dispute"
-      // | "userManagement" // Tạm thời comment
+      | "userManagement"
       | "complaints"
+      | "moderation"
   ) => {
     console.log("Moderator handleTabChange called with:", tab);
 
@@ -108,9 +111,10 @@ export default function ModeratorDashboard() {
 
   // Set default tab and handle URL query parameter for tab navigation
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    const blogTab = searchParams.get("blogTab");
-    const productTab = searchParams.get("productTab");
+    const tab = searchParams!.get("tab");
+    const blogTab = searchParams!.get("blogTab");
+    const productTab = searchParams!.get("productTab");
+
     console.log(
       "URL query parameters - tab:",
       tab,
@@ -137,11 +141,11 @@ export default function ModeratorDashboard() {
         "productManagement",
         "messages",
         "dispute",
-        // "userManagement", // Tạm thời comment
+        "userManagement",
         "complaints",
+        "moderation",
       ].includes(tab)
     ) {
-      console.log("Setting activeTab from URL query parameter:", tab);
       // If messages tab, navigate to messages page (separate route)
       if (tab === "messages") {
         router.push("/moderator/messages");
@@ -155,8 +159,9 @@ export default function ModeratorDashboard() {
         | "blog"
         | "productManagement"
         | "dispute"
-        // | "userManagement" // Tạm thời comment
-        | "complaints";
+        | "userManagement"
+        | "complaints"
+        | "moderation";
       setActiveTab(validTab);
 
       // Handle sub-tabs
@@ -263,10 +268,12 @@ export default function ModeratorDashboard() {
         return <VerificationRequestManagement />;
       case "dispute":
         return <DisputeManagement />;
-      // case "userManagement": // Tạm thời comment
-      //   return <ModeratorUserManagementTable />;
+      case "userManagement":
+        return <ModeratorUserManagementTable />;
       case "complaints":
         return <ComplaintManagement />;
+      case "moderation":
+        return <ContentModerationPage />;
       default:
         return <ModeratorDashboardView />;
     }
@@ -307,11 +314,13 @@ export default function ModeratorDashboard() {
       case "verification":
         return "Xác thực tài khoản";
       case "dispute":
-        return "Xử lý Khiếu nạiĐơn hàng";
-      // case "userManagement": // Tạm thời comment
-      //   return "Quản lý người dùng";
+        return "Xử lý Khiếu nại Đơn hàng";
+      case "userManagement":
+        return "Quản lý người dùng";
       case "complaints":
         return "Khiếu nại khóa tài khoản";
+      case "moderation":
+        return "Kiểm duyệt nội dung";
       default:
         return "Dashboard Tổng quan";
     }
@@ -352,11 +361,13 @@ export default function ModeratorDashboard() {
       case "verification":
         return "Xác thực danh tính và thông tin người dùng";
       case "dispute":
-        return "Quản lý và giải quyết khiếu nại Khiếu nạiđơn hàng";
-      // case "userManagement": // Tạm thời comment
-      //   return "Quản lý người dùng cần xử lý";
+        return "Quản lý và giải quyết khiếu nại đơn hàng";
+      case "userManagement":
+        return "Quản lý người dùng cần xử lý";
       case "complaints":
         return "Xem xét và xử lý các khiếu nại về tài khoản bị khóa từ người dùng";
+      case "moderation":
+        return "Kiểm duyệt nội dung bình luận tự động với AI";
       default:
         return "Tổng quan về hoạt động và thống kê hệ thống";
     }

@@ -30,6 +30,12 @@ export interface OwnerRequest {
     fullName: string;
   };
   reviewedAt?: string;
+  assignedBy?: {
+    _id: string;
+    email: string;
+    fullName: string;
+  };
+  assignedAt?: string;
   rejectionReason?: string;
   notes?: string;
   CreatedAt: string;
@@ -88,6 +94,22 @@ export const ownerRequestApi = {
     const response = await api.put(`/owner-requests-moderator/${id}/reject`, data);
     const result = await response.json();
     if (result.code !== 200) throw new Error(result.message || 'Failed to reject request');
+    return result.data;
+  },
+
+  // Moderator: Assign owner request
+  assignOwnerRequest: async (id: string): Promise<OwnerRequest> => {
+    const response = await api.put(`/owner-requests-moderator/${id}/assign`, {});
+    const result = await response.json();
+    if (result.code !== 200) throw new Error(result.message || 'Failed to assign request');
+    return result.data;
+  },
+
+  // Moderator: Unassign owner request
+  unassignOwnerRequest: async (id: string, reason?: string): Promise<OwnerRequest> => {
+    const response = await api.put(`/owner-requests-moderator/${id}/unassign`, { reason });
+    const result = await response.json();
+    if (result.code !== 200) throw new Error(result.message || 'Failed to unassign request');
     return result.data;
   },
 

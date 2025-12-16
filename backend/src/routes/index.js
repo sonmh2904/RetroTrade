@@ -9,6 +9,7 @@ const uploadproductRouter = require("./products/upload/upload.routes");
 
 const userRouter = require("./user/user.router")
 const blogRoutes = require("../routes/blog/post.routes");
+const homeRoutes = require("../routes/home/home.routes");
 
 const walletRoutes = require("../routes/wallet/wallet.routes");
 const messagesRouter = require("../routes/messages/messages.router");
@@ -33,6 +34,9 @@ const termsRouter = require("./terms/terms.routes");
 const privacyRouter = require("./privacy/privacy.routes");
 const privacyTypesRouter = require("./privacy/privacy-types.routes");
 const aiRouter = require("./messages/aiChat.routes")
+const systemConfigRouter = require("./admin/systemConfig.routes");
+const moderationRouter = require("./moderator/moderation.routes");
+
 module.exports = (app) => {
     const api = "/api/v1";
     app.use(api + "/auth", userAuthRouter);
@@ -49,6 +53,7 @@ module.exports = (app) => {
     app.use(api + "/price-units", priceUnitsRouter);
 
     app.use(api + "/post", blogRoutes);
+    app.use(api + "/home", homeRoutes);
     app.use(api + "/wallet", walletRoutes);
     app.use(api + "/messages", messagesRouter)
     app.use(api + "/ai-chat", aiRouter)
@@ -68,5 +73,7 @@ module.exports = (app) => {
     app.use(api + "/admin/complaints", adminComplaintRouter);
     app.use(api + "/admin/dashboard", adminDashboardRouter);
     app.use(api + "/moderator/dashboard", moderatorDashboardRouter);
+    app.use(api + "/moderator/moderation", moderationRouter);
     app.use(api + "/owner/dashboard", ownerDashboardRouter);
+    app.use(api + "/system-config", systemConfigRouter);
 }

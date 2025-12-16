@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSelector, useDispatch } from "react-redux";
 import { decodeToken } from '@/utils/jwtHelper';
 import { toast } from "sonner";
-import { Crown, Users, BarChart3, Settings, Home, Wallet, Percent,Contact, Tag, FileText, LineChart , PenTool } from "lucide-react";
+import { Crown, Users, BarChart3, Settings, Home, Wallet, Percent, Contact, Tag, FileText, LineChart, PenTool, DollarSign } from "lucide-react";
 import { AdminHeader } from "@/components/ui/admin/admin-header";
 import { RootState } from "@/store/redux_store";
 import { logout } from "@/store/auth/authReducer";
@@ -76,7 +76,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { icon: PenTool, label: "Chính sách", key: "privacy", href: "/admin/privacy" },
     { icon: Wallet, label: "Quản lý ví", key: "wallet", href: "/admin/wallet" },
     { icon: Contact, label: "Quản lý hợp đồng", key: "contract", href: "/admin/contract" },
-    { icon: Percent, label: "Quản lý Phí dịch vụ", key: "serviceFee", href: "/admin/serviceFee-management" },
+    { icon: Percent, label: "Phí dịch vụ (đơn hàng)", key: "serviceFee", href: "/admin/serviceFee-management" },
+    { icon: DollarSign, label: "Phí hệ thống", key: "systemConfig", href: "/admin/system-config" },
     { icon: Tag, label: "Mã giảm giá", key: "discounts", href: "/admin/discount-management" },
     { icon: BarChart3, label: "Lịch sử thay đổi", key: "audit", href: "/admin/audit-logs" },
     { icon: Settings, label: "Cài đặt", key: "settings", href: "/admin/settings" },

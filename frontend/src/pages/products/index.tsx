@@ -200,40 +200,42 @@ const toIdString = (v: unknown): string => {
   }
 };
 const normalizeItems = (rawItems: RawProductItem[]): Product[] => {
-  return rawItems.map((item) => ({
-    _id: toIdString(item._id),
-    title: item.Title || "",
-    shortDescription: item.ShortDescription || "",
-    thumbnail: item.Images?.[0]?.Url || "/placeholder.jpg",
-    basePrice: item.BasePrice || 0,
-    currency: item.Currency || "VND",
-    depositAmount: item.DepositAmount || 0,
-    createdAt: item.CreatedAt || "",
-    availableQuantity: item.AvailableQuantity || 0,
-    quantity: item.Quantity || 0,
-    viewCount: item.ViewCount || 0,
-    rentCount: item.RentCount || 0,
-    favoriteCount: item.FavoriteCount || 0,
-    category: item.Category
-      ? { _id: toIdString(item.Category._id), name: item.Category.name || "" }
-      : undefined,
-    condition: item.Condition
-      ? { ConditionName: item.Condition.ConditionName || "" }
-      : undefined,
-    priceUnit: item.PriceUnit
-      ? { UnitName: item.PriceUnit.UnitName || "" }
-      : undefined,
-    tags: Array.isArray(item.Tags)
-      ? (item.Tags.map((t: RawTag) => {
-        const id = toIdString(t.TagId || t.Tag?._id || t._id || t.id);
-        const name = t.Tag?.name || t.TagName || t.Name || t.name || "";
-        if (!id || !name) return null;
-        return { _id: id, name };
-      }).filter(Boolean) as { _id: string; name: string }[])
-      : [],
-    city: item.City,
-    district: item.District,
-  }));
+  return rawItems
+    .map((item) => ({
+      _id: toIdString(item._id),
+      title: item.Title || "",
+      shortDescription: item.ShortDescription || "",
+      thumbnail: item.Images?.[0]?.Url || "/placeholder.jpg",
+      basePrice: item.BasePrice || 0,
+      currency: item.Currency || "VND",
+      depositAmount: item.DepositAmount || 0,
+      createdAt: item.CreatedAt || "",
+      availableQuantity: item.AvailableQuantity || 0,
+      quantity: item.Quantity || 0,
+      viewCount: item.ViewCount || 0,
+      rentCount: item.RentCount || 0,
+      favoriteCount: item.FavoriteCount || 0,
+      category: item.Category
+        ? { _id: toIdString(item.Category._id), name: item.Category.name || "" }
+        : undefined,
+      condition: item.Condition
+        ? { ConditionName: item.Condition.ConditionName || "" }
+        : undefined,
+      priceUnit: item.PriceUnit
+        ? { UnitName: item.PriceUnit.UnitName || "" }
+        : undefined,
+      tags: Array.isArray(item.Tags)
+        ? (item.Tags.map((t: RawTag) => {
+            const id = toIdString(t.TagId || t.Tag?._id || t._id || t.id);
+            const name = t.Tag?.name || t.TagName || t.Name || t.name || "";
+            if (!id || !name) return null;
+            return { _id: id, name };
+          }).filter(Boolean) as { _id: string; name: string }[])
+        : [],
+      city: item.City,
+      district: item.District,
+    }))
+    .filter((item) => item.availableQuantity > 0);
 };
 const formatPrice = (price: number, currency: string) => {
   if (currency === "VND") {
@@ -288,6 +290,32 @@ export default function ProductPage() {
   );
   const itemsPerPage = 9;
 
+  const baseProductsPath = useMemo(() => {
+    if (!pathname) return "/products";
+    const segments = pathname.split("/").filter(Boolean);
+    const productsIndex = segments.indexOf("products");
+    if (productsIndex === -1) return "/products";
+    return `/${segments.slice(0, productsIndex + 1).join("/")}`;
+  }, [pathname]);
+
+  const categoryPathFromPathname = useMemo(() => {
+    if (!pathname) return "";
+    const segments = pathname.split("/").filter(Boolean);
+    const productsIndex = segments.indexOf("products");
+    if (productsIndex === -1) return "";
+    const categorySegments = segments.slice(productsIndex + 1);
+    if (categorySegments.length === 0) return "";
+    return categorySegments
+      .map((segment) => {
+        try {
+          return decodeURIComponent(segment);
+        } catch {
+          return segment;
+        }
+      })
+      .join("/");
+  }, [pathname]);
+
   // Helper function to find category by path
   const findCategoryByPath = (path: string): Category | undefined => {
     const pathParts = path.split('/').filter(part => part);
@@ -314,25 +342,38 @@ export default function ProductPage() {
     if (Number.isFinite(p) && p >= 1) {
       setCurrentPage(p);
     }
-    
-    // Handle category from URL (full path support)
-    const categoryPath = searchParams?.get("category");
-    if (categoryPath && categories.length > 0) {
-      const category = findCategoryByPath(categoryPath);
-      if (category) {
-        setSelectedCategory(category._id);
-      }
+
+    const categoryPath = searchParams?.get("category") || categoryPathFromPathname;
+    if (!categoryPath) {
+      setSelectedCategory((prev) => (prev === null ? prev : null));
+      return;
     }
-  }, [searchParams, categories]);
+
+    if (categories.length === 0) return;
+
+    const category = findCategoryByPath(categoryPath);
+    if (category) {
+      setSelectedCategory((prev) =>
+        prev === category._id ? prev : category._id
+      );
+    } else {
+      setSelectedCategory((prev) => (prev === null ? prev : null));
+    }
+  }, [searchParams, categories, categoryPathFromPathname]);
+
   const updatePageInUrl = (page: number) => {
     try {
       const sp = new URLSearchParams(searchParams?.toString() || "");
       if (page <= 1) sp.delete("page");
       else sp.set("page", String(page));
       const qs = sp.toString();
-      router.push(qs ? `${pathname}?${qs}` : pathname);
+      const basePath = categoryPathFromPathname
+        ? `${baseProductsPath}/${categoryPathFromPathname}`
+        : baseProductsPath;
+      router.push(qs ? `${basePath}?${qs}` : basePath);
     } catch { }
   };
+
   const goToPage = (page: number) => {
     const clamped = Math.max(1, Math.min(totalPages, page));
     setCurrentPage(clamped);
@@ -814,25 +855,23 @@ export default function ProductPage() {
     // ... (rest of the code remains the same)
     
     // Update URL with full category path
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    params.delete("category");
+    params.delete("page");
+
     if (newSelectedCategory) {
       const categoryPath = buildCategoryPath(newSelectedCategory);
       if (categoryPath) {
-        // Manually construct URL to avoid encoding slashes
-        const otherParams = new URLSearchParams(searchParams?.toString() || "");
-        otherParams.delete("category"); // Remove category from other params
-        
-        const otherParamsString = otherParams.toString();
-        const newUrl = `${pathname}/${categoryPath}${otherParamsString ? '&' + otherParamsString : ''}`;
-        window.history.replaceState({}, '', newUrl);
+        const qs = params.toString();
+        const newUrl = `${baseProductsPath}/${categoryPath}${qs ? `?${qs}` : ""}`;
+        router.replace(newUrl);
+        return;
       }
-    } else {
-      // Remove category from URL
-      const sp = new URLSearchParams(searchParams?.toString() || "");
-      sp.delete("category");
-      const qs = sp.toString();
-      const newUrl = qs ? `${pathname}?${qs}` : pathname;
-      window.history.replaceState({}, '', newUrl);
     }
+
+    const qs = params.toString();
+    const newUrl = qs ? `${baseProductsPath}?${qs}` : baseProductsPath;
+    router.replace(newUrl);
   };
 
   const renderChildTree = (parentId: string, level = 0) => {

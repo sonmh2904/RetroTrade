@@ -3,8 +3,19 @@ import type { ApiResponse } from "@iService";
 
 export interface ExtensionRequest {
   _id: string;
-  orderId: string;
+  orderId: {
+    _id: string;
+    orderGuid?: string;
+    startAt: string;
+    endAt: string;
+    rentalDuration: number;
+    itemId: {
+      Title: string;
+      PriceUnitId: number;
+    };
+  };
   requestedEndAt: string;
+  originalEndAt: string;
   extensionDuration: number;
   extensionUnit: string;
   extensionFee: number;
@@ -35,6 +46,7 @@ export interface ExtensionRequest {
   rejectedReason?: string;
   createdAt: string;
   updatedAt: string;
+  paymentStatus: "unpaid" | "paid" | "refunded";
 }
 
 export interface CreateExtensionRequest {
@@ -74,18 +86,72 @@ export interface ExtensionListResponse {
   data: ExtensionRequest[];
 }
 
+interface ErrorResponseBody {
+  message?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
 const parseResponse = async <T,>(
   response: Response
 ): Promise<ApiResponse<T>> => {
+  let raw: unknown = null;
   const contentType = response.headers.get("content-type");
-  const raw = contentType?.includes("application/json")
-    ? await response.json()
-    : await response.text();
+
+  if (contentType?.includes("application/json")) {
+    try {
+      raw = await response.json();
+    } catch {
+      raw = null;
+    }
+  } else {
+    raw = await response.text();
+  }
+
+  // Xác định message
+  let message: string;
+
+  if (typeof raw === "string" && raw.trim() !== "") {
+    message = raw;
+  } else if (raw && typeof raw === "object" && raw !== null) {
+    const body = raw as ErrorResponseBody;
+
+    if (body.message && typeof body.message === "string") {
+      message = body.message;
+    } else if (body.error && typeof body.error === "string") {
+      message = body.error;
+    } else if (response.ok) {
+      message = "Success";
+    } else {
+      message = `HTTP ${response.status}: ${response.statusText}`;
+    }
+  } else if (response.ok) {
+    message = "Success";
+  } else {
+    message = `HTTP ${response.status}: ${response.statusText}`;
+  }
+
+  // Xác định data 
+  let data: T | undefined = undefined;
+
+  if (raw && typeof raw === "object" && raw !== null) {
+    const body = raw as Record<string, unknown>;
+
+    if ("data" in body) {
+      if (body.data !== null && body.data !== undefined) {
+        data = body.data as T;
+      }
+      // Nếu body.data === null → data giữ undefined
+    } else {
+      // Không có key "data" → toàn bộ raw là data
+      data = raw as T;
+    }
+  }
 
   return {
     code: response.status,
-    message: typeof raw === "string" ? raw : raw?.message || "Success",
-    data: (raw?.data ?? raw) as T,
+    message,
+    data,
   };
 };
 

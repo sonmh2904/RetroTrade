@@ -23,15 +23,9 @@ router.get('/facebook/callback', userAuthController.handleFacebookCallback);
 // Complaint route (public - for banned users)
 router.post('/complaint', complaintController.submitComplaint);
 
-// Phone verification via Twilio (recommended)
+// Phone verification via Twilio
 router.post('/phone/send-otp', authenticateToken, verifyController.sendOtpViaTwilio);
 router.post('/phone/verify-otp', authenticateToken, verifyController.verifyOtpViaTwilio);
-
-// Phone verification via Firebase ID token (client performs Firebase Phone Auth) - deprecated
-router.post('/phone/confirm-firebase', authenticateToken, verifyController.confirmPhoneWithFirebaseIdToken);
-// Firebase Auth REST: send and verify OTP from backend (deprecated - use Twilio instead)
-router.post('/phone/send-otp-firebase', authenticateToken, verifyController.sendOtpViaFirebase);
-router.post('/phone/verify-otp-firebase', authenticateToken, verifyController.verifyOtpViaFirebase);
 
 // ID card OCR preview (1 image: idCardFront) - only extracts info, doesn't create request
 router.post('/verify-face/preview-ocr', authenticateToken, upload.single('image'), verifyController.previewIdCardOcr);
