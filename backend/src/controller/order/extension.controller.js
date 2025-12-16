@@ -279,17 +279,18 @@ module.exports = {
       session.endSession();
 
       const request = newExtensionRequest[0];
+      const productTitle = order.itemSnapshot?.title;
 
       // Gửi thông báo cho chủ sản phẩm
       await createNotification(
         order.ownerId,
         "Extension Request",
         "Yêu cầu gia hạn thuê",
-        `Người thuê yêu cầu gia hạn đơn #${order.orderGuid} thêm ${
+        `Người thuê yêu cầu gia hạn đơn ${productTitle} thêm ${
           calc.duration
         } ${
           calc.unitName
-        }. Phí: ${finalExtensionFee.toLocaleString()}đ (chưa thanh toán).`,
+        }. Phí: ${finalExtensionFee.toLocaleString()}đ .`,
         {
           orderId: order._id,
           type: "extension_request",
@@ -408,13 +409,14 @@ module.exports = {
 
       await session.commitTransaction();
       session.endSession();
+      const productTitle = order.itemSnapshot?.title;
 
       // Thông báo cho người thuê
       await createNotification(
         order.renterId,
         "Extension Approved",
         "Gia hạn thuê đã được duyệt",
-        `Chủ sản phẩm đã duyệt gia hạn đơn #${order.orderGuid} thêm ${extensionReq.extensionDuration} ${extensionReq.extensionUnit}.`,
+        `Chủ sản phẩm đã duyệt gia hạn đơn ${productTitle} thêm ${extensionReq.extensionDuration} ${extensionReq.extensionUnit}.`,
         {
           orderId: order._id,
           type: "extension_approved",
@@ -489,7 +491,6 @@ module.exports = {
       extensionReq.status = "rejected";
       extensionReq.approvedBy = ownerId;
       extensionReq.rejectedReason = rejectReason;
-      extensionReq.notes += `\n[Từ chối] Lý do: ${rejectReason}`;
       extensionReq.updatedAt = new Date();
       await extensionReq.save({ session });
 
@@ -511,11 +512,14 @@ module.exports = {
 
       await session.commitTransaction();
       session.endSession();
+      const productTitle = order.itemSnapshot?.title;
 
       const notifBody =
         extensionReq.paymentStatus === "refunded"
-          ? `Yêu cầu gia hạn bị từ chối và đã hoàn ${extensionReq.extensionFee.toLocaleString()}đ vào ví của bạn.`
-          : `Yêu cầu gia hạn bị từ chối. Lý do: ${rejectReason || "Không rõ"}`;
+          ? `Yêu cầu gia hạn "${productTitle}" bị từ chối và đã hoàn ${extensionReq.extensionFee.toLocaleString()}đ vào ví của bạn.`
+          : `Yêu cầu gia hạn "${productTitle}" bị từ chối. Lý do: ${
+              rejectReason || "Không rõ"
+            }`;
 
       await createNotification(
         order.renterId,

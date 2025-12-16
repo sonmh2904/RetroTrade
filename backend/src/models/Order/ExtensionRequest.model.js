@@ -10,24 +10,22 @@ const extensionRequestSchema = new mongoose.Schema(
       index: true,
     },
     requestedEndAt: { type: Date, required: true },
-    originalEndAt: { type: Date }, // NEW: Lưu endAt gốc để revert reject
+    originalEndAt: { type: Date },
     extensionDuration: { type: Number, min: 1, required: true },
     extensionUnit: { type: String, enum: ["giờ", "ngày", "tuần", "tháng"] },
     extensionFee: { type: Number, min: 0 }, // Phí gia hạn sau discount
-    serviceFee: { type: Number, min: 0, default: 0 }, // NEW: Phí dịch vụ riêng
+    serviceFee: { type: Number, min: 0, default: 0 },
     originalExtensionFee: { type: Number, min: 0 }, // Phí gốc trước discount
     discount: {
-      // Giữ nguyên, nhưng ensure nested object
-      type: mongoose.Schema.Types.Mixed, // Cho linh hoạt (code, type, amountApplied, etc.)
+      type: mongoose.Schema.Types.Mixed,
     },
     paymentStatus: {
-      // NEW: Enum cho payment
       type: String,
       enum: ["unpaid", "paid", "refunded", "failed"],
       default: "unpaid",
       index: true,
     },
-    paidAt: { type: Date }, // NEW: Timestamp pay
+    paidAt: { type: Date },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

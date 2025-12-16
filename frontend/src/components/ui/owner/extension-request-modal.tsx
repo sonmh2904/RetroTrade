@@ -93,7 +93,7 @@ export default function ExtensionRequestModal({
     <>
       {/* Main Modal - Xem chi tiết yêu cầu gia hạn */}
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-lg shadow-xl border border-gray-200">
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[80vh] my-8 translate-y-0 top-1/2 -translate-y-1/2 overflow-y-auto rounded-xl shadow-2xl">
           {/* Header */}
           <div className="bg-white border-b border-gray-200 p-6">
             <DialogHeader>
@@ -112,7 +112,7 @@ export default function ExtensionRequestModal({
             </div>
           </div>
 
-          <div className="p-6 bg-gray-50 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-6">
             {/* Thông tin gia hạn */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-gray-200">

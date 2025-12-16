@@ -187,9 +187,7 @@ export default function ExtensionRequestsModal({
                           <p className="font-medium">
                             {formatDateTime(ext.orderId.startAt)}
                           </p>
-                          <p className="text-xs text-gray-600 mt-2">
-                            Đến
-                          </p>
+                          <p className="text-xs text-gray-600 mt-2">Đến</p>
                           <p className="font-medium text-red-600">
                             {formatDateTime(ext.originalEndAt)}
                           </p>
@@ -247,6 +245,31 @@ export default function ExtensionRequestsModal({
                         − Giảm {formatCurrency(ext.discount.totalAmountApplied)}
                       </p>
                     ) : null}
+
+                    {ext.notes && ext.notes.trim() !== "" && (
+                      <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex items-center gap-2 text-gray-700 font-medium mb-1">
+                          <svg
+                            className="w-5 h-5 text-gray-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                            />
+                          </svg>
+                          Ghi chú cho chủ sở hữu
+                        </div>
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                          {ext.notes.trim()}
+                        </p>
+                      </div>
+                    )}
 
                     {ext.status === "rejected" && ext.rejectedReason && (
                       <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
