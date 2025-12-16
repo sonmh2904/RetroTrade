@@ -275,76 +275,83 @@ async function refundOrder(orderId, session = null) {
 
     // ===== THÔNG BÁO CHO RENTER/OWNER - LUÔN GỬI =====
     // 1. Notification cho RENTER (LUÔN gửi)
-    await Notification.create(
-      {
-        user: renterId,
-        notificationType: hasResolvedDispute
-          ? "Dispute Refund Completed"
-          : "Order Refund Completed",
-        title: hasResolvedDispute
-          ? "Hoàn tiền sau khiếu nại"
-          : "Hoàn tiền đơn hàng",
-        body: hasResolvedDispute
-          ? `Khiếu nại đơn #${orderCode} đã xử lý. Bạn nhận ${amountToRenter.toLocaleString()} VND.${amountToRenter === depositAmount
-            ? " (Giữ nguyên cọc - khiếu nại không hợp lệ)"
-            : amountToRenter === 0
-              ? "(Cọc đã bị trừ hết bồi thường cho chủ đồ)"
-              : `(Cọc ${depositAmount.toLocaleString()} VND ${amountToRenter > depositAmount
-                ? "+ bồi thường thêm"
-                : "- bồi thường"
-              })`
-          }.`
-          : `Đơn #${orderCode} (${order.orderStatus}) đã hoàn tiền. Bạn nhận ${amountToRenter.toLocaleString()} VND${order.orderStatus === "completed" ? " tiền cọc" : ""
-          }.`,
-        metaData: JSON.stringify({
-          orderId: order._id,
-          orderCode,
-          orderStatus: order.orderStatus,
-          hasDispute: hasResolvedDispute,
-          amountToRenter,
-          depositAmount,
-          rentAmount,
-        }),
-        isRead: false,
-      },
-      { session }
-    );
+    const renterNoti = {
+      user: renterId,
+      notificationType: hasResolvedDispute
+        ? "Dispute Refund Completed"
+        : "Order Refund Completed",
+      title: hasResolvedDispute
+        ? "Hoàn tiền sau khiếu nại"
+        : "Hoàn tiền đơn hàng",
+      body: hasResolvedDispute
+        ? `Khiếu nại đơn #${orderCode} đã xử lý. Bạn nhận ${amountToRenter.toLocaleString()} VND.${amountToRenter === depositAmount
+          ? " (Giữ nguyên cọc - khiếu nại không hợp lệ)"
+          : amountToRenter === 0
+            ? "(Cọc đã bị trừ hết bồi thường cho chủ đồ)"
+            : `(Cọc ${depositAmount.toLocaleString()} VND ${amountToRenter > depositAmount
+              ? "+ bồi thường thêm"
+              : "- bồi thường"
+            })`
+        }.`
+        : `Đơn #${orderCode} (${order.orderStatus}) đã hoàn tiền.
+     Bạn nhận ${amountToRenter.toLocaleString()} VND.
+     Số dư ví hiện tại: ${renterWallet.balance.toLocaleString()} VND.`,
+      metaData: JSON.stringify({
+        orderId: order._id,
+        orderCode,
+        orderStatus: order.orderStatus,
+        hasDispute: hasResolvedDispute,
+        amountToRenter,
+        depositAmount,
+        rentAmount,
+      }),
+      isRead: false,
+    };
+
+    console.log("[NOTI_RENTER_DATA]", renterNoti);
+    await Notification.create([renterNoti], { session });
+
 
     // 2. Notification cho OWNER (LUÔN gửi)
-    await Notification.create(
-      {
-        user: ownerId,
-        notificationType: hasResolvedDispute
-          ? "Dispute Payment Completed"
-          : "Owner Payment Completed",
-        title: hasResolvedDispute
-          ? "Thanh toán sau khiếu nại"
-          : "Kết quả đơn hàng",
-        body: hasResolvedDispute
-          ? `Khiếu nại đơn #${orderCode} đã xử lý. Bạn nhận ${amountToOwner.toLocaleString()} VND.${amountToOwner === 0
-            ? " (Tiền thuê đã bị trừ hết bồi thường cho người thuê)"
-            : amountToOwner === rentAmount
-              ? " (Giữ nguyên tiền thuê - khiếu nại không hợp lệ)"
-              : amountToOwner > rentAmount
-                ? `(Tiền thuê ${rentAmount.toLocaleString()} VND + phần cọc bồi thường)`
-                : " (Bị trừ tiền thuê do renter khiếu nại)"
-          }.`
-          : `Đơn #${orderCode} (${order.orderStatus}) đã hoàn tiền. Bạn nhận ${amountToOwner.toLocaleString()} VND${amountToOwner === 0 ? " (đơn bị hủy)" : " tiền thuê"
-          }.`,
-        metaData: JSON.stringify({
-          orderId: order._id,
-          orderCode,
-          orderStatus: order.orderStatus,
-          hasDispute: hasResolvedDispute,
-          amountToOwner,
-          rentAmount,
-          depositAmount,
-        }),
-        isRead: false,
-      },
-      { session }
-    );
+    const ownerNoti = {
+      user: ownerId,
+      notificationType: hasResolvedDispute
+        ? "Dispute Payment Completed"
+        : "Owner Payment Completed",
+      title: hasResolvedDispute
+        ? "Thanh toán sau khiếu nại"
+        : "Kết quả đơn hàng",
+      body: hasResolvedDispute
+        ? `Khiếu nại đơn #${orderCode} đã xử lý. Bạn nhận ${amountToOwner.toLocaleString()} VND.${amountToOwner === 0
+          ? " (Tiền thuê đã bị trừ hết bồi thường cho người thuê)"
+          : amountToOwner === rentAmount
+            ? " (Giữ nguyên tiền thuê - khiếu nại không hợp lệ)"
+            : amountToOwner > rentAmount
+              ? `(Tiền thuê ${rentAmount.toLocaleString()} VND + phần cọc bồi thường)`
+              : " (Bị trừ tiền thuê do renter khiếu nại)"
+        }.`
+        : `Đơn #${orderCode} (${order.orderStatus}) đã hoàn tiền.
+     Bạn nhận ${amountToOwner.toLocaleString()} VND.
+     Số dư ví hiện tại: ${ownerWallet.balance.toLocaleString()} VND.`,
+      metaData: JSON.stringify({
+        orderId: order._id,
+        orderCode,
+        orderStatus: order.orderStatus,
+        hasDispute: hasResolvedDispute,
+        amountToOwner,
+        rentAmount,
+        depositAmount,
+      }),
+      isRead: false,
+    };
 
+    console.log("[NOTI_OWNER_DATA]", ownerNoti);
+    await Notification.create([ownerNoti], { session });
+
+
+    console.log(
+      `[NOTIFICATION] Gửi thông báo hoàn tiền cho renter ${renterId} và owner ${ownerId} của đơn ${orderCode}`
+    );
     if (ownSession) {
       await session.commitTransaction();
       session.endSession();
@@ -352,6 +359,7 @@ async function refundOrder(orderId, session = null) {
 
     return true;
   } catch (error) {
+    console.error("[REFUND_ORDER_ERROR]", orderId?.toString(), error);
     if (ownSession) {
       await session.abortTransaction();
       session.endSession();
