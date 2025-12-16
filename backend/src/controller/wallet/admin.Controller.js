@@ -198,7 +198,9 @@ const completeWithdrawal = async (req, res) => {
       user: userId,
       notificationType: "Wallet Withdraw Complete",
       title: "Rút tiền thành công",
-      body: `Yêu cầu rút ${Math.abs(transaction.amount).toLocaleString()} VND của bạn đã hoàn tất, vui lòng kiểm tra tài khoản ngân hàng.`,
+      body: `Yêu cầu rút ${Math.abs(transaction.amount).toLocaleString()} VND của bạn đã hoàn tất.
+        Số dư ví hiện tại: ${wallet.balance.toLocaleString()} VND.
+        Vui lòng kiểm tra tài khoản ngân hàng.`,
       metaData: JSON.stringify({
         transactionId: transaction._id,
         amount: Math.abs(transaction.amount),
@@ -382,7 +384,7 @@ const getAllRefundsForAdmin = async (req, res) => {
 
       const renterRefundFromTx = txs
         .filter((tx) =>
-          ["renter_refund", "renter_refund_dispute","refund_deposit"].includes(tx.typeId)
+          ["renter_refund", "renter_refund_dispute", "refund_deposit"].includes(tx.typeId)
         )
         .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 

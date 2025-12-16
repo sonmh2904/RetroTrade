@@ -187,7 +187,7 @@ const handlePayOSWebhook = async (req, res) => {
       user: wallet.userId,
       notificationType: "Wallet Deposit Success",
       title: "Thành công nạp tiền vào ví",
-      body: `Bạn vừa nạp thành công ${amount.toLocaleString()} vào ví. Số dư mới: ${wallet.balance.toLocaleString()} VND.`,
+      body: `Bạn vừa nạp thành công ${amount.toLocaleString()} vào ví. Số dư ví hiện tại : ${wallet.balance.toLocaleString()} VND.`,
       metaData: JSON.stringify({ amount, orderCode, balance: wallet.balance }),
       isRead: false
     });
