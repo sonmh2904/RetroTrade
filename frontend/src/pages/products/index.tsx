@@ -710,6 +710,18 @@ export default function ProductPage() {
     setSearch("");
     setShowCustomPrice(false);
     setPriceRange({ from: 0, to: 0 });
+    setCurrentPage(1);
+
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    params.delete("page");
+    params.delete("category");
+
+    const cleanedQuery = params.toString();
+    const targetUrl = cleanedQuery
+      ? `${baseProductsPath}?${cleanedQuery}`
+      : baseProductsPath;
+
+    router.replace(targetUrl);
   };
 
   // Helper functions for categories
