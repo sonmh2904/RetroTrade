@@ -268,7 +268,7 @@ const parseMessageToFilters = (messageText) => {
   };
   const productTypeKeywords = [
     "máy ảnh", "camera", "thiết bị văn phòng", "laptop", "macbook", "máy tính bảng",
-    "máy tính", "dell", "điện thoại", "phone", "iphone", "android", "xe", "xe máy",
+    "máy tính", "dell", "điện thoại", "phone", "iphone", "android", "xe máy",
     "xe đạp", "bike", "moto", "máy móc", "thiết bị", "dụng cụ", "đồ dùng", "vật dụng",
     "đồ chơi", "game", "nhạc cụ", "quần áo", "thời trang", "fashion", "giày", "dép",
     "túi", "balo", "nội thất", "bàn", "ghế", "tủ", "giường", "sofa", "đồ điện tử",
