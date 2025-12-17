@@ -851,43 +851,79 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                       </div>
 
                       {/* 4. Giảm giá (nếu có) */}
-                      {totalDiscountAmount > 0 && (
-                        <div className="space-y-1">
-                          {publicDiscountAmount > 0 && discount?.code && (
-                            <div className="flex justify-between items-center py-1 border-b border-white/10">
-                              <span className="text-emerald-50 text-sm">
-                                Giảm giá công khai ({discount.code})
-                              </span>
-                              <span className="font-semibold text-emerald-100 text-sm">
-                                -{publicDiscountAmount.toLocaleString("vi-VN")}₫
-                              </span>
-                            </div>
-                          )}
-                          {privateDiscountAmount > 0 &&
-                            discount?.secondaryCode && (
-                              <div className="flex justify-between items-center py-1 border-b border-white/10">
-                                <span className="text-emerald-50 text-sm">
-                                  Giảm giá riêng tư ({discount.secondaryCode})
+                      {(() => {
+                        const discount = order.discount;
+                        const totalDiscountAmount =
+                          discount?.totalAmountApplied ?? 0;
+
+                        // Chỉ hiển thị toàn bộ khối nếu có bất kỳ giảm giá nào
+                        if (totalDiscountAmount <= 0) return null;
+
+                        return (
+                          <div className="space-y-2 py-2 border-t border-emerald-400 pt-3">
+                            {/* Chi tiết giảm giá gốc - chỉ hiển thị khi có mã gốc hoặc entry "original" */}
+                            {(discount?.extensions &&
+                              discount.extensions.some(
+                                (ext) => ext.source === "original"
+                              )) ||
+                            discount?.code ||
+                            discount?.secondaryCode ? (
+                              <div className="flex justify-between items-center">
+                                <span className="text-green-200 font-semibold">
+                                  Giảm giá
                                 </span>
-                                <span className="font-semibold text-emerald-100 text-sm">
+                                <span className="font-bold text-green-100">
                                   -
-                                  {privateDiscountAmount.toLocaleString(
-                                    "vi-VN"
-                                  )}
+                                  {(
+                                    (discount.extensions?.find(
+                                      (ext) => ext.source === "original"
+                                    )?.amountApplied || 0) +
+                                      (discount.extensions?.find(
+                                        (ext) => ext.source === "original"
+                                      )?.secondaryAmountApplied || 0) ||
+                                    (discount?.amountApplied || 0) +
+                                      (discount?.secondaryAmountApplied || 0)
+                                  ).toLocaleString("vi-VN")}
                                   ₫
                                 </span>
                               </div>
-                            )}
-                          <div className="flex justify-between items-center py-2 border-b border-white/20">
-                            <span className="text-emerald-50 font-semibold">
-                              Tổng giảm giá
-                            </span>
-                            <span className="font-semibold text-emerald-100">
-                              -{totalDiscountAmount.toLocaleString("vi-VN")}₫
-                            </span>
+                            ) : null}
+                            {/* Chi tiết từng lần giảm giá gia hạn */}
+                            {discount?.extensions &&
+                              discount.extensions.length > 0 &&
+                              discount.extensions.some(
+                                (ext) => ext.source === "extension"
+                              ) && (
+                                <>
+                                  {discount.extensions
+                                    .filter((ext) => ext.source === "extension")
+                                    .map((ext, idx) => {
+                                      const primaryAmount =
+                                        ext.amountApplied || 0;
+                                      const secondaryAmount =
+                                        ext.secondaryAmountApplied || 0;
+                                      const extTotal =
+                                        primaryAmount + secondaryAmount;
+
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="flex justify-between items-center"
+                                        >
+                                          <span className="text-green-200 font-semibold">
+                                            Giảm giá gia hạn
+                                          </span>
+                                          <span className="font-bold text-green-100">
+                                            -{extTotal.toLocaleString("vi-VN")}₫
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                </>
+                              )}
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* 5. Tổng cộng */}
                       <div className="border-t border-emerald-400 pt-3">
@@ -904,9 +940,15 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
 
                       {/* Chi tiết mã giảm giá đã sử dụng */}
                       {discount &&
-                        (discount.code || discount.secondaryCode) && (
+                        (discount.code ||
+                          discount.secondaryCode ||
+                          (discount.extensions &&
+                            discount.extensions.some(
+                              (ext) => ext.source === "extension"
+                            ))) && (
                           <div className="mt-4 pt-4 border-t border-emerald-400">
                             <div className="text-xs text-emerald-200/80 space-y-1">
+                              {/* Mã giảm giá ban đầu (gốc) - giữ nguyên như code cũ */}
                               {discount.code && (
                                 <div>
                                   <span className="font-semibold">
@@ -943,6 +985,42 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                                   ₫
                                 </div>
                               )}
+
+                              {/* Chỉ thêm mã giảm giá gia hạn nếu có gia hạn */}
+                              {discount.extensions &&
+                                discount.extensions.length > 0 &&
+                                discount.extensions
+                                  .filter((ext) => ext.source === "extension")
+                                  .map((ext, idx) => (
+                                    <div key={idx}>
+                                      <span className="font-semibold">
+                                        Mã giảm gia hạn:
+                                      </span>{" "}
+                                      {ext.code || "Không có mã"}
+                                      {ext.secondaryCode &&
+                                        ` + ${ext.secondaryCode}`}{" "}
+                                      {ext.type === "percent"
+                                        ? `(${ext.value}%)`
+                                        : ext.value
+                                        ? `(${ext.value.toLocaleString(
+                                            "vi-VN"
+                                          )}₫)`
+                                        : ""}
+                                      {ext.secondaryType === "percent"
+                                        ? ` + (${ext.secondaryValue}%)`
+                                        : ext.secondaryValue
+                                        ? ` + (${ext.secondaryValue.toLocaleString(
+                                            "vi-VN"
+                                          )}₫)`
+                                        : ""}{" "}
+                                      -{" "}
+                                      {(
+                                        (ext.amountApplied || 0) +
+                                        (ext.secondaryAmountApplied || 0)
+                                      ).toLocaleString("vi-VN")}
+                                      ₫
+                                    </div>
+                                  ))}
                             </div>
                           </div>
                         )}

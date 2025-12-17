@@ -59,6 +59,29 @@ const orderSchema = new mongoose.Schema(
       secondaryAmountApplied: { type: Number, default: 0, min: 0 },
       // Total discount amount
       totalAmountApplied: { type: Number, default: 0, min: 0 },
+      extensions: {
+        type: [
+          // <-- quan trọng: bao trong type array
+          {
+            code: { type: String },
+            type: { type: String, enum: ["percent", "fixed"] },
+            value: { type: Number },
+            amountApplied: { type: Number, required: true }, // primary amount
+            secondaryCode: { type: String },
+            secondaryType: { type: String, enum: ["percent", "fixed"] },
+            secondaryValue: { type: Number },
+            secondaryAmountApplied: { type: Number, default: 0 },
+            appliedAt: { type: Date, default: Date.now },
+            source: {
+              type: String,
+              enum: ["original", "extension"],
+              default: "original",
+            },
+            requestId: { type: Types.ObjectId, ref: "ExtensionRequest" }, // chỉ có khi gia hạn
+          },
+        ],
+        default: [], // <-- tránh undefined
+      },
     },
     finalAmount: { type: Number, min: 0 },
     depositAmount: { type: Number, default: 0, min: 0 },

@@ -393,10 +393,43 @@ module.exports = {
 
       // Cập nhật đơn hàng: kéo dài thời gian, cộng thêm phí đã thu
       order.endAt = extensionReq.requestedEndAt;
-      order.totalAmount += extensionReq.extensionFee;
+      order.totalAmount += extensionReq.originalExtensionFee;
       order.finalAmount += extensionReq.extensionFee;
       order.rentalDuration += extensionReq.extensionDuration;
       order.serviceFee += extensionReq.serviceFee || 0;
+
+      if (extensionReq.discount) {
+        const extensionDiscountAmount =
+          extensionReq.originalExtensionFee - extensionReq.extensionFee;
+
+        // Cộng vào tổng discount (field mới trong schema)
+        if (!order.discount.totalAmountApplied) {
+          order.discount.totalAmountApplied = 0;
+        }
+        order.discount.totalAmountApplied += extensionDiscountAmount;
+
+        // Khởi tạo mảng extensions nếu chưa có
+        if (!order.discount.extensions) {
+          order.discount.extensions = [];
+        }
+
+        // Push entry mới cho lần gia hạn (hỗ trợ đầy đủ secondary)
+        order.discount.extensions.push({
+          code: extensionReq.discount.code || null,
+          type: extensionReq.discount.type,
+          value: extensionReq.discount.value,
+          amountApplied:
+            extensionReq.discount.amountApplied || extensionDiscountAmount, // primary
+          secondaryCode: extensionReq.discount.secondaryCode || null,
+          secondaryType: extensionReq.discount.secondaryType,
+          secondaryValue: extensionReq.discount.secondaryValue,
+          secondaryAmountApplied:
+            extensionReq.discount.secondaryAmountApplied || 0,
+          appliedAt: new Date(),
+          source: "extension",
+          requestId: extensionReq._id,
+        });
+      }
 
       // Cập nhật lượt thuê của sản phẩm
       const item = await Item.findById(order.itemId).session(session);
@@ -500,14 +533,6 @@ module.exports = {
         extensionReq.extensionFee > 0
       ) {
         await refundExtensionRequest(requestId, session);
-
-        // Khôi phục lại thông tin đơn hàng về trạng thái cũ
-        order.endAt = extensionReq.originalEndAt;
-        order.totalAmount -= extensionReq.extensionFee;
-        order.finalAmount -= extensionReq.extensionFee;
-        order.rentalDuration -= extensionReq.extensionDuration;
-        order.serviceFee -= extensionReq.serviceFee || 0;
-        await order.save({ session });
       }
 
       await session.commitTransaction();

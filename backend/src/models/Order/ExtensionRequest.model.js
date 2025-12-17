@@ -38,6 +38,8 @@ const extensionRequestSchema = new mongoose.Schema(
     rejectedReason: String,
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
+    isRefunded: { type: Boolean, default: false },
+    refundedAt: { type: Date },
   },
   { timestamps: true }
 );

@@ -691,7 +691,9 @@ function OwnerOrderDetailContent() {
                   <span className="text-emerald-50">Tiền thuê</span>
                   <span className="font-semibold text-white">
                     {(
-                      (order?.totalAmount ?? 0) - (order?.depositAmount ?? 0) - (order?.serviceFee ?? 0)
+                      (order?.totalAmount ?? 0) -
+                      (order?.depositAmount ?? 0) -
+                      (order?.serviceFee ?? 0)
                     ).toLocaleString("vi-VN")}{" "}
                     {order?.currency || "₫"}
                   </span>
@@ -716,23 +718,77 @@ function OwnerOrderDetailContent() {
                 </div>
 
                 {/* 4. Giảm giá (nếu có) */}
-                {order.discount &&
-                  ((order.discount.amountApplied ?? 0) > 0 ||
-                    (order.discount.secondaryAmountApplied ?? 0) > 0 ||
-                    (order.discount.totalAmountApplied ?? 0) > 0) && (
-                    <div className="flex justify-between text-green-200 border-t border-emerald-400 pt-3">
-                      <span>Giảm giá</span>
-                      <span className="font-medium">
-                        -
-                        {(
-                          order.discount.totalAmountApplied ||
-                          order.discount.amountApplied ||
-                          0
-                        ).toLocaleString("vi-VN")}{" "}
-                        {order.currency || "₫"}
-                      </span>
+                {(() => {
+                  const discount = order.discount;
+                  const totalDiscountAmount = discount?.totalAmountApplied ?? 0;
+
+                  // Chỉ hiển thị toàn bộ khối nếu có bất kỳ giảm giá nào
+                  if (totalDiscountAmount <= 0) return null;
+
+                  return (
+                    <div className="space-y-2 py-2 border-t border-emerald-400 pt-3">
+                      {/* Chi tiết giảm giá gốc - chỉ hiển thị khi có mã gốc hoặc entry "original" */}
+                      {(discount?.extensions &&
+                        discount.extensions.some(
+                          (ext) => ext.source === "original"
+                        )) ||
+                      discount?.code ||
+                      discount?.secondaryCode ? (
+                        <div className="flex justify-between items-center">
+                          <span className="text-green-200 font-semibold">
+                            Giảm giá
+                          </span>
+                          <span className="font-bold text-green-100">
+                            -
+                            {(
+                              (discount.extensions?.find(
+                                (ext) => ext.source === "original"
+                              )?.amountApplied || 0) +
+                                (discount.extensions?.find(
+                                  (ext) => ext.source === "original"
+                                )?.secondaryAmountApplied || 0) ||
+                              (discount?.amountApplied || 0) +
+                                (discount?.secondaryAmountApplied || 0)
+                            ).toLocaleString("vi-VN")}
+                            ₫
+                          </span>
+                        </div>
+                      ) : null}
+                      {/* Chi tiết từng lần giảm giá gia hạn */}
+                      {discount?.extensions &&
+                        discount.extensions.length > 0 &&
+                        discount.extensions.some(
+                          (ext) => ext.source === "extension"
+                        ) && (
+                          <>
+                            {discount.extensions
+                              .filter((ext) => ext.source === "extension")
+                              .map((ext, idx) => {
+                                const primaryAmount = ext.amountApplied || 0;
+                                const secondaryAmount =
+                                  ext.secondaryAmountApplied || 0;
+                                const extTotal =
+                                  primaryAmount + secondaryAmount;
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex justify-between items-center"
+                                  >
+                                    <span className="text-green-200 font-semibold">
+                                      Giảm giá gia hạn
+                                    </span>
+                                    <span className="font-bold text-green-100">
+                                      -{extTotal.toLocaleString("vi-VN")}₫
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                          </>
+                        )}
                     </div>
-                  )}
+                  );
+                })()}
 
                 {/* 5. Tổng thanh toán */}
                 <div className="border-t border-emerald-400 pt-3">
@@ -746,42 +802,92 @@ function OwnerOrderDetailContent() {
                       {order.currency || "₫"}
                     </span>
                   </div>
-                  {/* Chi tiết mã giảm giá */}
-                  {order.discount &&
-                    (order.discount.code || order.discount.secondaryCode) && (
+                  {/* Chi tiết mã giảm giá đã sử dụng */}
+                  {(() => {
+                    const discount = order.discount;
+
+                    // Nếu không có discount hoặc không có bất kỳ mã nào → không hiển thị gì
+                    if (
+                      !discount ||
+                      (!discount.code &&
+                        !discount.secondaryCode &&
+                        !(
+                          discount.extensions && discount.extensions.length > 0
+                        ))
+                    ) {
+                      return null;
+                    }
+
+                    return (
                       <div className="mt-2 text-xs text-emerald-200/80">
-                        {order.discount.code && (
-                          <div>
-                            Mã công khai: {order.discount.code}{" "}
-                            {order.discount.type === "percent"
-                              ? `(${order.discount.value}%)`
-                              : `(${(order.discount.value ?? 0).toLocaleString(
-                                  "vi-VN"
-                                )}₫)`}{" "}
-                            -{" "}
-                            {(order.discount.amountApplied || 0).toLocaleString(
-                              "vi-VN"
-                            )}
-                            ₫
-                          </div>
-                        )}
-                        {order.discount.secondaryCode && (
-                          <div>
-                            Mã riêng tư: {order.discount.secondaryCode}{" "}
-                            {order.discount.secondaryType === "percent"
-                              ? `(${order.discount.secondaryValue}%)`
-                              : `(${order.discount.secondaryValue?.toLocaleString(
-                                  "vi-VN"
-                                )}₫)`}{" "}
-                            -{" "}
-                            {(
-                              order.discount.secondaryAmountApplied || 0
-                            ).toLocaleString("vi-VN")}
-                            ₫
-                          </div>
-                        )}
+                        <div className="space-y-1">
+                          {/* Mã gốc - luôn hiển thị nếu có (giữ nguyên như code cũ) */}
+                          {discount.code && (
+                            <div>
+                              Mã công khai: {discount.code}{" "}
+                              {discount.type === "percent"
+                                ? `(${discount.value}%)`
+                                : `(${(discount.value ?? 0).toLocaleString(
+                                    "vi-VN"
+                                  )}₫)`}{" "}
+                              -{" "}
+                              {(discount.amountApplied || 0).toLocaleString(
+                                "vi-VN"
+                              )}
+                              ₫
+                            </div>
+                          )}
+                          {discount.secondaryCode && (
+                            <div>
+                              Mã riêng tư: {discount.secondaryCode}{" "}
+                              {discount.secondaryType === "percent"
+                                ? `(${discount.secondaryValue}%)`
+                                : `(${(
+                                    discount.secondaryValue ?? 0
+                                  ).toLocaleString("vi-VN")}₫)`}{" "}
+                              -{" "}
+                              {(
+                                discount.secondaryAmountApplied || 0
+                              ).toLocaleString("vi-VN")}
+                              ₫
+                            </div>
+                          )}
+
+                          {/* Chỉ thêm mã gia hạn khi thực sự có gia hạn */}
+                          {discount.extensions &&
+                            discount.extensions.length > 0 &&
+                            discount.extensions
+                              .filter((ext) => ext.source === "extension")
+                              .map((ext, idx) => (
+                                <div key={idx}>
+                                  Mã giảm giá gia hạn:{" "}
+                                  {ext.code || "Không có mã"}
+                                  {ext.secondaryCode &&
+                                    ` + ${ext.secondaryCode}`}{" "}
+                                  {ext.type === "percent"
+                                    ? `(${ext.value}%)`
+                                    : ext.value
+                                    ? `(${ext.value.toLocaleString("vi-VN")}₫)`
+                                    : ""}{" "}
+                                  {ext.secondaryType === "percent"
+                                    ? ` + (${ext.secondaryValue}%)`
+                                    : ext.secondaryValue
+                                    ? ` + (${ext.secondaryValue.toLocaleString(
+                                        "vi-VN"
+                                      )}₫)`
+                                    : ""}{" "}
+                                  -{" "}
+                                  {(
+                                    (ext.amountApplied || 0) +
+                                    (ext.secondaryAmountApplied || 0)
+                                  ).toLocaleString("vi-VN")}
+                                  ₫
+                                </div>
+                              ))}
+                        </div>
                       </div>
-                    )}
+                    );
+                  })()}
                 </div>
               </div>
             </div>

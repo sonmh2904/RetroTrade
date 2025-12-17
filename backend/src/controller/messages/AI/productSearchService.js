@@ -276,7 +276,7 @@ const parseMessageToFilters = (messageText) => {
     "vợt bóng bàn", "table tennis", "ping pong", "thể thao", "bóng đá", "bóng rổ",
     "bóng chuyền", "cầu lông", "tennis", "golf", "áo dạ hội", "váy dạ hội", "đầm dạ hội",
     "áo", "quần", "váy", "đầm", "máy chiếu", "máy in", "flycam", "bút", "balo",
-    "máy tính bỏ túi", "dụng cụ học tập", "lều", "trại",
+    "máy tính bỏ túi", "dụng cụ học tập", "lều", "trại", "vest" , "đồ án",
   ];
   for (const keyword of productTypeKeywords) {
     if (lowerMessage.includes(keyword)) {

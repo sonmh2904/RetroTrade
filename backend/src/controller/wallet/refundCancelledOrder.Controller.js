@@ -48,25 +48,31 @@ async function refundExtensionRequest(requestId, session = null) {
     renterWallet.balance += refundAmount;
     await Promise.all([adminWallet.save({ session }), renterWallet.save({ session })]);
 
-    await WalletTransaction.create([{
-      walletId: adminWallet._id,
-      orderId: order._id,
-      orderCode: `${order.orderGuid}_ext_refund_admin`,
-      typeId: "refund_extension_rejected",
-      amount: -refundAmount,
-      note: `Hoàn phí gia hạn bị từ chối - Đơn #${order.orderGuid}`,
-      status: "completed",
-      createdAt: new Date()
-    }, {
-      walletId: renterWallet._id,
-      orderId: order._id,
-      orderCode: `${order.orderGuid}_ext_refund_renter`,
-      typeId: "refund_extension_rejected",
-      amount: refundAmount,
-      note: `Nhận hoàn phí gia hạn bị từ chối - ${order.itemSnapshot.title}`,
-      status: "completed",
-      createdAt: new Date()
-    }], { session ,ordered: true });
+    await WalletTransaction.create(
+      [
+        {
+          walletId: adminWallet._id,
+          orderId: order._id,
+          orderCode: `${order.orderGuid}_ext_refund_admin_${requestId}`,
+          typeId: "refund_extension_rejected",
+          amount: -refundAmount,
+          note: `Hoàn phí gia hạn bị từ chối - Đơn #${order.orderGuid}`,
+          status: "completed",
+          createdAt: new Date(),
+        },
+        {
+          walletId: renterWallet._id,
+          orderId: order._id,
+          orderCode: `${order.orderGuid}_ext_refund_renter_${requestId}`,
+          typeId: "refund_extension_rejected",
+          amount: refundAmount,
+          note: `Nhận hoàn phí gia hạn bị từ chối - ${order.itemSnapshot.title}`,
+          status: "completed",
+          createdAt: new Date(),
+        },
+      ],
+      { session, ordered: true }
+    );
 
     request.isRefunded = true;
     request.refundedAt = new Date();

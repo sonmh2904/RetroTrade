@@ -32,8 +32,8 @@ export interface Order {
     fullName: string;
     email: string;
     avatarUrl?: string;
-    bio:string;
-    phone:string;
+    bio: string;
+    phone: string;
   };
   ownerId: {
     _id: string;
@@ -73,6 +73,20 @@ export interface Order {
     secondaryValue?: number;
     secondaryAmountApplied?: number;
     totalAmountApplied?: number;
+
+    extensions?: Array<{
+      code?: string;
+      type?: "percent" | "fixed";
+      value?: number;
+      amountApplied?: number;
+      secondaryCode?: string;
+      secondaryType?: "percent" | "fixed";
+      secondaryValue?: number;
+      secondaryAmountApplied?: number;
+      appliedAt?: string; // ISO string từ backend
+      source?: "original" | "extension";
+      requestId?: string;
+    }>;
   };
   shippingAddress: {
     fullName: string;
