@@ -29,6 +29,15 @@ module.exports.getOrderByOwnerId = async (req, res) => {
         startDate.setDate(startDate.getDate() - days);
         startDate.setHours(0, 0, 0, 0);
 
+        const timezone = "Asia/Ho_Chi_Minh";
+        const formatDateKey = (date) =>
+            new Intl.DateTimeFormat("sv-SE", {
+                timeZone: timezone,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(date);
+
         const rentalAmountExpression = {
             $let: {
                 vars: {
@@ -68,7 +77,7 @@ module.exports.getOrderByOwnerId = async (req, res) => {
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone }
                     },
                     orders: { $sum: 1 },
                     pending: { $sum: { $cond: [{ $eq: ["$orderStatus", "pending"] }, 1, 0] } },
@@ -151,7 +160,7 @@ module.exports.getOrderByOwnerId = async (req, res) => {
         const timelineCursor = new Date(startDate);
         const today = new Date();
         while (timelineCursor <= today) {
-            const dateStr = timelineCursor.toISOString().split('T')[0];
+            const dateStr = formatDateKey(timelineCursor);
             const dayData = timelineMap.get(dateStr) || {
                 date: dateStr,
                 orders: 0,
@@ -264,10 +273,19 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
 
         const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
 
-        const netRevenueExpression = {
+        const timezone = "Asia/Ho_Chi_Minh";
+        const formatDateKey = (date) =>
+            new Intl.DateTimeFormat("sv-SE", {
+                timeZone: timezone,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(date);
+
+        const rentalAmountExpression = {
             $let: {
                 vars: {
-                    gross: { $ifNull: ["$finalAmount", "$totalAmount"] },
+                    total: { $ifNull: ["$totalAmount", 0] },
                     deposit: { $ifNull: ["$depositAmount", 0] },
                     serviceFee: { $ifNull: ["$serviceFee", 0] },
                 },
@@ -276,7 +294,7 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
                         0,
                         {
                             $subtract: [
-                                "$$gross",
+                                "$$total",
                                 {
                                     $add: ["$$deposit", "$$serviceFee"]
                                 }
@@ -287,35 +305,7 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             }
         };
 
-        // Get revenue timeline data
-        const orderRevenueData = await Order.aggregate([
-            {
-                $match: {
-                    orderStatus: "completed",
-                    createdAt: { $gte: startDate },
-                    ownerId: new mongoose.Types.ObjectId(ownerId)
-                }
-            },
-            {
-                $addFields: {
-                    netRevenue: netRevenueExpression
-                }
-            },
-            {
-                $group: {
-                    _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
-                    },
-                    revenue: { $sum: "$netRevenue" },
-                    orders: { $sum: 1 }
-                }
-            },
-            {
-                $sort: { _id: 1 }
-            }
-        ]);
-
-        const extensionBasePipeline = [
+        const extensionRevenueBasePipeline = [
             {
                 $match: {
                     paymentStatus: "paid",
@@ -337,7 +327,7 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
                                 }
                             }
                         },
-                        { $project: { createdAt: 1, ownerId: 1 } }
+                        { $project: { createdAt: 1 } }
                     ],
                     as: "order"
                 }
@@ -346,7 +336,6 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             {
                 $addFields: {
                     effectiveDate: { $ifNull: ["$paidAt", "$updatedAt"] },
-                    orderCreatedAt: "$order.createdAt",
                     netExtensionRevenue: {
                         $max: [
                             0,
@@ -367,22 +356,32 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             }
         ];
 
-        const extensionTimeline = await ExtensionRequest.aggregate([
-            ...extensionBasePipeline,
+        // Get revenue timeline data
+        const orderRevenueData = await Order.aggregate([
             {
                 $match: {
-                    effectiveDate: { $gte: startDate }
+                    orderStatus: "completed",
+                    createdAt: { $gte: startDate },
+                    ownerId: new mongoose.Types.ObjectId(ownerId)
+                }
+            },
+            {
+                $addFields: {
+                    rentalAmount: rentalAmountExpression
                 }
             },
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$effectiveDate" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone }
                     },
-                    revenue: { $sum: "$netExtensionRevenue" }
+                    revenue: { $sum: "$rentalAmount" },
+                    orders: { $sum: 1 }
                 }
             },
-            { $sort: { _id: 1 } }
+            {
+                $sort: { _id: 1 }
+            }
         ]);
 
         // Fill missing dates with zero counts
@@ -395,18 +394,12 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             });
         });
 
-        extensionTimeline.forEach((day) => {
-            const existing = timelineMap.get(day._id) || { revenue: 0, orders: 0 };
-            existing.revenue += day.revenue;
-            timelineMap.set(day._id, existing);
-        });
-
         const filledStats = [];
         const currentDate = new Date(startDate);
         const today = new Date();
         
         while (currentDate <= today) {
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = formatDateKey(currentDate);
             const dayData = timelineMap.get(dateStr);
             filledStats.push({
                 date: dateStr,
@@ -427,21 +420,21 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             },
             {
                 $addFields: {
-                    netRevenue: netRevenueExpression
+                    rentalAmount: rentalAmountExpression
                 }
             },
             {
                 $group: {
                     _id: null,
-                    totalRevenue: { $sum: "$netRevenue" },
+                    totalRevenue: { $sum: "$rentalAmount" },
                     totalOrders: { $sum: 1 },
-                    avgOrderValue: { $avg: "$netRevenue" }
+                    avgOrderValue: { $avg: "$rentalAmount" }
                 }
             }
         ]);
 
         const totalExtensionStats = await ExtensionRequest.aggregate([
-            ...extensionBasePipeline,
+            ...extensionRevenueBasePipeline,
             {
                 $group: {
                     _id: null,
@@ -459,14 +452,14 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             },
             {
                 $addFields: {
-                    netRevenue: netRevenueExpression
+                    rentalAmount: rentalAmountExpression
                 }
             },
             {
                 $group: {
                     _id: "$orderStatus",
                     count: { $sum: 1 },
-                    revenue: { $sum: "$netRevenue" }
+                    revenue: { $sum: "$rentalAmount" }
                 }
             }
         ]);
@@ -477,7 +470,7 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
         const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-        const [currentMonthRevenue, previousMonthRevenue, currentMonthExtensions, previousMonthExtensions] = await Promise.all([
+        const [currentMonthRevenue, previousMonthRevenue] = await Promise.all([
             Order.aggregate([
                 {
                     $match: {
@@ -488,10 +481,10 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
                 },
                 {
                     $addFields: {
-                        netRevenue: netRevenueExpression
+                        rentalAmount: rentalAmountExpression
                     }
                 },
-                { $group: { _id: null, total: { $sum: "$netRevenue" }, count: { $sum: 1 } } }
+                { $group: { _id: null, total: { $sum: "$rentalAmount" }, count: { $sum: 1 } } }
             ]),
             Order.aggregate([
                 {
@@ -503,55 +496,23 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
                 },
                 {
                     $addFields: {
-                        netRevenue: netRevenueExpression
+                        rentalAmount: rentalAmountExpression
                     }
                 },
-                { $group: { _id: null, total: { $sum: "$netRevenue" }, count: { $sum: 1 } } }
-            ]),
-            ExtensionRequest.aggregate([
-                ...extensionBasePipeline,
-                {
-                    $match: {
-                        effectiveDate: { $gte: currentMonthStart }
-                    }
-                },
-                {
-                    $group: {
-                        _id: null,
-                        total: { $sum: "$netExtensionRevenue" }
-                    }
-                }
-            ]),
-            ExtensionRequest.aggregate([
-                ...extensionBasePipeline,
-                {
-                    $match: {
-                        effectiveDate: { $gte: previousMonthStart, $lte: previousMonthEnd }
-                    }
-                },
-                {
-                    $group: {
-                        _id: null,
-                        total: { $sum: "$netExtensionRevenue" }
-                    }
-                }
+                { $group: { _id: null, total: { $sum: "$rentalAmount" }, count: { $sum: 1 } } }
             ])
         ]);
 
-        const currentExtensionRevenue = currentMonthExtensions?.[0]?.total || 0;
-        const previousExtensionRevenue = previousMonthExtensions?.[0]?.total || 0;
-
-        const currentRevenue = (currentMonthRevenue[0]?.total || 0) + currentExtensionRevenue;
-        const prevRevenue = (previousMonthRevenue[0]?.total || 0) + previousExtensionRevenue;
+        const currentRevenue = currentMonthRevenue[0]?.total || 0;
+        const prevRevenue = previousMonthRevenue[0]?.total || 0;
         const revenueChange = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
 
         const extensionTotalRevenue = totalExtensionStats?.[0]?.total || 0;
         const baseRevenueStats = totalRevenueStats[0] || { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0 };
         const rentalRevenue = baseRevenueStats.totalRevenue || 0;
-        const combinedTotalRevenue = rentalRevenue + extensionTotalRevenue;
 
         baseRevenueStats.avgOrderValue = baseRevenueStats.totalOrders > 0
-            ? combinedTotalRevenue / baseRevenueStats.totalOrders
+            ? rentalRevenue / baseRevenueStats.totalOrders
             : 0;
 
         // Format revenue by status
@@ -583,7 +544,7 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
             data: {
                 timeline: filledStats,
                 totals: {
-                    totalRevenue: combinedTotalRevenue,
+                    totalRevenue: rentalRevenue,
                     rentalRevenue,
                     totalOrders: baseRevenueStats.totalOrders,
                     extensionRevenue: extensionTotalRevenue,

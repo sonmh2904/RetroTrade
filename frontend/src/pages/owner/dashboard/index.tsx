@@ -108,10 +108,10 @@ const OwnerDashboard = () => {
           format: "currency"
         },
         {
-          id: "rentalRevenue",
-          label: "Doanh thu thuê ban đầu",
-          value: formatCurrency(revenueData.totals.rentalRevenue),
-          icon: DollarSign,
+          id: "avgOrderValue",
+          label: "Giá trị đơn trung bình",
+          value: formatCurrency(revenueData.totals.avgOrderValue ?? 0),
+          icon: BarChart3,
           bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
           iconColor: "text-blue-600",
           format: "currency"

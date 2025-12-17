@@ -14,6 +14,14 @@ const WalletTransaction = require("../../models/WalletTransaction.model");
 const mongoose = require("mongoose");
 
 const serviceFeeExpression = { $ifNull: ["$serviceFee", 0] };
+const ADMIN_TIMEZONE = "Asia/Ho_Chi_Minh";
+const formatDateKey = (date) =>
+    new Intl.DateTimeFormat("sv-SE", {
+        timeZone: ADMIN_TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(date);
 const extensionMatchStage = {
     paymentStatus: "paid",
     status: "approved"
@@ -98,7 +106,7 @@ const buildExtensionTimelinePipeline = (startDate) => [
     {
         $group: {
             _id: {
-                $dateToString: { format: "%Y-%m-%d", date: "$effectiveDate" }
+                $dateToString: { format: "%Y-%m-%d", date: "$effectiveDate", timezone: ADMIN_TIMEZONE }
             },
             revenue: { $sum: serviceFeeExpression },
             extensions: { $sum: 1 }
@@ -456,7 +464,7 @@ module.exports.getRevenueStats = async (req, res) => {
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: ADMIN_TIMEZONE }
                     },
                     revenue: { $sum: serviceFeeExpression },
                     orders: { $sum: 1 }
@@ -507,7 +515,7 @@ module.exports.getRevenueStats = async (req, res) => {
         const endDate = new Date();
         
         while (currentDate <= endDate) {
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = formatDateKey(currentDate);
             const dayData = timelineMap.get(dateStr);
             filledStats.push({
                 date: dateStr,
@@ -607,7 +615,7 @@ module.exports.getUserStats = async (req, res) => {
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: ADMIN_TIMEZONE }
                     },
                     users: { $sum: 1 },
                     verified: {
@@ -628,7 +636,7 @@ module.exports.getUserStats = async (req, res) => {
         const now = new Date();
         
         while (currentDate <= now) {
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = formatDateKey(currentDate);
             const dayData = userData.find(stat => stat._id === dateStr);
             
             filledStats.push({
@@ -695,7 +703,7 @@ module.exports.getOrderStats = async (req, res) => {
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: ADMIN_TIMEZONE }
                     },
                     orders: { $sum: 1 },
                     totalAmount: { $sum: "$totalAmount" },
@@ -757,7 +765,7 @@ module.exports.getOrderStats = async (req, res) => {
         const now = new Date();
         
         while (currentDate <= now) {
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = formatDateKey(currentDate);
             const dayData = orderData.find(stat => stat._id === dateStr);
             
             filledStats.push({
@@ -861,7 +869,7 @@ module.exports.getProductStats = async (req, res) => {
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$CreatedAt" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$CreatedAt", timezone: ADMIN_TIMEZONE }
                     },
                     products: { $sum: 1 },
                     pending: {
@@ -892,7 +900,7 @@ module.exports.getProductStats = async (req, res) => {
         const now = new Date();
         
         while (currentDate <= now) {
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = formatDateKey(currentDate);
             const dayData = productData.find(stat => stat._id === dateStr);
             
             filledStats.push({

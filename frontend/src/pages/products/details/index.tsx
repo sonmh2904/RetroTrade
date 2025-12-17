@@ -274,6 +274,21 @@ export default function ProductDetailPage() {
   const [similarItems, setSimilarItems] = useState<ProductItem[]>([]);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
   const [ratings, setRatings] = useState<Array<{ rating: number }>>([]);
+  const averageRating = useMemo(() => {
+    if (ratings.length === 0) return 0;
+    const total = ratings.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+    return total / ratings.length;
+  }, [ratings]);
+
+  const getStarFillPercentage = useCallback(
+    (starIndex: number) => {
+      const diff = averageRating - (starIndex - 1);
+      if (diff >= 1) return 100;
+      if (diff <= 0) return 0;
+      return diff * 100;
+    },
+    [averageRating]
+  );
   const isAuthenticated = useSelector(
     (state: RootState) => !!state.auth.accessToken
   );
@@ -1036,18 +1051,22 @@ export default function ProductDetailPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center text-yellow-500">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star
-                        key={star}
-                        className={`w-4 h-4 ${
-                          star <= Math.round(
-                            ratings.reduce((sum, r) => sum + r.rating, 0) / Math.max(1, ratings.length)
-                          )
-                            ? 'fill-yellow-500'
-                            : 'text-gray-300'
-                        }`}
-                      />
-                    ))}
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const fillPercent = getStarFillPercentage(star);
+                      return (
+                        <span key={star} className="relative inline-flex w-4 h-4">
+                          <Star className="w-4 h-4 text-gray-300" />
+                          {fillPercent > 0 && (
+                            <span
+                              className="absolute left-0 top-0 h-full overflow-hidden"
+                              style={{ width: `${fillPercent}%` }}
+                            >
+                              <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                   <span className="text-sm text-gray-500">
                     ({ratings.length} {ratings.length === 1 ? 'đánh giá' : 'đánh giá'})
