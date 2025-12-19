@@ -980,8 +980,8 @@ export default function DiscountManagementPage() {
       {/* Create Pop-up Modal */}
       {isCreateDialogOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">
                   <Gift className="w-6 h-6" />
@@ -1002,7 +1002,7 @@ export default function DiscountManagementPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* AI Suggestions in Create Form */}
               {dashboardStats && isCreatingWithAI && (
                 <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-purple-50 rounded-xl p-4 border-2 border-purple-200 relative overflow-hidden">
@@ -1432,8 +1432,8 @@ export default function DiscountManagementPage() {
       {/* Edit Pop-up Modal */}
       {isEditDialogOpen && editingDiscount && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">
                   <Gift className="w-6 h-6" />
@@ -1454,7 +1454,7 @@ export default function DiscountManagementPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Code Info */}
               <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-200">
                 <div className="flex items-center gap-3 mb-3">
