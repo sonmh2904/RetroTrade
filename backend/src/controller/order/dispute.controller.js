@@ -109,9 +109,12 @@ const createDispute = async (req, res) => {
     order.disputeId = newDispute._id;
     await order.save();
 
-    // === 9. Lấy tên người tạo để thông báo ===
+    // === 9. Lấy thông tin người liên quan để thông báo ===
     const reporter = await User.findById(userId).select("fullName email");
     const reporterName = reporter?.fullName || reporter?.email || "Người dùng";
+    
+    const reportedUser = await User.findById(reportedUserId).select("fullName email");
+    const reportedUserName = reportedUser?.fullName || reportedUser?.email || "Người dùng";
 
     // === 10. Gửi thông báo cho người bị báo cáo ===
     await createNotification(
@@ -127,25 +130,68 @@ const createDispute = async (req, res) => {
       }
     );
 
-    // === 11. Gửi thông báo cho tất cả moderator ===
-    const moderators = await User.find({ role: "moderator" }).select(
-      "_id fullName"
-    );
-    for (const mod of moderators) {
-      await createNotification(
-        mod._id,
-        "New Dispute",
-        "Có Khiếu nạimới cần xử lý",
-        `${reporterName} đã tạo Khiếu nại#${order.orderGuid} – Lý do: ${reason}`,
-        {
-          type: "dispute",
-          disputeId: newDispute._id,
-          orderId,
-          orderGuid: order.orderGuid,
-          reporterId: userId,
-          reportedUserId,
+    // === 11. Gửi thông báo cho TẤT CẢ moderator để xử lý ===
+    try {
+      const moderators = await User.find({ 
+        role: "moderator",
+        isActive: { $ne: false },
+        isDeleted: { $ne: true }
+      }).select("_id fullName email");
+      
+      if (moderators && moderators.length > 0) {
+        // Tạo nội dung thông báo chi tiết cho moderator
+        const disputeDescription = description?.trim() 
+          ? `\nMô tả: ${description.substring(0, 200)}${description.length > 200 ? '...' : ''}` 
+          : '';
+        const evidenceCount = evidenceUrls.length > 0 ? `\nCó ${evidenceUrls.length} ảnh bằng chứng đính kèm.` : '';
+        
+        const moderatorMessage = `🚨 Tranh chấp mới cần xử lý!\n\n` +
+          `📋 Đơn hàng: #${order.orderGuid}\n` +
+          `👤 Người tố cáo: ${reporterName}\n` +
+          `👤 Người bị tố cáo: ${reportedUserName}\n` +
+          `📝 Lý do: ${reason}${disputeDescription}${evidenceCount}\n\n` +
+          `⏰ Vui lòng xem chi tiết và xử lý tranh chấp này.`;
+
+        // Gửi thông báo cho từng moderator
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const mod of moderators) {
+          try {
+            await createNotification(
+              mod._id,
+              "New Dispute",
+              "🚨 Có tranh chấp mới cần xử lý",
+              moderatorMessage,
+              {
+                type: "dispute",
+                disputeId: newDispute._id,
+                orderId,
+                orderGuid: order.orderGuid,
+                reporterId: userId,
+                reportedUserId,
+                reporterName: reporterName,
+                reportedUserName: reportedUserName,
+                reason: reason,
+                description: description?.trim() || "",
+                evidenceCount: evidenceUrls.length,
+                status: "Pending"
+              }
+            );
+            successCount++;
+          } catch (notifError) {
+            console.error(`Failed to send notification to moderator ${mod._id}:`, notifError);
+            failCount++;
+          }
         }
-      );
+        
+        console.log(`✅ Dispute notifications sent: ${successCount} success, ${failCount} failed out of ${moderators.length} moderators`);
+      } else {
+        console.warn("⚠️ No active moderators found to notify about new dispute");
+      }
+    } catch (moderatorError) {
+      console.error("Error sending notifications to moderators:", moderatorError);
+      // Không throw error để không ảnh hưởng đến việc tạo dispute
     }
 
     // === 12. Trả về response sạch đẹp cho frontend ===

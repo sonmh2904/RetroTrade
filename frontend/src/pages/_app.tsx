@@ -1,6 +1,8 @@
 import Footer from "@/components/common/footer";
 import Header from "@/components/common/header";
 import ChatFloatingButton from "@/components/common/chatbutton";
+import Snowfall from "@/components/common/snowfall";
+import ChristmasDecorations from "@/components/common/christmas-decorations";
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import { Toaster } from "sonner";
@@ -34,7 +36,7 @@ function AppContent({ Component, pageProps }: AppProps) {
 
       {!isManagementPage && <Header />}
 
-      <div className={isManagementPage ? "min-h-screen" : "pt-20 bg-white min-h-screen"}>
+      <div className={isManagementPage ? "min-h-screen" : "pt-28 bg-white min-h-screen"}>
         {showAdminSidebar ? (
           <AdminLayout>
             <Component {...pageProps} />
@@ -47,6 +49,12 @@ function AppContent({ Component, pageProps }: AppProps) {
 
         {/* Chat Button - Show on all pages */}
         <ChatFloatingButton />
+
+        {/* Snowfall Effect - Show on all pages */}
+        <Snowfall />
+        
+        {/* Christmas Decorations - Show on all pages */}
+        <ChristmasDecorations />
 
         {mounted && (
           <Toaster
