@@ -19,6 +19,13 @@ import { motion } from "framer-motion";
 import CardCheckout from "@/components/ui/common/CardCheckout";
 import CardWallet from "@/components/ui/common/CardWallet";
 import CardPay from "@/components/ui/common/CardMethodPay";
+import { 
+  ChristmasCard, 
+  ChristmasCountdown, 
+  ChristmasButton,
+  ChristmasTree,
+  ChristmasBadge
+} from "@/components/ui/common/christmas";
 export default function Home() {
   return (
     <>
@@ -31,8 +38,57 @@ export default function Home() {
       </Head>
 
       {/* Hero Section */}
-
       <HeroSlider />
+
+      {/* Christmas Countdown Section */}
+      <section className="py-12 bg-gradient-to-br from-red-50 via-white to-green-50">
+        <Container>
+          <div className="max-w-2xl mx-auto">
+            <ChristmasCountdown />
+          </div>
+        </Container>
+      </section>
+
+      {/* Christmas Special Section */}
+      <section className="py-16 bg-white">
+        <Container>
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div>
+              <ChristmasCard
+                title="🎄 Mùa Giáng Sinh Đặc Biệt 🎄"
+                message="RetroTrade chúc bạn một mùa Giáng Sinh ấm áp và hạnh phúc! Khám phá những sản phẩm độc đáo với giá ưu đãi đặc biệt."
+              >
+                <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+                  <ChristmasButton 
+                    variant="default" 
+                    size="md"
+                    onClick={() => window.location.href = "/products"}
+                  >
+                    Khám Phá Sản Phẩm
+                  </ChristmasButton>
+                  <ChristmasButton 
+                    variant="outline" 
+                    size="md"
+                    onClick={() => window.location.href = "/home"}
+                  >
+                    Xem Thêm
+                  </ChristmasButton>
+                </div>
+              </ChristmasCard>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-8">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">
+                  <ChristmasBadge variant="gold" size="lg">Giáng Sinh 2025</ChristmasBadge>
+                </h3>
+                <div className="flex items-center justify-center">
+                  <ChristmasTree size="md" animated={true} showOrnaments={true} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
 
       {/* Features Section */}
       <section className="py-20 bg-white">

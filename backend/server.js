@@ -28,6 +28,11 @@ const {
   updateTrendingItems,
 } = require("./src/controller/products/updateTrending.controller");
 
+const { autoUpdateServiceFeeStatus } = require("./src/controller/serviceFee/serviceFeeAutoUpdate.controller");
+const { unbanExpiredCommentBans } = require("./src/cronJobs/unbanJob");
+const { checkPendingDisputes, autoAssignOldDisputes } = require('./src/cronJobs/disputeJob');
+const { checkPendingVerifications, autoAssignOldVerifications } = require('./src/cronJobs/verificationJob');
+const { seedDefaultConfigs } = require("./src/controller/admin/systemConfig.controller");
 require("dotenv").config();
 
 require("./src/utils/orderReminder.job"); // Load cron nhắc nhở đơn hàng
@@ -65,8 +70,6 @@ app.use((req, res, next) => {
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-const { autoUpdateServiceFeeStatus } = require("./src/controller/serviceFee/serviceFeeAutoUpdate.controller");
-const { unbanExpiredCommentBans } = require("./src/cronJobs/unbanJob");
 
 // cập nhật lúc 0h mỗi ngày
 cron.schedule('0 0 * * *', updateTrendingItems);
@@ -108,11 +111,34 @@ fetchBanks()
 setInterval(fetchBanks, 1000 * 60 * 60 * 12); // Update tự động mỗi 12h (hoặc 24h tùy lịch trình)
 
 require('./src/cronJobs/refundJob');
+
+// Cron job kiểm tra tranh chấp chưa xử lý - Chạy mỗi 1 giờ
+// Tìm tranh chấp Pending quá 24h → Gửi nhắc nhở moderator
+// Tìm tranh chấp In Progress quá 48h → Tự động unassign
+cron.schedule('0 * * * *', async () => {
+  await checkPendingDisputes();
+});
+
+// Cron job tự động gán tranh chấp cũ - Chạy mỗi 6 giờ
+// Tự động gán tranh chấp Pending quá 48h cho moderator có ít việc nhất
+cron.schedule('0 */6 * * *', async () => {
+  await autoAssignOldDisputes();
+});
+
+// Cron job kiểm tra yêu cầu xác minh chưa xử lý - Chạy mỗi 1 giờ
+// Tìm yêu cầu Pending quá 24h → Gửi nhắc nhở moderator
+// Tìm yêu cầu In Progress quá 48h → Tự động unassign
+cron.schedule('0 * * * *', async () => {
+  await checkPendingVerifications();
+});
+
+// Cron job tự động gán yêu cầu xác minh cũ - Chạy mỗi 6 giờ
+// Tự động gán yêu cầu Pending quá 48h cho moderator có ít việc nhất
+cron.schedule('0 */6 * * *', async () => {
+  await autoAssignOldVerifications();
+});
+
 console.log(' Cron jobs đã được nạp và chạy');
-
-
-
-
 // Routes
 router(app);
 
@@ -120,8 +146,6 @@ router(app);
 connectDB()
   .then(async () => {
     console.log(" MongoDB connected");
-    // Seed system configs
-    const { seedDefaultConfigs } = require("./src/controller/admin/systemConfig.controller");
     await seedDefaultConfigs();
   })
   .catch((err) => console.log(err));
