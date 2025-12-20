@@ -39,7 +39,6 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         return parsed as Record<string, unknown>;
       }
     } catch (error) {
-      console.warn("[Notifications] Failed to parse metadata:", error);
     }
     return null;
   }, []);
@@ -49,17 +48,14 @@ export function NotificationIcon({ className }: NotificationIconProps) {
       const meta = parseMetaData(notification.metaData);
 
       if (meta && typeof meta === "object") {
-        // Direct redirect URL if backend provided one
         if (typeof meta.redirectUrl === "string") {
           return meta.redirectUrl;
         }
 
-        // Order related notifications
         if (meta.orderId) {
           return `/auth/my-orders/${meta.orderId}`;
         }
 
-        // Dispute related notifications
         if (meta.disputeId) {
           if (user?.role === "moderator") {
             return `/moderator/dispute/${meta.disputeId}`;
@@ -67,18 +63,15 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           return `/dispute/${meta.disputeId}`;
         }
 
-        // Blog post or community notifications
         if (meta.postId) {
           return `/blog/${meta.postId}`;
         }
 
-        // Product or item notifications
         if (meta.productId || meta.itemId) {
           const productId = (meta.productId || meta.itemId) as string;
           return `/products/details?id=${productId}`;
         }
 
-        // Owner request related notifications
         if (meta.requestId && (
           notification.notificationType?.includes('chủ sở hữu') ||
           notification.notificationType?.includes('Owner') ||
@@ -86,20 +79,16 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           notification.title?.includes('Owner') ||
           meta.ownerRequestId
         )) {
-          // For moderators, go to moderator owner requests page
           if (user?.role === "moderator") {
             return '/moderator?tab=owner-requests';
           }
-          // For users, go to detail page if requestId is available
           if (meta.requestId) {
             return `/auth/owner-requests/${meta.requestId}`;
           }
-          // Fallback to profile ownership tab
           return '/auth/profile?menu=ownership';
         }
       }
 
-      // Verification related notifications (only if not owner request)
       if (meta?.requestId) {
         return '/auth/verification-history';
       }
@@ -108,8 +97,6 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           return '/auth/verification-history';
         }
       }
-
-      // Type-based fallback when no metadata route
       switch (notification.notificationType) {
         case "Xác minh số điện thoại thành công":
         case "Đã gửi yêu cầu xác minh CCCD":
@@ -145,7 +132,6 @@ export function NotificationIcon({ className }: NotificationIconProps) {
           return "/owner/myproducts";
         case "Loyalty":
           return "/auth/profile?menu=loyalty";
-        // Owner request notifications
         case "Yêu cầu cấp quyền chủ sở hữu":
         case "Yêu cầu cấp quyền chủ sở hữu đã được duyệt":
         case "Yêu cầu cấp quyền chủ sở hữu bị từ chối":
@@ -183,90 +169,65 @@ export function NotificationIcon({ className }: NotificationIconProps) {
         setUnreadCount(calculatedUnreadCount);
       }
     } catch (error) {
-      console.error("Error fetching notifications:", error);
       toast.error("Không thể tải thông báo");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Fetch once on mount so header always has latest data
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Refetch whenever auth info becomes available/changes
   useEffect(() => {
-    if (!user || !accessToken) return;
+    if (!accessToken) return;
     fetchNotifications();
-  }, [user, accessToken, fetchNotifications]);
+  }, [accessToken, fetchNotifications]);
 
-  // SSE setup
   useEffect(() => {
-    // Chỉ kết nối khi có user và token
-    if (!user || !accessToken) {
+    if (!accessToken) {
       return;
     }
 
-    // Disconnect previous SSE (nếu có) để đảm bảo dùng token mới nhất
     notificationSSE.disconnect();
 
-    // Kết nối SSE để nhận notifications và unread count realtime
     notificationSSE.connect({
       onConnect: () => {
-        console.log('[Notifications] SSE connected');
         setSseConnected(true);
-        // Backend sẽ tự động gửi unread count ban đầu khi SSE kết nối
-        // Unread count sẽ được cập nhật từ SSE callback (onUnreadCount)
       },
       onDisconnect: () => {
-        console.log('[Notifications] SSE disconnected');
         setSseConnected(false);
       },
       onNotification: (notification: Notification) => {
-        console.log('[Notifications] New notification received:', notification);
 
-        // Thêm notification mới vào đầu danh sách
         setNotifications(prev => {
-          // Kiểm tra xem notification đã tồn tại chưa (tránh duplicate)
           const exists = prev.some(n => n._id === notification._id);
           if (exists) return prev;
-
-          // Thêm vào đầu danh sách và giới hạn số lượng
           return [notification, ...prev].slice(0, NOTIFICATIONS_LIMIT);
         });
-
 
         if (!notification.isRead) {
           setUnreadCount((prev) => prev + 1);
         }
 
-        // Hiển thị toast notification
         toast.info(notification.title, {
           description: notification.body,
           duration: 5000,
         });
       },
       onUnreadCount: (count: number) => {
-        console.log('[Notifications] Unread count updated from SSE:', count);
-        // Cập nhật unread count từ SSE - đây là nguồn chính xác nhất
-        // Backend gửi unread count ban đầu khi SSE kết nối và mỗi khi có thay đổi
         setUnreadCount(count);
-        console.log('[Notifications] Unread count state updated to:', count);
       },
       onError: (error) => {
-        console.error('[Notifications] SSE error:', error);
         setSseConnected(false);
       }
     }, accessToken);
 
-    // Cleanup: disconnect SSE khi component unmount hoặc user logout
     return () => {
       notificationSSE.disconnect();
     };
-  }, [user, accessToken]); // Reconnect khi user hoặc token thay đổi
+  }, [accessToken]);
 
-  // Refresh notifications when dropdown opens (SSE đã tự động cập nhật unread count)
   useEffect(() => {
     if (isOpen) {
       fetchNotifications();
@@ -282,11 +243,8 @@ export function NotificationIcon({ className }: NotificationIconProps) {
       setNotifications(prev =>
         prev.map(n => n._id === id ? { ...n, isRead: true } : n)
       );
-      // Không cập nhật unread count thủ công ở đây
-      // Backend sẽ gửi unread count update qua SSE callback (onUnreadCount)
       toast.success("Đã đánh dấu đã đọc");
     } catch (error) {
-      console.error("Error marking as read:", error);
       toast.error("Không thể đánh dấu đã đọc");
     }
   }, []);
@@ -296,16 +254,12 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     try {
       await notificationApi.markAllAsRead();
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      // Không cập nhật unread count thủ công ở đây
-      // Backend sẽ gửi unread count update qua SSE callback (onUnreadCount)
       toast.success("Đã đánh dấu tất cả đã đọc");
     } catch (error) {
-      console.error("Error marking all as read:", error);
       toast.error("Không thể đánh dấu tất cả đã đọc");
     }
   }, []);
 
-  // Memoized date formatter
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -321,7 +275,6 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     return date.toLocaleDateString("vi-VN");
   }, []);
 
-  // Memoized notification icon getter
   const getNotificationIcon = useCallback((type: string) => {
     switch (type) {
       case "Login Success":
@@ -355,7 +308,6 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     }
   }, []);
 
-  // Format notification type name for display
   const getNotificationTypeName = useCallback((type: string) => {
     switch (type) {
       case "Xác minh số điện thoại thành công":
@@ -380,13 +332,7 @@ export function NotificationIcon({ className }: NotificationIconProps) {
     }
   }, []);
 
-  // Unread count được cập nhật realtime từ SSE
   const displayUnreadCount = unreadCount;
-
-  // Debug: Log unread count changes
-  useEffect(() => {
-    console.log('[Notifications] Unread count changed to:', unreadCount, 'Display count:', displayUnreadCount);
-  }, [unreadCount, displayUnreadCount]);
 
   const handleNotificationClick = useCallback((notification: Notification, event?: React.MouseEvent) => {
     if (event) {
