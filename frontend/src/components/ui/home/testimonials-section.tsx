@@ -6,11 +6,11 @@ import { useRef, useState } from "react"
 
 const testimonials = [
   {
-  name: "Đinh Đức Linh",
+  name: "Triệu Tài Dũng",
   role: "Người cho thuê",
   content:
     "Tôi đã đăng cho thuê nhiều món đồ trên RetroTrade và rất bất ngờ vì lượng khách tìm đến. Nền tảng giúp tôi tận dụng lại những đồ ít dùng, vừa có thêm thu nhập vừa giảm lãng phí. Quy trình duyệt, giao nhận và thanh toán đều minh bạch, hỗ trợ khách hàng cực kỳ nhanh. Rất đáng trải nghiệm!",
-  avatar: "/avatar_user/linhdd.jpg",
+  avatar: "/avatar_user/dungtt.JPG",
   rating: 5,
 },
 {
@@ -22,11 +22,11 @@ const testimonials = [
   rating: 5,
 },
 {
-  name: "Lưu Minh Đức",
+  name: "Luu Danh Thái",
   role: "Người cho thuê",
   content:
     "RetroTrade giúp tôi kết nối với nhiều khách hàng mà trước đây không thể tiếp cận. Các sản phẩm được kiểm duyệt rõ ràng, phản hồi từ khách cũng minh bạch nên tạo cảm giác rất chuyên nghiệp. Từ khi sử dụng nền tảng, hiệu suất cho thuê của tôi tăng lên đáng kể. Hoàn toàn hài lòng!",
-  avatar: "/avatar_user/duclm.jpg",
+  avatar: "/avatar_user/thaild.jpg",
   rating: 5,
 }
 ]
