@@ -23,7 +23,6 @@ import {
   X,
 } from "lucide-react";
 import { NotificationIcon } from "@/components/ui/common/notification-icon";
-import ChristmasBanner from "./christmas-banner";
 
 import {
   DropdownMenu,
@@ -189,15 +188,13 @@ export function Header() {
   };
 
   return (
-    <>
-      <ChristmasBanner />
-      <header
-        className={`fixed left-0 right-0 z-[150] transition-all duration-300 ${
-          scrolled
-            ? "bg-white/95 shadow-lg backdrop-blur-md top-[48px]"
-            : "bg-white/80 backdrop-blur-sm top-[48px]"
-        } border-b border-gray-100`}
-      >
+    <header
+      className={`fixed top-0 left-0 right-0 z-[150] transition-all duration-300 ${
+        scrolled
+          ? "bg-white/95 shadow-lg backdrop-blur-md"
+          : "bg-white/80 backdrop-blur-sm"
+      } border-b border-gray-100`}
+    >
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between relative">
           {/* Logo + Hamburger (mobile) - logo luôn bên trái */}
@@ -516,7 +513,6 @@ export function Header() {
         }
       `}</style>
     </header>
-    </>
   );
 }
 
