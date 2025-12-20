@@ -80,7 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { icon: DollarSign, label: "Phí hệ thống", key: "systemConfig", href: "/admin/system-config" },
     { icon: Tag, label: "Mã giảm giá", key: "discounts", href: "/admin/discount-management" },
     { icon: BarChart3, label: "Lịch sử thay đổi", key: "audit", href: "/admin/audit-logs" },
-    { icon: Settings, label: "Cài đặt", key: "settings", href: "/admin/settings" },
+    { icon: Settings, label: "Cài đặt sự kiện", key: "events", href: "/admin/event" },
   ];
 
   return (
