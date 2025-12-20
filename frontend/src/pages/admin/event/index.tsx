@@ -110,6 +110,17 @@ export default function EventManagementPage() {
     "basic"
   );
 
+  // Modal xác nhận xóa
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    eventId: string | null;
+    eventName: string | null;
+  }>({
+    isOpen: false,
+    eventId: null,
+    eventName: null,
+  });
+
   const [formData, setFormData] = useState<Partial<Event>>({
     name: "",
     slug: "",
@@ -259,15 +270,23 @@ export default function EventManagementPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc muốn xóa sự kiện này?")) return;
-    const toastId = toast.loading("Đang xóa...");
+    const toastId = toast.loading("Đang xóa sự kiện...");
     try {
       await deleteEvent(id);
-      toast.success("Xóa thành công!", { id: toastId });
+      toast.success("Xóa sự kiện thành công!", { id: toastId });
       await fetchEvents();
+      setDeleteConfirmModal({ isOpen: false, eventId: null, eventName: null });
     } catch {
-      toast.error("Xóa thất bại", { id: toastId });
+      toast.error("Xóa sự kiện thất bại", { id: toastId });
     }
+  };
+
+  const openDeleteConfirm = (event: Event) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      eventId: event._id,
+      eventName: event.name,
+    });
   };
 
   const handleToggleActive = async (id: string) => {
@@ -380,7 +399,7 @@ export default function EventManagementPage() {
                       Chỉnh sửa
                     </button>
                     <button
-                      onClick={() => handleDelete(event._id)}
+                      onClick={() => openDeleteConfirm(event)}
                       className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -902,6 +921,80 @@ export default function EventManagementPage() {
                   className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
                 >
                   {editingEvent ? "Cập nhật" : "Tạo sự kiện"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal xác nhận xóa */}
+      <AnimatePresence>
+        {deleteConfirmModal.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() =>
+              setDeleteConfirmModal({
+                isOpen: false,
+                eventId: null,
+                eventName: null,
+              })
+            }
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Xác nhận xóa sự kiện
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Bạn có chắc chắn muốn xóa sự kiện này?
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-sm font-medium text-red-800">
+                  {deleteConfirmModal.eventName}
+                </p>
+                <p className="text-xs text-red-700 mt-1">
+                  Hành động này không thể hoàn tác.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() =>
+                    setDeleteConfirmModal({
+                      isOpen: false,
+                      eventId: null,
+                      eventName: null,
+                    })
+                  }
+                  className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={() =>
+                    deleteConfirmModal.eventId &&
+                    handleDelete(deleteConfirmModal.eventId)
+                  }
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm"
+                >
+                  Xóa sự kiện
                 </button>
               </div>
             </motion.div>

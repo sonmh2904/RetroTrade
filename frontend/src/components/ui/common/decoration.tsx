@@ -5,20 +5,19 @@ import { useEffect, useState } from "react";
 interface DecorationItem {
   id: number;
   emoji: string;
-  left: number;
-  animationDuration: number;
-  animationDelay: number;
-  size: number;
   startX: number;
   startY: number;
-  endX: number;
-  endY: number;
   midX: number;
   midY: number;
+  endX: number;
+  endY: number;
+  duration: number;
+  delay: number;
+  size: number;
 }
 
 interface DecorationProps {
-  emojis: string[]; 
+  emojis: string[];
 }
 
 export default function Decoration({ emojis = [] }: DecorationProps) {
@@ -30,7 +29,7 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
       return;
     }
 
-    const decorationItems: DecorationItem[] = [];
+    const newItems: DecorationItem[] = [];
     const count = 12;
 
     for (let i = 0; i < count; i++) {
@@ -43,47 +42,47 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
         midY = 0;
 
       if (rand < 0.3) {
-        startX = Math.random() * 5;
-        startY = Math.random() * 20 + 20;
-        endX = Math.random() * 5;
-        endY = Math.random() * 30 + 70;
-        midX = Math.random() * 8 + 2;
+        startX = Math.random() * 8;
+        startY = Math.random() * 30 + 10;
+        endX = Math.random() * 8 + 92;
+        endY = Math.random() * 40 + 60;
+        midX = 50 + Math.random() * 20;
         midY = (startY + endY) / 2;
       } else if (rand < 0.6) {
-        startX = 95 + Math.random() * 5;
-        startY = Math.random() * 20 + 20;
-        endX = 95 + Math.random() * 5;
-        endY = Math.random() * 30 + 70;
-        midX = 92 + Math.random() * 6;
+        // Từ phải sang trái
+        startX = 92 + Math.random() * 8;
+        startY = Math.random() * 30 + 10;
+        endX = Math.random() * 8;
+        endY = Math.random() * 40 + 60;
+        midX = 50 - Math.random() * 20;
         midY = (startY + endY) / 2;
       } else {
+        // Từ dưới lên trên (bay ngược lên)
         startX = Math.random() * 80 + 10;
-        startY = 85 + Math.random() * 15;
+        startY = 90 + Math.random() * 20;
         endX = Math.random() * 80 + 10;
-        endY = 85 + Math.random() * 15;
-        midX = (startX + endX) / 2;
-        midY = 80 + Math.random() * 10;
+        endY = -20; // Bay ra khỏi màn hình trên
+        midX = startX + (Math.random() - 0.5) * 20;
+        midY = 40 + Math.random() * 20;
       }
 
-      decorationItems.push({
-        id: i,
+      newItems.push({
+        id: i + Date.now(),
         emoji: emojis[Math.floor(Math.random() * emojis.length)],
-        left: Math.random() * 100,
-        animationDuration: Math.random() * 15 + 10,
-        animationDelay: Math.random() * 5,
-        size: Math.random() * 15 + 20,
         startX,
         startY,
-        endX,
-        endY,
         midX,
         midY,
+        endX,
+        endY,
+        duration: Math.random() * 12 + 10, 
+        delay: Math.random() * 5,
+        size: Math.random() * 20 + 25, 
       });
     }
 
-    setItems(decorationItems);
-  }, [emojis]);
-
+    setItems(newItems);
+  }, [emojis]); 
   if (items.length === 0) return null;
 
   return (
@@ -96,28 +95,45 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
             left: `${item.startX}%`,
             top: `${item.startY}%`,
             fontSize: `${item.size}px`,
-            animation: `movePath${item.id} ${item.animationDuration}s ease-in-out infinite`,
-            animationDelay: `${item.animationDelay}s`,
-            filter: "drop-shadow(0 0 8px rgba(255, 255, 255, 0.8))",
+            animation: `move${item.id} ${item.duration}s ease-in-out infinite`,
+            animationDelay: `${item.delay}s`,
+            filter: "drop-shadow(0 0 10px rgba(255,255,255,0.9))",
           }}
         >
           {item.emoji}
         </div>
       ))}
-      <style jsx>{`
+
+      {/* Keyframes động */}
+      <style jsx global>{`
         ${items
           .map((item) => {
-            const offsetMidX = item.midX - item.startX;
-            const offsetMidY = item.midY - item.startY;
-            const offsetEndX = item.endX - item.startX;
-            const offsetEndY = item.endY - item.startY;
+            const offsetMidX = (item.midX - item.startX) * 10; 
+            const offsetMidY = (item.midY - item.startY) * 10;
+            const offsetEndX = (item.endX - item.startX) * 10;
+            const offsetEndY = (item.endY - item.startY) * 10;
+
             return `
-            @keyframes movePath${item.id} {
-              0% { transform: translate(0, 0) rotate(0deg) scale(1); }
-              50% { transform: translate(${offsetMidX}vw, ${offsetMidY}vh) rotate(180deg) scale(1.2); }
-              100% { transform: translate(${offsetEndX}vw, ${offsetEndY}vh) rotate(360deg) scale(1); }
-            }
-          `;
+              @keyframes move${item.id} {
+                0% {
+                  opacity: 0;
+                  transform: translate(0px, 0px) rotate(0deg) scale(0.8);
+                }
+                10% {
+                  opacity: 1;
+                }
+                50% {
+                  transform: translate(${offsetMidX}px, ${offsetMidY}px) rotate(180deg) scale(1.3);
+                }
+                90% {
+                  opacity: 1;
+                }
+                100% {
+                  opacity: 0;
+                  transform: translate(${offsetEndX}px, ${offsetEndY}px) rotate(360deg) scale(0.8);
+                }
+              }
+            `;
           })
           .join("")}
       `}</style>
