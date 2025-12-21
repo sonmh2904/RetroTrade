@@ -268,15 +268,16 @@ const parseMessageToFilters = (messageText) => {
   };
   const productTypeKeywords = [
     "máy ảnh", "camera", "thiết bị văn phòng", "laptop", "macbook", "máy tính bảng",
-    "máy tính", "dell", "điện thoại", "phone", "iphone", "android", "xe máy",
-    "xe đạp", "bike", "moto", "máy móc", "thiết bị", "dụng cụ", "đồ dùng", "vật dụng",
-    "đồ chơi", "game", "nhạc cụ", "quần áo", "thời trang", "fashion", "giày", "dép",
-    "túi", "balo", "nội thất", "bàn", "ghế", "tủ", "giường", "sofa", "đồ điện tử",
-    "tivi", "tủ lạnh", "máy giặt", "điều hòa", "quạt", "máy lạnh", "bóng bàn",
-    "vợt bóng bàn", "table tennis", "ping pong", "thể thao", "bóng đá", "bóng rổ",
-    "bóng chuyền", "cầu lông", "tennis", "golf", "áo dạ hội", "váy dạ hội", "đầm dạ hội",
-    "áo", "quần", "váy", "đầm", "máy chiếu", "máy in", "flycam", "bút", "balo",
-    "máy tính bỏ túi", "dụng cụ học tập", "lều", "trại", "vest" , "đồ án",
+    "máy tính", "dell", "điện thoại", "phone", "iphone", "android", "máy móc", "máy chơi game","thiết bị",
+    "xe máy","xe đạp", "bike", "moto", "dụng cụ", "đồ dùng", "vật dụng",
+    "đồ chơi", "game", "nhạc cụ", "quần áo", "thời trang", "fashion", "giày", "dép","túi", "balo",
+    "nội thất", "bàn", "ghế", "tủ", "giường", "sofa", "đồ điện tử", "tivi", "tủ lạnh", "máy giặt", "điều hòa", "quạt", "máy lạnh",
+    "bóng bàn","vợt bóng bàn", "table tennis", "ping pong", "thể thao", "bóng đá", "bóng rổ","bóng chuyền", "cầu lông", "tennis", "golf",
+    "áo dạ hội","áo dài", "váy dạ hội", "đầm dạ hội","áo", "quần", "váy", "đầm",
+    "máy chiếu", "máy in", "flycam", "bút", "balo","máy tính bỏ túi", "dụng cụ học tập",
+    "lều", "trại", "vest" , "đồ án", 
+    "đàn" , "đàn tỳ bà" , "đàn nhị" , "đàn tranh", "piano" , "guitar",
+    "sách" , "truyện", "gậy chụp ảnh" , "board"
   ];
   for (const keyword of productTypeKeywords) {
     if (lowerMessage.includes(keyword)) {

@@ -17,9 +17,9 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
       return;
     }
 
-    const newItems = Array.from({ length: 15 }, () => ({
+    const newItems = Array.from({ length: 12 }, () => ({
       emoji: emojis[Math.floor(Math.random() * emojis.length)],
-      direction: Math.floor(Math.random() * 4), // 0: lên, 1: xuống, 2: trái→phải, 3: phải→trái
+      direction: Math.floor(Math.random() * 4),
     }));
     setItems(newItems);
   }, [emojis]);
@@ -31,7 +31,7 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
       {items.map((item, i) => (
         <div
           key={i}
-          className={`absolute text-4xl md:text-6xl select-none drop-shadow-2xl ${
+          className={`absolute select-none drop-shadow-md ${
             item.direction === 0
               ? "animate-float-up"
               : item.direction === 1
@@ -48,93 +48,107 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
                 : item.direction === 2
                 ? "50%"
                 : "50%",
-            animationDelay: `${Math.random() * 8}s`,
-            animationDuration: `${12 + Math.random() * 12}s`,
+            animationDelay: `${Math.random() * 10}s`,
+            animationDuration: `${15 + Math.random() * 15}s`,
           }}
         >
-          {item.emoji}
+          <span className="text-2xl md:text-3xl block animate-pulse-slow">
+            {item.emoji}
+          </span>
         </div>
       ))}
 
-      {/* 4 keyframes static – chắc chắn chạy trên Vercel */}
       <style jsx global>{`
         @keyframes float-up {
           0% {
-            transform: translateY(110vh) rotate(0deg) scale(0.6);
+            transform: translateY(110vh) rotate(0deg) scale(0.5);
             opacity: 0;
           }
-          10% {
-            opacity: 1;
+          15% {
+            opacity: 0.8;
           }
           50% {
-            transform: translateY(-20vh) rotate(180deg) scale(1.4);
+            transform: translateY(-10vh) rotate(180deg) scale(1);
           }
-          90% {
-            opacity: 1;
+          85% {
+            opacity: 0.8;
           }
           100% {
-            transform: translateY(-110vh) rotate(360deg) scale(0.6);
+            transform: translateY(-110vh) rotate(360deg) scale(0.5);
             opacity: 0;
           }
         }
+
         @keyframes float-down {
           0% {
-            transform: translateY(-110vh) rotate(0deg) scale(0.6);
+            transform: translateY(-110vh) rotate(0deg) scale(0.5);
             opacity: 0;
           }
-          10% {
-            opacity: 1;
+          15% {
+            opacity: 0.8;
           }
           50% {
-            transform: translateY(20vh) rotate(180deg) scale(1.4);
+            transform: translateY(10vh) rotate(-180deg) scale(1);
           }
-          90% {
-            opacity: 1;
+          85% {
+            opacity: 0.8;
           }
           100% {
-            transform: translateY(110vh) rotate(360deg) scale(0.6);
+            transform: translateY(110vh) rotate(-360deg) scale(0.5);
             opacity: 0;
           }
         }
+
         @keyframes float-left-to-right {
           0% {
-            transform: translateX(-110vw) translateY(0) rotate(0deg) scale(0.8);
+            transform: translateX(-110vw) translateY(0) rotate(0deg) scale(0.6);
             opacity: 0;
           }
-          10% {
-            opacity: 1;
+          15% {
+            opacity: 0.7;
           }
           50% {
-            transform: translateX(10vw) translateY(-20vh) rotate(180deg)
-              scale(1.3);
+            transform: translateX(10vw) translateY(-15vh) rotate(180deg)
+              scale(1);
           }
-          90% {
-            opacity: 1;
+          85% {
+            opacity: 0.7;
           }
           100% {
-            transform: translateX(110vw) translateY(0) rotate(360deg) scale(0.8);
+            transform: translateX(110vw) translateY(0) rotate(360deg) scale(0.6);
             opacity: 0;
           }
         }
+
         @keyframes float-right-to-left {
           0% {
-            transform: translateX(110vw) translateY(0) rotate(0deg) scale(0.8);
+            transform: translateX(110vw) translateY(0) rotate(0deg) scale(0.6);
             opacity: 0;
           }
-          10% {
-            opacity: 1;
+          15% {
+            opacity: 0.7;
           }
           50% {
-            transform: translateX(-10vw) translateY(20vh) rotate(-180deg)
-              scale(1.3);
+            transform: translateX(-10vw) translateY(15vh) rotate(-180deg)
+              scale(1);
           }
-          90% {
-            opacity: 1;
+          85% {
+            opacity: 0.7;
           }
           100% {
             transform: translateX(-110vw) translateY(0) rotate(-360deg)
-              scale(0.8);
+              scale(0.6);
             opacity: 0;
+          }
+        }
+
+        @keyframes pulse-slow {
+          0%,
+          100% {
+            opacity: 0.6;
+          }
+          50% {
+            opacity: 1;
           }
         }
 
@@ -149,6 +163,10 @@ export default function Decoration({ emojis = [] }: DecorationProps) {
         }
         .animate-float-right-to-left {
           animation: float-right-to-left linear infinite;
+        }
+
+        .animate-pulse-slow {
+          animation: pulse-slow 3s ease-in-out infinite;
         }
       `}</style>
     </div>
