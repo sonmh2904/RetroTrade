@@ -26,7 +26,7 @@ import {
 import type { Order } from "@/services/auth/order.api";
 import Image from "next/image";
 import Link from "next/link";
-import { payOrderWithWallet, getMyWallet } from "@/services/wallet/wallet.api"; // Đảm bảo import đúng
+import { payOrderWithWallet, getMyWallet } from "@/services/wallet/wallet.api";
 import { toast } from "sonner";
 
 interface TimelineStep {
@@ -799,15 +799,15 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
                 {(() => {
                   // Lấy tất cả giá trị từ backend (đã được tính sẵn)
                   // Tiền thuê (rentalTotal) - totalAmount trong order là tiền thuê
-                  
+
                   const rentalTotal = order.itemSnapshot.basePrice || 0;
                   // Tiền cọc (depositTotal)
                   const depositTotal = order.depositAmount || 0;
 
                   // Phí dịch vụ (serviceFeeAmount) - đã được tính sẵn trong backend
                   const serviceFeeAmount = order.serviceFee || 0;
-                   const retalamout =
-                     order.totalAmount - depositTotal - serviceFeeAmount || 0;
+                  const retalamout =
+                    order.totalAmount - depositTotal - serviceFeeAmount || 0;
 
                   // Lấy discount info từ order
                   const discount = order.discount;
@@ -1140,12 +1140,21 @@ export default function OrderDetail({ id: propId }: { id?: string }) {
 
                 {/* Thông báo đã ký */}
                 {order.isContractSigned && (
-                  <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-                    <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
-                      <CheckCircle2 className="w-5 h-5" />
-                      Hợp đồng đã được cả hai bên ký thành công
-                    </p>
-                  </div>
+                  <>
+                    <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                      <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-5 h-5" />
+                        Hợp đồng đã được cả hai bên ký thành công
+                      </p>
+                    </div>
+
+                    <Link href={`/auth/contract/sign/${id}`}>
+                      <button className="mt-4 w-full bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg flex items-center justify-center gap-2">
+                        <Eye className="w-5 h-5" />
+                        Xem hợp đồng
+                      </button>
+                    </Link>
+                  </>
                 )}
               </div>
             )}

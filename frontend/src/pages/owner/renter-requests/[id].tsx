@@ -965,12 +965,21 @@ function OwnerOrderDetailContent() {
 
                 {/* Thông báo đã ký */}
                 {order.isContractSigned && (
-                  <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-                    <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
-                      <CheckCircle2 className="w-5 h-5" />
-                      Hợp đồng đã được cả hai bên ký thành công
-                    </p>
-                  </div>
+                  <>
+                    <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                      <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-5 h-5" />
+                        Hợp đồng đã được cả hai bên ký thành công
+                      </p>
+                    </div>
+
+                    <Link href={`/auth/contract/sign/${id}`}>
+                      <button className="mt-4 w-full bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg flex items-center justify-center gap-2">
+                        <Eye className="w-5 h-5" />
+                        Xem hợp đồng
+                      </button>
+                    </Link>
+                  </>
                 )}
               </div>
             )}
