@@ -36,6 +36,7 @@ const privacyTypesRouter = require("./privacy/privacy-types.routes");
 const aiRouter = require("./messages/aiChat.routes")
 const systemConfigRouter = require("./admin/systemConfig.routes");
 const moderationRouter = require("./moderator/moderation.routes");
+const eventRouter = require("./admin/event.routes");
 
 module.exports = (app) => {
     const api = "/api/v1";
@@ -76,4 +77,5 @@ module.exports = (app) => {
     app.use(api + "/moderator/moderation", moderationRouter);
     app.use(api + "/owner/dashboard", ownerDashboardRouter);
     app.use(api + "/system-config", systemConfigRouter);
+    app.use(api + "/events", eventRouter);
 }
