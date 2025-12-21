@@ -18,7 +18,7 @@ import {
   Clock,
   DollarSign,
   Calendar,
-  Download,
+  // Download,
   Filter as SelectIcon,
   MousePointer2,
   FilePlus2,
@@ -29,7 +29,7 @@ import {
   confirmCreateContract,
   signContract,
   updateSignaturePosition,
-  exportContractPDF,
+  // exportContractPDF,
   type SignContractData,
   type PreviewTemplateData,
   type ConfirmCreateData,
@@ -535,38 +535,38 @@ const proseRef = useRef<HTMLDivElement | null>(null);
     setOriginalPosition(null);
   };
 
-  const exportToPDF = async (): Promise<void> => {
-    if (!contractData?.contractId) {
-      toast.error("Không tìm thấy hợp đồng để xuất PDF");
-      return;
-    }
-    setLoadingAction(true);
-    try {
-      const res = await exportContractPDF(contractData.contractId);
-      if (!res.ok) {
-        throw new Error("API export PDF failed");
-      }
+  // const exportToPDF = async (): Promise<void> => {
+  //   if (!contractData?.contractId) {
+  //     toast.error("Không tìm thấy hợp đồng để xuất PDF");
+  //     return;
+  //   }
+  //   setLoadingAction(true);
+  //   try {
+  //     const res = await exportContractPDF(contractData.contractId);
+  //     if (!res.ok) {
+  //       throw new Error("API export PDF failed");
+  //     }
 
-      // Tải blob từ response
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      a.download = `hop-dong-thue-${
-        order?.orderGuid?.slice(0, 8) || contractData.contractId
-      }.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success("PDF đã được xuất và tải về thành công!");
-    } catch (error: unknown) {
-      toast.error((error as Error)?.message || "Lỗi xuất PDF từ server");
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  //     // Tải blob từ response
+  //     const blob = await res.blob();
+  //     const url = window.URL.createObjectURL(blob);
+  //     const a = document.createElement("a");
+  //     a.style.display = "none";
+  //     a.href = url;
+  //     a.download = `hop-dong-thue-${
+  //       order?.orderGuid?.slice(0, 8) || contractData.contractId
+  //     }.pdf`;
+  //     document.body.appendChild(a);
+  //     a.click();
+  //     window.URL.revokeObjectURL(url);
+  //     document.body.removeChild(a);
+  //     toast.success("PDF đã được xuất và tải về thành công!");
+  //   } catch (error: unknown) {
+  //     toast.error((error as Error)?.message || "Lỗi xuất PDF từ server");
+  //   } finally {
+  //     setLoadingAction(false);
+  //   }
+  // };
 
   if (loading) {
     return (
@@ -816,7 +816,7 @@ const proseRef = useRef<HTMLDivElement | null>(null);
               )}
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-end items-center">
-              <button
+              {/* <button
                 onClick={exportToPDF}
                 disabled={loadingAction}
                 className="px-6 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 disabled:opacity-50 transition-all font-medium flex items-center gap-2"
@@ -827,7 +827,7 @@ const proseRef = useRef<HTMLDivElement | null>(null);
                   <Download className="w-4 h-4" />
                 )}
                 Xuất PDF
-              </button>
+              </button> */}
               {!hasSigned &&
                 contractData.canSign &&
                 userSignature?.isActive &&

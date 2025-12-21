@@ -154,7 +154,7 @@ export function Header() {
             onClick={handleGoToAdminPanel}
           >
             <Crown className="mr-2 h-4 w-4 group-hover:text-yellow-500 transition-colors" />
-            <span>Bảng điều khiển Admin</span>
+            <span>Trang Quản Trị</span>
           </DropdownMenuItem>
         );
         break;
@@ -166,7 +166,7 @@ export function Header() {
             onClick={handleGoToModeratorPanel}
           >
             <Shield className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
-            <span>Bảng điều khiển Moderator</span>
+            <span>Trang điều hành</span>
           </DropdownMenuItem>
         );
         break;
@@ -197,9 +197,8 @@ export function Header() {
     >
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between relative">
-          {/* Logo + Hamburger (mobile) - logo luôn bên trái */}
+          {/* Logo + Hamburger (mobile) */}
           <div className="flex items-center gap-4">
-            {/* Hamburger chỉ hiện trên mobile */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 rounded-lg hover:bg-gray-100 z-50"
@@ -211,7 +210,6 @@ export function Header() {
               )}
             </button>
 
-            {/* Logo */}
             <Link href="/" className="flex items-center gap-2 group z-10">
               <div className="relative">
                 <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-xl group-hover:bg-indigo-500/40 transition-all duration-300"></div>
@@ -230,7 +228,7 @@ export function Header() {
             </Link>
           </div>
 
-          {/* Navigation desktop - giữ nguyên */}
+          {/* Navigation desktop */}
           <nav className="hidden md:flex items-center gap-8 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <Link
               href="/home"
@@ -280,7 +278,7 @@ export function Header() {
             </Link>
           </nav>
 
-          {/* Phần phải: auth / icons - luôn hiển thị */}
+          {/* Phần phải: auth / icons */}
           <div className="flex items-center gap-4 z-10">
             {isLoggedIn && (
               <>
@@ -326,7 +324,7 @@ export function Header() {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                {/* Dropdown content giữ nguyên hoàn toàn như code gốc */}
+
                 <DropdownMenuContent
                   className="w-56 z-[200] animate-in fade-in-0 zoom-in-95 slide-in-from-top-2"
                   align="end"
@@ -370,21 +368,27 @@ export function Header() {
                     <span>Thông tin cá nhân</span>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    className="cursor-pointer group"
-                    onClick={handleGoToMyfavirite}
-                  >
-                    <Bookmark className="mr-2 h-4 w-4 group-hover:text-yellow-500 group-hover:fill-yellow-500 transition-all" />
-                    <span>Danh sách yêu thích</span>
-                  </DropdownMenuItem>
+                  {/*renter/owner */}
+                  {(userInfo.role === "renter" ||
+                    userInfo.role === "owner") && (
+                    <>
+                      <DropdownMenuItem
+                        className="cursor-pointer group"
+                        onClick={handleGoToMyfavirite}
+                      >
+                        <Bookmark className="mr-2 h-4 w-4 group-hover:text-yellow-500 group-hover:fill-yellow-500 transition-all" />
+                        <span>Danh sách yêu thích</span>
+                      </DropdownMenuItem>
 
-                  <DropdownMenuItem
-                    className="cursor-pointer group"
-                    onClick={handleGoToMyOrders}
-                  >
-                    <Package className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
-                    <span>Lịch sử đơn hàng</span>
-                  </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="cursor-pointer group"
+                        onClick={handleGoToMyOrders}
+                      >
+                        <Package className="mr-2 h-4 w-4 group-hover:text-blue-500 transition-colors" />
+                        <span>Lịch sử đơn hàng</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
 
                   {(userInfo?.role === "renter" ||
                     userInfo?.role === "owner") && (
@@ -430,7 +434,7 @@ export function Header() {
                   </Link>
                 </Button>
 
-                {/* Mobile version - nhỏ gọn, luôn hiển thị */}
+                {/* Mobile version */}
                 <div className="flex md:hidden items-center gap-3">
                   <Link
                     href="/auth/login"
