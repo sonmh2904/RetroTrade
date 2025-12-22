@@ -341,7 +341,7 @@ module.exports.getRevenueByOwnerId = async (req, res) => {
                             0,
                             {
                                 $subtract: [
-                                    { $ifNull: ["$extensionFee", 0] },
+                                    { $ifNull: ["$originalExtensionFee", 0] },
                                     { $ifNull: ["$serviceFee", 0] }
                                 ]
                             }

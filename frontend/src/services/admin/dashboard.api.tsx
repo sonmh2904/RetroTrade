@@ -1,6 +1,7 @@
 import api from "../customizeAPI";
 
 export interface DashboardStats {
+  orderDisputes: any;
   revenue: {
     value: string;
     rawValue: number;
@@ -90,6 +91,10 @@ export interface DashboardStats {
     rawValue: number;
   };
   activeUsers?: {
+    value: string;
+    rawValue: number;
+  };
+  ownerRequests?: {
     value: string;
     rawValue: number;
   };

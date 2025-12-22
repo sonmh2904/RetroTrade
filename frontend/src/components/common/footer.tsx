@@ -105,7 +105,7 @@ function FooterColumn({ title, links, isContact }: FooterColumnProps) {
         <div className="space-y-4 text-sm text-gray-300">
           <div className="flex items-center gap-3 group">
             <Phone className="h-5 w-5 group-hover:text-blue-400 transition-colors" />
-            <span className="group-hover:text-white transition-colors">1900-xxxx</span>
+            <span className="group-hover:text-white transition-colors">Hotline: 1900-xxxx</span>
           </div>
           <div className="flex items-center gap-3 group">
             <div className="flex items-center justify-center">
