@@ -97,6 +97,14 @@ export default function ModeratorDashboard() {
     setActiveTab("blog");
   };
 
+  // Handle initial redirect to messages page only on first load
+  useEffect(() => {
+    // Only redirect if we're on the root moderator page with no query parameters
+    if (window.location.pathname === '/moderator' && !window.location.search) {
+      router.replace('/moderator/messages');
+    }
+  }, [router]);
+
   // Debug: Track state changes
   useEffect(() => {
     console.log(
@@ -109,9 +117,15 @@ export default function ModeratorDashboard() {
     );
   }, [activeTab, activeBlogTab, activeProductTab]);
 
-  // Set default tab and handle URL query parameter for tab navigation
+  // Handle URL query parameters for tab navigation
   useEffect(() => {
-    const tab = searchParams!.get("tab");
+    // Don't process if we're on the messages page
+    if (window.location.pathname.endsWith('/messages')) {
+      setActiveTab('messages');
+      return;
+    }
+
+    const tab = searchParams?.get("tab") || ""; // Provide default empty string if null
     const blogTab = searchParams!.get("blogTab");
     const productTab = searchParams!.get("productTab");
 
@@ -124,12 +138,19 @@ export default function ModeratorDashboard() {
       productTab
     );
 
-    // If no tab parameter, default to dashboard
-    if (!tab) {
-      const defaultUrl = `/moderator?tab=dashboard`;
-      window.history.replaceState({}, "", defaultUrl);
-      setActiveTab("dashboard");
-      return;
+    // Only set active tab if we have a valid tab parameter
+    if (tab && [
+      "dashboard",
+      "requests",
+      "verification",
+      "blog",
+      "productManagement",
+      "dispute",
+      "userManagement",
+      "complaints",
+      "moderation"
+    ].includes(tab)) {
+      setActiveTab(tab as any);
     }
 
     if (
