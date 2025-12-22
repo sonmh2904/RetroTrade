@@ -75,7 +75,9 @@ export default function ExtensionModal({
   const [availableDiscounts, setAvailableDiscounts] = useState<Discount[]>([]);
   const [loadingDiscounts, setLoadingDiscounts] = useState(false);
   const [showDiscountList, setShowDiscountList] = useState(false);
-  const [discountListError, setDiscountListError] = useState<string | null>(null);
+  const [discountListError, setDiscountListError] = useState<string | null>(
+    null
+  );
 
   const currentEndAt = useMemo(
     () => (order?.endAt ? new Date(order.endAt) : null),
@@ -97,11 +99,16 @@ export default function ExtensionModal({
   // Tên đơn vị hiển thị cho người dùng
   const rentalUnit = useMemo(() => {
     switch (priceUnitId) {
-      case 1: return "giờ";
-      case 2: return "ngày";
-      case 3: return "tuần";
-      case 4: return "tháng";
-      default: return "ngày";
+      case 1:
+        return "giờ";
+      case 2:
+        return "ngày";
+      case 3:
+        return "tuần";
+      case 4:
+        return "tháng";
+      default:
+        return "ngày";
     }
   }, [priceUnitId]);
 
@@ -126,14 +133,8 @@ export default function ExtensionModal({
   const serviceFee = Math.round(rentalAmount * 0.03);
   const subtotal = rentalAmount + serviceFee;
 
-  const effectivePublicDiscountAmount = useMemo(
-    () => (rentalAmount > 0 ? publicDiscountAmount : 0),
-    [rentalAmount, publicDiscountAmount]
-  );
-  const effectivePrivateDiscountAmount = useMemo(
-    () => (rentalAmount > 0 ? privateDiscountAmount : 0),
-    [rentalAmount, privateDiscountAmount]
-  );
+  const effectivePublicDiscountAmount = publicDiscountAmount;
+  const effectivePrivateDiscountAmount = privateDiscountAmount;
   const totalDiscountAmount = useMemo(
     () => effectivePublicDiscountAmount + effectivePrivateDiscountAmount,
     [effectivePublicDiscountAmount, effectivePrivateDiscountAmount]
@@ -157,6 +158,47 @@ export default function ExtensionModal({
     },
     []
   );
+
+  // Recalculate discount khi duration thay đổi
+  useEffect(() => {
+    if (!publicDiscount && !privateDiscount) {
+      setPublicDiscountAmount(0);
+      setPrivateDiscountAmount(0);
+      return;
+    }
+
+    let newPublic = 0;
+    let newPrivate = 0;
+
+    if (publicDiscount) {
+      newPublic = calculateDiscountAmount(
+        publicDiscount.type,
+        publicDiscount.value,
+        rentalAmount,
+        publicDiscount.maxDiscountAmount
+      );
+    }
+
+    if (privateDiscount) {
+      const remaining = rentalAmount - newPublic;
+      newPrivate = calculateDiscountAmount(
+        privateDiscount.type,
+        privateDiscount.value,
+        remaining,
+        privateDiscount.maxDiscountAmount
+      );
+    }
+
+    setPublicDiscountAmount(newPublic);
+    setPrivateDiscountAmount(newPrivate);
+  }, [
+    extensionDuration,
+    rentalAmount,
+    publicDiscount,
+    privateDiscount,
+    calculateDiscountAmount,
+  ]);
+
 
   const loadAvailableDiscounts = useCallback(async () => {
     setLoadingDiscounts(true);

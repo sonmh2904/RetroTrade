@@ -187,12 +187,6 @@ const payExtensionFee = async (req, res) => {
     extensionReq.paidAt = new Date();
     await extensionReq.save({ session });
 
-    if (extensionReq.discount) {
-      order.discount = extensionReq.discount;
-    }
-
-    await order.save({ session }); 
-
     // 8. Create Notification 
     await Notification.create(
       [

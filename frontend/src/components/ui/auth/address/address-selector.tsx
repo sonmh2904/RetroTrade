@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { MapPin, Edit2, Trash2, Check, X, Plus, ChevronDown, ChevronUp, Loader2, Search, CheckCircle } from 'lucide-react';
+import { MapPin, Edit2, Trash2, Check, X, Plus, ChevronDown, ChevronUp, Loader2, Search } from 'lucide-react';
 import {
   getUserAddresses,
   createUserAddress,
@@ -39,10 +39,7 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
   const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
   const [districtLoading, setDistrictLoading] = useState(false);
   const districtDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Gợi ý địa chỉ states
-  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
-  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [, setAddressesLoading] = useState(false);
 
   useEffect(() => {
     if (controlledSelectedId !== undefined) {
@@ -402,19 +399,6 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
     );
   };
 
-  const selectAddress = (addr: UserAddress) => {
-    setNewAddress({
-      Address: addr.Address || '',
-      City: addr.City || '',
-      District: addr.District || '',
-      IsDefault: addr.IsDefault || false
-    });
-    const selectedProvince = provinces.find((p) => p.name === addr.City);
-    setProvinceCode(selectedProvince ? selectedProvince.province_code : 0);
-    setIsEditingAddress(true);
-    setShowAddressSuggestions(false);
-  };
-
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-3">
@@ -721,62 +705,6 @@ export function AddressSelector({ selectedAddressId: controlledSelectedId, onSel
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Gợi ý địa chỉ - sử dụng để fill form editing */}
-        {userAddresses.length > 0 && (
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={() =>
-                setShowAddressSuggestions(!showAddressSuggestions)
-              }
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium mb-3 transition-colors"
-            >
-              Gợi ý địa chỉ trước đó ({userAddresses.length})
-              <ChevronDown
-                size={16}
-                className={`transition-transform ${
-                  showAddressSuggestions ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-            {showAddressSuggestions && (
-              <div className="bg-gray-50 rounded-lg p-4 max-h-40 overflow-y-auto border border-gray-200">
-                {addressesLoading ? (
-                  <p className="text-gray-500 text-sm">Đang tải...</p>
-                ) : (
-                  <div className="space-y-2">
-                    {userAddresses.map((addr, index) => (
-                      <button
-                        key={addr._id || index}
-                        type="button"
-                        onClick={() => selectAddress(addr)}
-                        className={`w-full text-left p-3 bg-white rounded-md hover:bg-blue-50 border border-gray-200 transition-colors text-sm ${
-                          addr.IsDefault
-                            ? "border-green-500 bg-green-50"
-                            : ""
-                        }`}
-                      >
-                        <div className="font-medium text-gray-900 flex items-center gap-2">
-                          {addr.District}, {addr.City}
-                          {addr.IsDefault && (
-                            <CheckCircle
-                              size={16}
-                              className="text-green-600"
-                            />
-                          )}
-                        </div>
-                        <div className="text-gray-600 truncate">
-                          {addr.Address}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>

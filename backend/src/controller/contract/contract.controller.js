@@ -17,6 +17,7 @@ const {
 } = require("../../utils/cryptoHelper");
 const { generatePDF } = require("../../utils/pdfExport");
 const { createNotification } = require("../../middleware/createNotification");
+const { formatDate, formatTime, formatFull, formatToday } = require("../../utils/vietnamTime");
 
 const getDecryptedIdCardInfo = async (userId) => {
   if (!userId) return null;
@@ -248,7 +249,7 @@ exports.previewTemplate = async (req, res) => {
     ]);
 
     const dataMap = {
-      // THÔNG TIN 2 BÊN 
+      // THÔNG TIN 2 BÊN
       ownerName: order.ownerId?.fullName || "N/A",
       ownerEmail: order.ownerId?.email || "N/A",
       ownerPhone: order.ownerId?.phone || "N/A",
@@ -271,39 +272,13 @@ exports.previewTemplate = async (req, res) => {
       depositAmount: Number(order.itemId?.DepositAmount || 0).toLocaleString(
         "vi-VN"
       ),
-      rentalStartDate: order.startAt
-        ? new Date(order.startAt).toLocaleDateString("vi-VN")
-        : "N/A",
-      rentalStartTime: order.startAt
-        ? new Date(order.startAt).toLocaleTimeString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "N/A",
-      rentalEndDate: order.endAt
-        ? new Date(order.endAt).toLocaleDateString("vi-VN")
-        : "N/A",
-      rentalEndTime: order.endAt
-        ? new Date(order.endAt).toLocaleTimeString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "N/A",
+      rentalStartDate: formatDate(order.startAt),
+      rentalStartTime: formatTime(order.startAt),
+      rentalEndDate: formatDate(order.endAt),
+      rentalEndTime: formatTime(order.endAt),
       rentalPeriodFull:
         order.startAt && order.endAt
-          ? `${new Date(order.startAt).toLocaleString("vi-VN", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })} → ${new Date(order.endAt).toLocaleString("vi-VN", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}`
+          ? `${formatFull(order.startAt)} → ${formatFull(order.endAt)}`
           : "N/A",
       rentalDuration: order.rentalDuration || "N/A",
       rentalUnit: order.rentalUnit || "ngày",
@@ -336,7 +311,7 @@ exports.previewTemplate = async (req, res) => {
       ).toLocaleString("vi-VN"),
 
       currency: "VND",
-      today: new Date().toLocaleDateString("vi-VN"),
+      today: formatToday(),
       orderGuid: order.orderGuid || "N/A",
     };
 
@@ -444,40 +419,14 @@ exports.confirmCreateContract = async (req, res) => {
       depositAmount: Number(order.itemId?.DepositAmount || 0).toLocaleString(
         "vi-VN"
       ),
-      rentalStartDate: order.startAt
-        ? new Date(order.startAt).toLocaleDateString("vi-VN")
-        : "N/A",
-      rentalStartTime: order.startAt
-        ? new Date(order.startAt).toLocaleTimeString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "N/A",
-      rentalEndDate: order.endAt
-        ? new Date(order.endAt).toLocaleDateString("vi-VN")
-        : "N/A",
-      rentalEndTime: order.endAt
-        ? new Date(order.endAt).toLocaleTimeString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "N/A",
+      rentalStartDate: formatDate(order.startAt),
+      rentalStartTime: formatTime(order.startAt),
+      rentalEndDate: formatDate(order.endAt),
+      rentalEndTime: formatTime(order.endAt),
 
       rentalPeriodFull:
         order.startAt && order.endAt
-          ? `${new Date(order.startAt).toLocaleString("vi-VN", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })} → ${new Date(order.endAt).toLocaleString("vi-VN", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}`
+          ? `${formatFull(order.startAt)} → ${formatFull(order.endAt)}`
           : "N/A",
       rentalDuration: order.rentalDuration || "N/A",
       rentalUnit: order.rentalUnit || "ngày",
@@ -510,7 +459,7 @@ exports.confirmCreateContract = async (req, res) => {
       ).toLocaleString("vi-VN"),
 
       currency: "VND",
-      today: new Date().toLocaleDateString("vi-VN"),
+      today: formatToday(),
       orderGuid: order.orderGuid || "N/A",
     };
 
