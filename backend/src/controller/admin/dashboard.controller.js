@@ -11,6 +11,7 @@ const Comment = require("../../models/Blog/Comment.model");
 const Categories = require("../../models/Product/Categories.model");
 const Wallet = require("../../models/Wallet.model");
 const WalletTransaction = require("../../models/WalletTransaction.model");
+const OwnerRequest = require("../../models/OwnerRequest.model");
 const mongoose = require("mongoose");
 
 const serviceFeeExpression = { $ifNull: ["$serviceFee", 0] };
@@ -197,10 +198,6 @@ const buildExtensionRevenueEntriesPipeline = (startDate = null, endDate = null) 
     return pipeline;
 };
 
-/**
- * Get dashboard statistics (revenue, users, orders, products)
- * Requires admin authentication
- */
 module.exports.getDashboardStats = async (req, res) => {
     try {
         const now = new Date();
@@ -272,51 +269,18 @@ module.exports.getDashboardStats = async (req, res) => {
 
         // Additional statistics
         const [
-            pendingOrders,
             completedOrders,
-            cancelledOrders,
             pendingProducts,
-            approvedProducts,
-            totalComplaints,
             totalDisputes,
-            totalRatings,
-            totalViews,
-            totalFavorites,
-            totalPosts,
-            totalComments,
-            totalCategories,
-            totalWalletTransactions,
-            totalWalletBalance,
-            verifiedUsers,
-            activeUsers
+            pendingOwnerRequests
         ] = await Promise.all([
-            Order.countDocuments({ orderStatus: "pending" }),
             Order.countDocuments({ orderStatus: "completed" }),
-            Order.countDocuments({ orderStatus: "cancelled" }),
             Item.countDocuments({ IsDeleted: { $ne: true }, StatusId: 1 }),
-            Item.countDocuments({ IsDeleted: { $ne: true }, StatusId: 2 }),
-            Complaint.countDocuments({}),
-            Report.countDocuments({ type: "dispute" }),
-            Rating.countDocuments({}),
-            Item.aggregate([
-                { $match: { IsDeleted: { $ne: true } } },
-                { $group: { _id: null, total: { $sum: "$ViewCount" } } }
-            ]),
-            Favorites.countDocuments({}),
-            Post.countDocuments({}),
-            Comment.countDocuments({}),
-            Categories.countDocuments({}),
-            WalletTransaction.countDocuments({}),
-            Wallet.aggregate([
-                { $group: { _id: null, total: { $sum: "$balance" } } }
-            ]),
-            User.countDocuments({ isIdVerified: true }),
-            User.countDocuments({ isActive: true })
+            Report.countDocuments({ type: "dispute", status: "Pending" }),
+            OwnerRequest.countDocuments({ status: "pending" })
         ]);
 
-        const viewsTotal = totalViews[0]?.total || 0;
-        const walletBalanceTotal = totalWalletBalance[0]?.total || 0;
-
+        
         // Also get total values for display
         const [orderTotalsAgg, extensionTotalsAgg, totalUsers, totalOrders, totalProducts] = await Promise.all([
             Order.aggregate(buildOrderRevenuePipeline()),
@@ -334,7 +298,7 @@ module.exports.getDashboardStats = async (req, res) => {
             status: "success",
             data: {
                 revenue: {
-                    value: formatRevenue(revenueTotal), // Show total revenue
+                    value: revenueTotal, 
                     rawValue: revenueTotal,
                     change: parseFloat(revenueChange.toFixed(1)),
                     changeType: revenueChange >= 0 ? "increase" : "decrease"
@@ -357,74 +321,21 @@ module.exports.getDashboardStats = async (req, res) => {
                     change: parseFloat(productsChange.toFixed(1)),
                     changeType: productsChange >= 0 ? "increase" : "decrease"
                 },
-                // Additional stats
-                pendingOrders: {
-                    value: pendingOrders.toLocaleString(),
-                    rawValue: pendingOrders
-                },
                 completedOrders: {
                     value: completedOrders.toLocaleString(),
                     rawValue: completedOrders
-                },
-                cancelledOrders: {
-                    value: cancelledOrders.toLocaleString(),
-                    rawValue: cancelledOrders
                 },
                 pendingProducts: {
                     value: pendingProducts.toLocaleString(),
                     rawValue: pendingProducts
                 },
-                approvedProducts: {
-                    value: approvedProducts.toLocaleString(),
-                    rawValue: approvedProducts
-                },
-                complaints: {
-                    value: totalComplaints.toLocaleString(),
-                    rawValue: totalComplaints
-                },
-                disputes: {
+                orderDisputes: {
                     value: totalDisputes.toLocaleString(),
                     rawValue: totalDisputes
                 },
-                ratings: {
-                    value: totalRatings.toLocaleString(),
-                    rawValue: totalRatings
-                },
-                views: {
-                    value: viewsTotal.toLocaleString(),
-                    rawValue: viewsTotal
-                },
-                favorites: {
-                    value: totalFavorites.toLocaleString(),
-                    rawValue: totalFavorites
-                },
-                posts: {
-                    value: totalPosts.toLocaleString(),
-                    rawValue: totalPosts
-                },
-                comments: {
-                    value: totalComments.toLocaleString(),
-                    rawValue: totalComments
-                },
-                categories: {
-                    value: totalCategories.toLocaleString(),
-                    rawValue: totalCategories
-                },
-                walletTransactions: {
-                    value: totalWalletTransactions.toLocaleString(),
-                    rawValue: totalWalletTransactions
-                },
-                walletBalance: {
-                    value: formatRevenue(walletBalanceTotal),
-                    rawValue: walletBalanceTotal
-                },
-                verifiedUsers: {
-                    value: verifiedUsers.toLocaleString(),
-                    rawValue: verifiedUsers
-                },
-                activeUsers: {
-                    value: activeUsers.toLocaleString(),
-                    rawValue: activeUsers
+                ownerRequests: {
+                    value: pendingOwnerRequests.toLocaleString(),
+                    rawValue: pendingOwnerRequests
                 }
             }
         });

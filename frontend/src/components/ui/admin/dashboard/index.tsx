@@ -31,6 +31,7 @@ import {
   CreditCard,
   Shield,
   UserCheck,
+  Crown,
 } from "lucide-react";
 import { RevenueChart } from "./charts/revenue-chart";
 import { UsersChart } from "./charts/users-chart";
@@ -116,6 +117,15 @@ const AnalyticsDashboard = () => {
           statsData.products.changeType
         );
 
+        // Format currency function
+        const formatCurrency = (amount: number) => {
+          return new Intl.NumberFormat('vi-VN', {
+            style: 'currency',
+            currency: 'VND',
+            minimumFractionDigits: 0,
+          }).format(amount);
+        };
+
         // Helper function to ensure consistent change values
         const normalizeChange = (
           change: number | undefined,
@@ -135,7 +145,7 @@ const AnalyticsDashboard = () => {
           {
             id: "revenue",
             label: "Tổng doanh thu",
-            value: statsData.revenue.value,
+            value: formatCurrency(Number(statsData.revenue.value)),
             ...normalizeChange(
               statsData.revenue.change,
               statsData.revenue.changeType
@@ -181,33 +191,6 @@ const AnalyticsDashboard = () => {
             iconColor: "text-amber-600",
           },
 
-          // HOẠT ĐỘNG CẦN XỬ LÝ - 5 items tiếp theo
-          {
-            id: "complaints",
-            label: "Khiếu nại chờ xử lý",
-            value: statsData.complaints?.value || "0",
-            icon: AlertCircle,
-            bgColor: "bg-gradient-to-r from-red-50 to-rose-50",
-            iconColor: "text-red-600",
-          },
-          {
-            id: "disputes",
-            label: "Khiếu nạichờ xử lý",
-            value: statsData.disputes?.value || "0",
-            icon: FileText,
-            bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
-            iconColor: "text-violet-600",
-          },
-          {
-            id: "walletTransactions",
-            label: "Giao dịch ví chờ duyệt",
-            value: statsData.walletTransactions?.value || "0",
-            icon: CreditCard,
-            bgColor: "bg-gradient-to-r from-teal-50 to-cyan-50",
-            iconColor: "text-teal-600",
-          },
-
-          // THỐNG KÊ KHÁC - 5 items cuối
           {
             id: "completedOrders",
             label: "Đơn hàng hoàn thành",
@@ -216,22 +199,35 @@ const AnalyticsDashboard = () => {
             bgColor: "bg-gradient-to-r from-emerald-50 to-green-50",
             iconColor: "text-emerald-600",
           },
+
           {
-            id: "verifiedUsers",
-            label: "Người dùng đã xác thực",
-            value: statsData.verifiedUsers?.value || "0",
-            icon: Shield,
-            bgColor: "bg-gradient-to-r from-blue-50 to-indigo-50",
-            iconColor: "text-blue-600",
+            id: "orderDisputes",
+            label: "Đơn hàng chờ xử lí khiếu nại",
+            value: statsData.orderDisputes?.value || "0",
+            icon: FileText,
+            bgColor: "bg-gradient-to-r from-violet-50 to-purple-50",
+            iconColor: "text-violet-600",
           },
+          
           {
-            id: "ratings",
-            label: "Tổng đánh giá",
-            value: statsData.ratings?.value || "0",
-            icon: Star,
-            bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
-            iconColor: "text-yellow-600",
+            id: "complaints",
+            label: "Sản phẩm chờ duyệt",
+            value: statsData.pendingProducts?.value || "0",
+            icon: Clock,
+            bgColor: "bg-gradient-to-r from-red-50 to-rose-50",
+            iconColor: "text-red-600",
           },
+          
+          {
+            id: "ownerRequests",
+            label: "Yêu cầu nâng quyền owner",
+            value: statsData.ownerRequests?.value || "0",
+            icon: Crown,
+            bgColor: "bg-gradient-to-r from-amber-50 to-yellow-50",
+            iconColor: "text-amber-600",
+          },
+
+         
         ];
         setStats(statsCards);
       } catch (error) {
@@ -345,7 +341,7 @@ const AnalyticsDashboard = () => {
                 <p className="mb-6 text-sm text-gray-600">
                   Bấm vào các thẻ thống kê để xem biểu đồ và phân tích chi tiết
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
                   {stats.map((stat, index) => {
                     const Icon = stat.icon;
                     const isClickable = [
