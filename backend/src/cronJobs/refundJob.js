@@ -5,9 +5,9 @@ const { refundExtensionRequest } = require("../controller/wallet/refundCancelled
 const ExtensionRequest = require("../models/Order/ExtensionRequest.model");
 
 
-cron.schedule("*/2 * * * *", async () => {
+cron.schedule("*/1 * * * *", async () => {
   const now = new Date();
-  const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
+  const oneMinutesAgo = new Date(now.getTime() - 1 * 60 * 1000);
 
   try {
     const orders = await Order.find({
@@ -32,7 +32,7 @@ cron.schedule("*/2 * * * *", async () => {
       console.log(
         `Kiểm tra đơn ${order._id}, completedAt: ${order.lifecycle.completedAt}`
       );
-      if (order.lifecycle.completedAt <= twoMinutesAgo) {
+      if (order.lifecycle.completedAt <= oneMinutesAgo) {
         console.log(`Bắt đầu hoàn tiền đơn ${order._id}...`);
         try {
           await refundOrder(order._id);
@@ -42,7 +42,7 @@ cron.schedule("*/2 * * * *", async () => {
         }
       } else {
         console.log(
-          `Đơn ${order._id} chưa đủ 2 phút kể từ khi hoàn thành, bỏ qua.`
+          `Đơn ${order._id} chưa đủ 1 phút kể từ khi hoàn thành, bỏ qua.`
         );
       }
     }
