@@ -91,20 +91,13 @@ export function ModeratorSidebar({
   };
 
   const menuItems: Array<{
-    id: "dashboard" | "messages" | "requests" | "verification" | "dispute" | "userManagement" | "complaints" | "productManagement" | "blog" | "moderation";
+    id:  "messages" | "requests" | "verification" | "dispute" | "userManagement" | "complaints" | "productManagement" | "blog" | "moderation";
     label: string;
     icon: React.ElementType;
     path?: string;
     description: string;
     hasSubmenu?: boolean;
   }> = [
-    {
-      id: "dashboard" as const,
-      label: "Dashboard",
-      icon: LayoutDashboard,
-      path: "/moderator/dashboard",
-      description: "Tổng quan hệ thống",
-    },
     {
       id: "messages" as const,
       label: "Tin nhắn",
