@@ -108,15 +108,6 @@ const OwnerDashboard = () => {
           format: "currency"
         },
         {
-          id: "avgOrderValue",
-          label: "Giá trị đơn trung bình",
-          value: formatCurrency(revenueData.totals.avgOrderValue ?? 0),
-          icon: BarChart3,
-          bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-          iconColor: "text-blue-600",
-          format: "currency"
-        },
-        {
           id: "extensionRevenue",
           label: "Doanh thu gia hạn",
           value: formatCurrency(revenueData.totals.extensionRevenue ?? 0),
@@ -177,7 +168,6 @@ const OwnerDashboard = () => {
       totalOrders: "orders",
       completedOrders: "orders",
       pendingOrders: "orders",
-      avgOrderValue: "revenue",
     };
 
     const tabId = statToTabMap[statId];
@@ -310,7 +300,8 @@ const OwnerDashboard = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 sm:gap-6">
                     {stats.map((stat, index) => {
                       const Icon = stat.icon;
-                      const isClickable = ["totalRevenue", "totalOrders", "completedOrders", "pendingOrders", "avgOrderValue"].includes(stat.id);
+                      const isClickable = ["totalRevenue", "totalOrders", "completedOrders", "pendingOrders"].includes(stat.id);
+                      const isWideCard = stat.id === "totalRevenue";
                       return (
                         <div
                           key={stat.id}
@@ -318,6 +309,7 @@ const OwnerDashboard = () => {
                             group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-6
                             shadow-sm transition-all duration-300 hover:scale-105 hover:shadow-xl
                             ${isClickable ? 'cursor-pointer hover:border-blue-400' : 'cursor-default'}
+                            ${isWideCard ? 'col-span-1 sm:col-span-2 md:col-span-2 lg:col-span-2' : ''}
                           `}
                           onClick={() => isClickable && handleStatClick(stat.id)}
                           style={{
