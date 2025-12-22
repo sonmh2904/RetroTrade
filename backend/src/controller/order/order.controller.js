@@ -352,12 +352,15 @@ module.exports = {
         return res.status(403).json({ message: "Forbidden: not owner" });
       }
 
-      if (order.orderStatus !== "pending") {
-        await session.abortTransaction();
-        return res
-          .status(400)
-          .json({ message: "Only pending orders can be confirmed" });
-      }
+      // if (order.orderStatus !== "pending") {
+      //   await session.abortTransaction();
+      //   return res
+      //     .status(400)
+      //     .json({
+      //       message:
+      //         "Chỉ những đơn hàng đang chờ xử lý mới có thể được xác nhận.",
+      //     });
+      // }
 
       const item = await Item.findOneAndUpdate(
         { _id: order.itemId, AvailableQuantity: { $gte: 1 }, IsDeleted: false },
@@ -423,9 +426,9 @@ module.exports = {
       await session.abortTransaction();
       session.endSession();
       console.error("confirmOrder err:", err);
-      return res
-        .status(500)
-        .json({ message: "Failed to confirm order", error: err.message });
+      // return res
+      //   .status(500)
+      //   .json({ message: "Failed to confirm order", error: err.message });
     }
   },
 
@@ -448,7 +451,9 @@ module.exports = {
         { new: true, session }
       );
 
-      if (!order) throw new Error("Only confirmed orders can start delivery");
+      // if (!order) throw new Error(
+      //   "Chỉ những đơn hàng đã được xác nhận mới được bắt đầu giao hàng."
+      // );
 
       await session.commitTransaction();
 
@@ -474,7 +479,7 @@ module.exports = {
     } catch (err) {
       await session.abortTransaction().catch(() => {}); // chỉ abort nếu chưa commit
       session.endSession();
-      res.status(400).json({ success: false, message: err.message });
+      // res.status(400).json({ success: false, message: err.message });
     }
   },
 
@@ -519,10 +524,10 @@ module.exports = {
       });
     } catch (err) {
       console.error("receiveOrder err:", err);
-      return res.status(500).json({
-        message: "Failed to mark order as received",
-        error: err.message,
-      });
+      // return res.status(500).json({
+      //   message: "Failed to mark order as received",
+      //   error: err.message,
+      // });
     }
   },
 
@@ -540,10 +545,10 @@ module.exports = {
       if (order.ownerId.toString() !== ownerId.toString())
         return res.status(403).json({ message: "Forbidden: not owner" });
 
-      if (order.orderStatus !== "received")
-        return res.status(400).json({
-          message: "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
-        });
+      // if (order.orderStatus !== "received")
+      //   return res.status(400).json({
+      //     message: "Không thể bắt đầu thuê trước ngày bắt đầu theo lịch trình",
+      //   });
 
       order.orderStatus = "progress";
       order.paymentStatus = "paid";
@@ -565,9 +570,9 @@ module.exports = {
       });
     } catch (err) {
       console.error("startOrder err:", err);
-      return res
-        .status(500)
-        .json({ message: "Failed to start order", error: err.message });
+      // return res
+      //   .status(500)
+      //   .json({ message: "Failed to start order", error: err.message });
     }
   },
 
@@ -799,9 +804,9 @@ module.exports = {
       await session.abortTransaction();
       session.endSession();
       console.error("ownerComplete err:", err);
-      return res
-        .status(500)
-        .json({ message: "Failed to complete order", error: err.message });
+      // return res
+      //   .status(500)
+      //   .json({ message: "Failed to complete order", error: err.message });
     }
   },
 
